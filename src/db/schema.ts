@@ -96,6 +96,8 @@ export interface Settings extends Stamped {
   id: 'settings';
   reminderTime?: string;
   theme: 'system' | 'light' | 'dark';
+  /** Favourite accent colour id (see lib/accents); an unknown value reads as teal. */
+  accent?: string;
   disclaimerAcceptedAt?: string;
   lastBackupAt?: string;
   /** Day the daily reminder was last shown, so it appears once a day. */

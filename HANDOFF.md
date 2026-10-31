@@ -1,7 +1,7 @@
 # رفيق (Rafiq): Handoff
 
 Any model or person can continue from this file. It is updated with every task commit.
-Last updated: Task 17 done. Next: Task 17b (favourite accent colour), then Task 18 (PWA, deploy config, e2e).
+Last updated: Task 17b done. Next: Task 18 (PWA, deploy config, end-to-end flow).
 
 ## What this is
 An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing journey, tracks check-ins, and builds a printable summary for the user's therapist. All data stays on the device (IndexedDB). It is a supportive tool, not therapy.
@@ -52,7 +52,7 @@ An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing j
 | 15 | Weekly review | done |
 | 16 | Backup export and import | done |
 | 17 | Calm, disclaimer, settings, reminders | done |
-| 17b | Favourite accent colour (owner request) | pending |
+| 17b | Favourite accent colour (owner request) | done |
 | 18 | PWA, deploy, e2e | pending |
 | - | Final whole-branch review, then finish branch | pending |
 
@@ -74,6 +74,7 @@ An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing j
 15. Task 15: weekly review = previous Saturday-to-Friday week, created on Home once per week only if that week has a check-in; no AI. The six weekly questions are first person (the first from the plan, reworded gender-neutral; five written by the implementer: **owner/therapist to review** in `src/content/weeklyQuestions.ts`).
 16. Task 16: `importBackup` accepts the file as text or an object, validates everything with Zod before touching the repo, then writes atomically (replace or merge by `updatedAt`). Zod strips unknown fields, so **Task 17b must add `accent` to the Settings schema in `src/db/backup.ts`** or the colour choice would be lost on import.
 17. Task 17: `DisclaimerGate` wraps the `Layout` (the `/calm` page is never behind it); the unknown-route redirect lives outside the layout. The calm page's danger sentence is first person and **no phone numbers are included** (a test enforces no 3+ digit runs); country help lines must be added only after verification. Settings: export/import backup (confirmation inside the page, merge or replace), daily reminder time, notification permission button, about. Home shows reminder banners (daily + 21-day backup) and links to Settings.
+18. Task 17b (owner request): favourite accent colour. Six palettes in `src/lib/accents.ts` (teal default, blue, purple, rose, amber, green), each with light and dark tokens; `accents.test.ts` checks WCAG contrast >= 4.5:1 for every palette in both modes. Chosen in Settings (`AccentPicker`), saved as `settings.accent` (included in backups), applied via `data-accent` on `<html>` by `installAccents()` in `main.tsx` before first render. The disclaimer heading was reworded to a neutral «مرحبًا في رفيق».
 
 ## Open items for the owner
 - Steps 4-10 content and the readiness questions for steps 1-3 are drafts: the owner's therapist must review them before release.
@@ -81,6 +82,7 @@ An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing j
 - Weekly-review question list has one given question; five more are written by the implementer and flagged for the owner's review (Task 15).
 
 ## Changes log (newest first)
+- Task 17b: Accent colour (owner request): `lib/accents.ts` (6 palettes x light/dark, `accentCss`, `applyAccent`, `installAccents`), `lib/color.ts` (contrast helpers), `AccentPicker` in Settings, `Settings.accent` + backup schema; contrast of every palette is tested. Disclaimer heading made gender-neutral.
 - Task 17: `/calm` (breathing, 5-4-3-2-1 grounding, danger sentence, no numbers), `DisclaimerGate` (accept once; /calm never blocked), `/settings` (backup export/import with in-page confirmation, daily reminder time, notification permission, about), `HomeReminders` (daily + 21-day backup banners), `lib/reminders.ts`, `lib/download.ts`. Redirect for unknown routes moved outside the layout.
 - Task 16: `src/db/backup.ts`: `exportBackup`, `importBackup(repo, textOrObject, 'replace'|'merge')`, `BackupError` (الملف غير صالح / إصدار الملف غير مدعوم); full Zod validation before any write; a bad file changes nothing.
 - Task 15: Weekly review: `reviewWeekStart`, `generateWeeklyReview` (top 3 emotions, trend, steps practised, rotating question), `ensureWeeklyReview` (one per week, only with check-ins), `WeeklyReviewCard` on Home (answer + share switch, off by default), `content/weeklyQuestions.ts`.

@@ -8,10 +8,12 @@ import { createRoot } from 'react-dom/client';
 import { createBrowserRouter } from 'react-router-dom';
 import { App } from './App';
 import { openDb } from './db/open';
+import { installAccents } from './lib/accents';
 import { routes } from './routes';
 
 async function boot() {
   const { repo, persistent } = await openDb();
+  installAccents((await repo.getSettings()).accent);
   const router = createBrowserRouter(routes);
   createRoot(document.getElementById('root')!).render(
     <StrictMode>

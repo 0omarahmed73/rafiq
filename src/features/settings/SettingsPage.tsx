@@ -4,6 +4,7 @@ import { BackupError, exportBackup, importBackup } from '../../db/backup';
 import { useRepo } from '../../db/RepoContext';
 import { dayKey } from '../../lib/dates';
 import { downloadText } from '../../lib/download';
+import { AccentPicker } from './AccentPicker';
 
 type Mode = 'replace' | 'merge';
 
@@ -81,6 +82,14 @@ export function SettingsPage({
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-[28px] font-bold leading-snug">الإعدادات</h1>
+
+      <section className={card} aria-labelledby="appearance-title">
+        <h2 id="appearance-title" className="text-base font-bold">
+          المظهر
+        </h2>
+        <p className="text-sm leading-7 text-muted">أختار اللون الذي يريحني، ويتغيّر التطبيق كله به.</p>
+        <AccentPicker />
+      </section>
 
       <section className={card} aria-labelledby="backup-title">
         <h2 id="backup-title" className="text-base font-bold">

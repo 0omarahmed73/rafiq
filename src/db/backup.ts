@@ -110,6 +110,7 @@ const Settings = z.object({
   id: z.literal('settings'),
   reminderTime: str.optional(),
   theme: z.enum(['system', 'light', 'dark']),
+  accent: str.optional(),
   disclaimerAcceptedAt: str.optional(),
   lastBackupAt: str.optional(),
   lastReminderDay: day.optional(),

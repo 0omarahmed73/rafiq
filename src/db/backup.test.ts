@@ -55,7 +55,7 @@ async function populated(): Promise<Repo> {
     decision: { acceptanceChoice: 'change', reasons: ['سبب'] },
   });
   await repo.addSoothing('الرسم', 'step1');
-  await repo.saveSettings({ id: 'settings', theme: 'dark' });
+  await repo.saveSettings({ id: 'settings', theme: 'dark', accent: 'rose' });
   await repo.saveAgendaPoint({ id: 'a1', text: 'نقطة', day: '2026-10-30', done: false });
   return repo;
 }
