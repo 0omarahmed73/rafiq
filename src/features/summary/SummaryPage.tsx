@@ -37,6 +37,26 @@ export function SummaryPage({ today = new Date() }: { today?: Date }) {
   const [model, setModel] = useState<SummaryModel | null>(null);
   const [profile, setProfile] = useState<{ displayName?: string; therapistName?: string }>();
 
+  // Paper is white: print in the light colours of the chosen accent, whatever the screen theme is.
+  useEffect(() => {
+    const root = document.documentElement;
+    let before: string | undefined;
+    const onBefore = () => {
+      before = root.dataset.theme;
+      root.dataset.theme = 'light';
+    };
+    const onAfter = () => {
+      if (before === undefined) delete root.dataset.theme;
+      else root.dataset.theme = before;
+    };
+    window.addEventListener('beforeprint', onBefore);
+    window.addEventListener('afterprint', onAfter);
+    return () => {
+      window.removeEventListener('beforeprint', onBefore);
+      window.removeEventListener('afterprint', onAfter);
+    };
+  }, []);
+
   useEffect(() => {
     void repo.getSettings().then((s) => setProfile({ displayName: s.displayName, therapistName: s.therapistName }));
   }, [repo]);

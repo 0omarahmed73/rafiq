@@ -104,20 +104,30 @@ export function SessionNotePage() {
       <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
         <legend className={`${label} mb-1`}>الواجب والخطوات المطلوبة</legend>
         {homework.length > 0 && (
-          <ul className="m-0 flex list-none flex-col rounded-2xl border border-line bg-card p-0">
+          <ul className="m-0 flex list-none flex-col overflow-hidden rounded-2xl border border-line bg-card p-0">
             {homework.map((h, i) => (
-              <li key={`${i}-${h.text}`} className="border-t border-line first:border-t-0">
-                <label className="flex min-h-12 cursor-pointer items-center gap-3 px-3.5 text-[15px]">
+              <li key={`${i}-${h.text}`} className="flex items-center border-t border-line first:border-t-0">
+                <label className="flex min-h-14 flex-1 cursor-pointer items-center gap-3 px-3.5 text-[15px] leading-7">
                   <input
                     type="checkbox"
                     checked={h.done}
                     onChange={() =>
                       setHomework((list) => list.map((x, j) => (j === i ? { ...x, done: !x.done } : x)))
                     }
-                    className="h-[22px] w-[22px] shrink-0 accent-teal"
+                    className="plan-check !mt-0"
                   />
-                  {h.text}
+                  <span className={h.done ? 'text-muted line-through' : ''}>{h.text}</span>
                 </label>
+                <button
+                  type="button"
+                  aria-label={`حذف الخطوة: ${h.text}`}
+                  onClick={() => setHomework((list) => list.filter((_, j) => j !== i))}
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:text-teal-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal"
+                >
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3" />
+                  </svg>
+                </button>
               </li>
             ))}
           </ul>
@@ -132,13 +142,15 @@ export function SessionNotePage() {
           <input
             type="text"
             aria-label="خطوة جديدة"
+            placeholder="اكتب خطوة جديدة…"
             value={step}
             onChange={(e) => setStep(e.target.value)}
             className="min-h-12 flex-1 rounded-2xl border border-line bg-card px-3.5 text-base text-ink"
           />
           <button
             type="submit"
-            className="min-h-12 rounded-2xl border-[1.5px] border-teal bg-card px-5 text-[15px] font-bold text-teal-ink"
+            disabled={!step.trim()}
+            className="min-h-12 rounded-2xl bg-teal px-5 text-[15px] font-bold text-card transition-opacity disabled:opacity-40"
           >
             إضافة
           </button>

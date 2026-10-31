@@ -68,3 +68,39 @@ describe('SummaryPage', () => {
     expect(await screen.findByText('لا يُرسل شيء تلقائيًا، وأنا أختار ما يدخل في الملخّص.')).toBeInTheDocument();
   });
 });
+
+describe('SummaryPage printing in colour', () => {
+  it('uses the light colours of the chosen accent while printing, then puts the theme back', async () => {
+    document.documentElement.dataset.theme = 'dark';
+    const repo = createMemoryRepo();
+    render(
+      <RepoProvider repo={repo}>
+        <MemoryRouter>
+          <SummaryPage today={new Date(2026, 9, 31)} />
+        </MemoryRouter>
+      </RepoProvider>,
+    );
+    await screen.findByRole('article');
+
+    window.dispatchEvent(new Event('beforeprint'));
+    expect(document.documentElement.dataset.theme).toBe('light');
+    window.dispatchEvent(new Event('afterprint'));
+    expect(document.documentElement.dataset.theme).toBe('dark');
+    delete document.documentElement.dataset.theme;
+  });
+
+  it('removes the attribute afterwards when there was none before', async () => {
+    delete document.documentElement.dataset.theme;
+    render(
+      <RepoProvider repo={createMemoryRepo()}>
+        <MemoryRouter>
+          <SummaryPage today={new Date(2026, 9, 31)} />
+        </MemoryRouter>
+      </RepoProvider>,
+    );
+    await screen.findByRole('article');
+    window.dispatchEvent(new Event('beforeprint'));
+    window.dispatchEvent(new Event('afterprint'));
+    expect(document.documentElement.hasAttribute('data-theme')).toBe(false);
+  });
+});

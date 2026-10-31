@@ -136,3 +136,7 @@ An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing j
 ### «معلوماتي» and the redesigned printed summary
 - Settings gained `displayName`, `therapistName`, `trustedName`, `trustedPhone` (in backup schema) and a «معلوماتي» card (`features/settings/ProfileCard.tsx`). Name and therapist print at the top of the summary when set; the trusted contact is stored only, not printed.
 - `SummaryPrint` redesigned for A4 black-and-white: heavy header rule with name/therapist/period, three boxed totals (hidden when no switch is on), section headings with a 2px rule, check-in rows with a 10-segment intensity bar plus «n / ١٠» (not colour-dependent), rows kept unbroken across pages, footer «ليس تشخيصًا» with the creation date.
+
+### Homework list and coloured report
+- Session note homework: visible tick boxes, done steps struck through, trash button per step (removal saved with the notes), placeholder on the new-step field, «إضافة» disabled while empty.
+- Printed summary is in colour: `SummaryPage` sets `data-theme="light"` on `beforeprint` (restored on `afterprint`) so paper gets the light palette of the chosen accent; `print.css` only forces a white page and exact colour output.

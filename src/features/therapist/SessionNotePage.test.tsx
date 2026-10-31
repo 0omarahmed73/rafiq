@@ -60,6 +60,45 @@ describe('SessionNotePage', () => {
     expect(sessions[0].createdAt).toBe('2026-10-27T09:00:00.000Z');
   });
 
+  describe('homework steps', () => {
+    const seed = async () => {
+      const repo = createMemoryRepo();
+      await repo.saveSession({
+        id: 's9',
+        date: '2026-10-20',
+        therapistSaid: 'x',
+        takeaway: '',
+        homework: [{ text: 'ابداع', done: true }, { text: 'رياضة', done: false }],
+        createdAt: '2026-10-20T09:00:00.000Z',
+      });
+      return repo;
+    };
+
+    it('hints what the new-step field is for', async () => {
+      setup('/therapist/note');
+      expect(await screen.findByPlaceholderText('اكتب خطوة جديدة…')).toBeInTheDocument();
+    });
+
+    it('removes a step, and the removal is saved with the notes', async () => {
+      const repo = await seed();
+      const { user } = setup('/therapist/note/s9', repo);
+      await user.click(await screen.findByRole('button', { name: 'حذف الخطوة: ابداع' }));
+      expect(screen.queryByText('ابداع')).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'حفظ الملاحظات' }));
+
+      await vi.waitFor(async () => {
+        expect((await repo.listSessions())[0].homework).toEqual([{ text: 'رياضة', done: false }]);
+      });
+    });
+
+    it('strikes through a step that is done', async () => {
+      const repo = await seed();
+      setup('/therapist/note/s9', repo);
+      expect((await screen.findByText('ابداع')).className).toContain('line-through');
+      expect(screen.getByText('رياضة').className).not.toContain('line-through');
+    });
+  });
+
   it('says the notes are private', async () => {
     setup('/therapist/note');
     expect(await screen.findByText('ملاحظاتي خاصة ولا تدخل في الملخّص.')).toBeInTheDocument();
