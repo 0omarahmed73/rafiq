@@ -120,8 +120,9 @@ An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing j
 - Route `/year` (`src/features/yearplan/YearPlanPage.tsx`); card on Home (`YearPlanCard`).
 - Content generated from the source app into `src/content/yearPlan.ts` (12 goals, 12 months × 4 weeks, 146 tasks, 8 review questions).
 - Storage: new `yearPlan` table (Dexie version 2), one row per answer (`t:` task, `g:` goal, `n:m` month note, `r:` review). Included in backups; old backups without it still import.
-- Not carried over: print/PDF of the plan, per-task detail notes, JSON import of the old app's `omar_year_plan_v4` localStorage data.
+- Not carried over: print/PDF of the plan, JSON import of the old app's `omar_year_plan_v4` localStorage data.
 
 ### Yearly plan: age, start month, visible tick boxes
 - Settings gained `planAge` (default 25) and `planStart` (`YYYY-MM`, default 2026-10); both in backup schema. Title is `عامي <ordinal>` (`src/lib/ordinal.ts`, 1–99); months are labelled from the start month for twelve months. Progress is stored by month index, so changing the start keeps it.
 - Tick boxes use the `.plan-check` class in `styles/tokens.css` (visible border, accent fill, white tick).
+- Each task has a note box (`d:` entries) for what was done.

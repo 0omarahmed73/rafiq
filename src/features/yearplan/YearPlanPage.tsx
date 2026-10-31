@@ -6,6 +6,7 @@ import { toArabicDigits } from '../../lib/digits';
 import {
   DEFAULT_AGE,
   DEFAULT_START,
+  detailKey,
   goalKey,
   monthLabel,
   monthPercent,
@@ -151,7 +152,16 @@ export function YearPlanPage() {
               <div key={w.title} className="mt-3 flex flex-col">
                 <h3 className="text-[15px] font-bold">{w.title}</h3>
                 {w.tasks.map((t, ti) => (
-                  <Check key={t} label={t} checked={map.get(taskKey(mi, wi, ti)) === true} onChange={(v) => set(taskKey(mi, wi, ti), v)} />
+                  <div key={t} className="flex flex-col">
+                    <Check label={t} checked={map.get(taskKey(mi, wi, ti)) === true} onChange={(v) => set(taskKey(mi, wi, ti), v)} />
+                    <textarea
+                      aria-label={`ما فعلته: ${t}`}
+                      placeholder="اكتب ما فعلته في هذه الخطوة…"
+                      className={`${field} mb-2 min-h-16`}
+                      value={text(detailKey(mi, wi, ti))}
+                      onChange={(e) => set(detailKey(mi, wi, ti), e.target.value)}
+                    />
+                  </div>
                 ))}
               </div>
             ))}

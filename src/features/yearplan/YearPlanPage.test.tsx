@@ -56,6 +56,28 @@ describe('YearPlanPage settings', () => {
   });
 });
 
+describe('YearPlanPage task notes', () => {
+  it('saves what I did under a task', async () => {
+    const { repo, user } = setup();
+    await user.click(await screen.findByText('أكتوبر ٢٠٢٦'));
+    await user.type(screen.getByRole('textbox', { name: `ما فعلته: ${first}` }), 'سجلت موقفًا');
+
+    await vi.waitFor(async () => {
+      expect((await repo.listYearPlan()).find((e) => e.id === 'd:0:0:0')?.value).toBe('سجلت موقفًا');
+    });
+  });
+
+  it('shows a note saved earlier and counts no progress for it', async () => {
+    const repo = createMemoryRepo();
+    await repo.saveYearPlanEntry({ id: 'd:0:0:0', value: 'كتبتها قبل' });
+    const { user } = setup(repo);
+    await user.click(await screen.findByText('أكتوبر ٢٠٢٦'));
+
+    expect(screen.getByRole('textbox', { name: `ما فعلته: ${first}` })).toHaveValue('كتبتها قبل');
+    expect(screen.getByText(/^التقدم: ٠٪/)).toBeInTheDocument();
+  });
+});
+
 describe('YearPlanPage', () => {
   it('shows the vision, the goals and the progress at zero', async () => {
     setup();
