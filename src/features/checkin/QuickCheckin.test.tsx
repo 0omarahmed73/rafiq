@@ -24,6 +24,40 @@ describe('QuickCheckin', () => {
     expect(screen.queryByRole('button', { name: 'حفظ' })).not.toBeInTheDocument();
   });
 
+  it('saves several emotions chosen together in one check-in', async () => {
+    const { repo, user } = setup();
+    await user.click(screen.getByRole('button', { name: 'حزن' }));
+    await user.click(screen.getByRole('button', { name: 'قلق' }));
+    await user.click(screen.getByRole('button', { name: 'ممتنّ' }));
+    await user.click(screen.getByRole('button', { name: 'حفظ' }));
+
+    const today = dayKey(new Date());
+    const saved = await repo.listCheckins({ from: today, to: today });
+    expect(saved).toHaveLength(1);
+    expect([...saved[0].emotions].sort()).toEqual(['anxiety', 'grateful', 'sadness']);
+  });
+
+  it('lets a chosen emotion be unselected again', async () => {
+    const { user } = setup();
+    const chip = screen.getByRole('button', { name: 'حزن' });
+    await user.click(chip);
+    expect(chip).toHaveAttribute('aria-pressed', 'true');
+    await user.click(chip);
+    expect(chip).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByRole('button', { name: 'حفظ' })).not.toBeInTheDocument();
+  });
+
+  it('allows a second check-in later the same day', async () => {
+    const { repo, user } = setup();
+    await user.click(screen.getByRole('button', { name: 'حزن' }));
+    await user.click(screen.getByRole('button', { name: 'حفظ' }));
+    await user.click(screen.getByRole('button', { name: 'ممتنّ' }));
+    await user.click(screen.getByRole('button', { name: 'حفظ' }));
+
+    const today = dayKey(new Date());
+    expect(await repo.listCheckins({ from: today, to: today })).toHaveLength(2);
+  });
+
   it('saves one check-in with the chosen emotion and the default intensity of 5', async () => {
     const { repo, user } = setup();
     await user.click(screen.getByRole('button', { name: 'حزن' }));

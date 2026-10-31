@@ -3,6 +3,7 @@ import { useRepo } from '../../db/RepoContext';
 import type { Checkin } from '../../db/schema';
 import { dayKey, formatArabicMonthYear, type DayKey } from '../../lib/dates';
 import { toArabicDigits } from '../../lib/digits';
+import { DayDetail } from './DayDetail';
 import { IntensityCurve } from './IntensityCurve';
 import { MonthCalendar } from './MonthCalendar';
 import { TopEmotions } from './TopEmotions';
@@ -20,6 +21,7 @@ const card = 'flex flex-col gap-2.5 rounded-2xl border border-line bg-card p-4';
 export function TrackerPage({ today = new Date() }: { today?: Date }) {
   const repo = useRepo();
   const [checkins, setCheckins] = useState<Checkin[]>([]);
+  const [selected, setSelected] = useState<DayKey | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -38,6 +40,15 @@ export function TrackerPage({ today = new Date() }: { today?: Date }) {
   const monthMax = new Map([...maxByDay].filter(([d]) => d.startsWith(monthPrefix)));
   const monthCheckins = checkins.filter((c) => c.day.startsWith(monthPrefix));
   const recent = [...maxByDay].sort(([a], [b]) => a.localeCompare(b)).slice(-7).map(([, v]) => v);
+
+  // The chosen day, else today if it has check-ins, else the latest logged day of the month.
+  const loggedDays = [...monthMax.keys()].sort();
+  const shownDay =
+    selected && monthMax.has(selected)
+      ? selected
+      : monthMax.has(todayKey)
+        ? todayKey
+        : (loggedDays[loggedDays.length - 1] ?? null);
 
   const intro =
     monthMax.size === 0
@@ -71,8 +82,12 @@ export function TrackerPage({ today = new Date() }: { today?: Date }) {
           monthIndex={today.getMonth()}
           maxByDay={monthMax}
           today={todayKey}
+          selected={shownDay}
+          onSelect={setSelected}
         />
       </section>
+
+      {shownDay && <DayDetail day={shownDay} checkins={monthCheckins} />}
 
       <section className={card}>
         <h2 className="text-[15px] font-bold">شدّة المشاعر خلال آخر ٧ أيام مسجّلة</h2>

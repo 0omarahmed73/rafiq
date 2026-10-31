@@ -43,6 +43,12 @@ export function weekStartSaturday(d: Date): DayKey {
   return dayKey(day);
 }
 
+/** Local time of an ISO timestamp as `HH:MM` in Arabic-Indic digits. */
+export function formatArabicTime(iso: string): string {
+  const d = new Date(iso);
+  return toArabicDigits(`${pad(d.getHours())}:${pad(d.getMinutes())}`);
+}
+
 export function formatArabicMonthYear(key: DayKey): string {
   const d = parseKey(key);
   return `${MONTHS[d.getMonth()]} ${toArabicDigits(d.getFullYear())}`;

@@ -1,4 +1,18 @@
-import { addDays, dayKey, formatArabicDate, formatArabicMonthYear, weekStartSaturday } from './dates';
+import {
+  addDays,
+  dayKey,
+  formatArabicDate,
+  formatArabicMonthYear,
+  formatArabicTime,
+  weekStartSaturday,
+} from './dates';
+
+describe('formatArabicTime', () => {
+  it('writes local hours and minutes with two digits in Arabic-Indic digits', () => {
+    expect(formatArabicTime(new Date(2026, 9, 3, 9, 5).toISOString())).toBe('٠٩:٠٥');
+    expect(formatArabicTime(new Date(2026, 9, 3, 21, 30).toISOString())).toBe('٢١:٣٠');
+  });
+});
 
 describe('formatArabicMonthYear', () => {
   it('writes the month name and the year in Arabic-Indic digits', () => {

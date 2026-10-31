@@ -1,7 +1,7 @@
 # رفيق (Rafiq): Handoff
 
 Any model or person can continue from this file. It is updated with every task commit.
-Last updated: Task 9 done. Next: Task 10 (journey and step page), plus the multi-emotion request from the owner (quick check-in multi-select + day detail in the tracker).
+Last updated: Task 6b done. Next: Task 10 (journey and step page).
 
 ## What this is
 An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing journey, tracks check-ins, and builds a printable summary for the user's therapist. All data stays on the device (IndexedDB). It is a supportive tool, not therapy.
@@ -63,6 +63,8 @@ An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing j
 6. Task 8: practice answers: chips are `{values, text?}` (not `string[]`) so "which need + why" and "chip + editable sentence" fit one prompt; the draft position lives in `answers._position`; answers of hidden (showWhen) prompts are dropped on finish; no prompt is required (Next is always enabled). Cost if wrong: small edits to prompts/tests.
 7. Task 9: new sink `followup`: finishing `regulation-followup` stores a `Followup` row against the latest completed `regulation` record (skipped if none, or if "did it help" is unanswered). Reason: spec §5 has a `followups` table that no task wrote to.
 8. Task 9: content wording is first person (no gendered imperatives); the regulation record is 5 prompts (one per screen), not the canvas's single-screen form. Dark-mode calendar shades were lightened after a visual check.
+9. Task 6b (owner request): "multi emotions in the same day" was read as (a) the quick check-in takes several emotions with one shared intensity, and (b) tapping a day in the tracker lists all of that day's check-ins (time, emotions, intensity, note). If the owner meant per-emotion intensities within one check-in, that is a data-model change (not done).
+10. Owner request queued: favourite accent colour (six palettes, light and dark, contrast tested, stored in `settings.accent`). Planned as Task 17b, built with the Settings page. See spec section 16 and the plan.
 
 ## Open items for the owner
 - Steps 4-10 content and the readiness questions for steps 1-3 are drafts: the owner's therapist must review them before release.
@@ -70,6 +72,7 @@ An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing j
 - Weekly-review question list has one given question; five more are written by the implementer and flagged for the owner's review (Task 15).
 
 ## Changes log (newest first)
+- Task 6b: Owner request: quick check-in accepts several emotions (one shared intensity); tracker days are buttons and `DayDetail` lists every check-in of the chosen day (default today); `formatArabicTime`; calendar cells are now 44px buttons. Spec section 16 and plan Task 17b added for the favourite-colour request.
 - Task 9: Practices `validate` (5 parts), `accept` (7 questions, branch on 'need', saves keep/change decision), `regulation` (5 prompts), `regulation-followup` (sink `followup` -> Followup row); registry in `content/practices/index.ts` is validated by `validateContent`. Dark-mode calendar shades lightened; legend swatch ringed.
 - Task 8: Practice engine (`features/practice`): `visiblePrompts`, `nextPromptId`/`previousPromptId` (showWhen branching), `applySink` (letters, acceptance decision), `PracticeRunner` (one prompt per screen, autosaved drafts resumed at the same prompt, final screen with 'للنقاش' and 'مشاركة' switches, both off by default), 7 prompt components, `PracticePage` at `/practice/:practiceId`, `validatePractice` + Prompt/PracticeDef schemas in `content/schema.ts`, empty practice registry `content/practices/index.ts`. Chips answers are `{values,text?}`.
 - Task 7: `/tracker`: `shadeFor`, `trendOf`, `MonthCalendar` (only logged days, grid-placed, Saturday-first), `IntensityCurve` (last 7 logged days, right-to-left), `TopEmotions`, neutral intro text (no failure/streak wording). Shade tokens added (light/dark). `formatArabicMonthYear` added to dates.

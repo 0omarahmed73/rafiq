@@ -13,17 +13,22 @@ const SHADE_CLASS: Record<Shade, string> = {
 /**
  * Only days with a check-in are drawn; each is placed on the 7-column grid
  * by its weekday (the week starts on Saturday), so the columns stay aligned.
+ * A day is a button: choosing it shows that day's check-ins.
  */
 export function MonthCalendar({
   year,
   monthIndex,
   maxByDay,
   today,
+  selected,
+  onSelect,
 }: {
   year: number;
   monthIndex: number;
   maxByDay: Map<DayKey, number>;
   today: DayKey;
+  selected: DayKey | null;
+  onSelect: (day: DayKey) => void;
 }) {
   const first = new Date(year, monthIndex, 1);
   const offset = (first.getDay() + 1) % 7;
@@ -52,15 +57,23 @@ export function MonthCalendar({
       <ul aria-label="أيام التسجيل" className="contents m-0 list-none p-0">
         {logged.map(({ day, key, max }) => {
           const slot = offset + day - 1;
+          const isSelected = key === selected;
           return (
             <li
               key={key}
               style={{ gridColumn: (slot % 7) + 1, gridRow: Math.floor(slot / 7) + 2 }}
-              className={`flex h-[34px] items-center justify-center rounded-[10px] text-[13px] font-medium ${
-                SHADE_CLASS[shadeFor(max)]
-              } ${key === today ? 'ring-2 ring-ink' : ''}`}
+              className="flex"
             >
-              {toArabicDigits(day)}
+              <button
+                type="button"
+                aria-pressed={isSelected}
+                onClick={() => onSelect(key)}
+                className={`flex min-h-11 w-full items-center justify-center rounded-[10px] text-[13px] ${
+                  SHADE_CLASS[shadeFor(max)]
+                } ${key === today ? 'font-bold' : 'font-medium'} ${isSelected ? 'ring-2 ring-ink' : ''}`}
+              >
+                {toArabicDigits(day)}
+              </button>
             </li>
           );
         })}

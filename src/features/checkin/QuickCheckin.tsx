@@ -10,14 +10,19 @@ const QUICK_EMOTIONS = ['sadness', 'anxiety', 'exhaustion', 'shame', 'grateful',
 
 export function QuickCheckin() {
   const repo = useRepo();
-  const [emotion, setEmotion] = useState<string | null>(null);
+  const [emotions, setEmotions] = useState<string[]>([]);
   const [intensity, setIntensity] = useState(5);
   const [saved, setSaved] = useState(false);
 
+  const toggle = (id: string) => {
+    setSaved(false);
+    setEmotions((list) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]));
+  };
+
   async function save() {
-    if (!emotion) return;
-    await saveCheckin(repo, { emotions: [emotion], intensity });
-    setEmotion(null);
+    if (emotions.length === 0) return;
+    await saveCheckin(repo, { emotions, intensity });
+    setEmotions([]);
     setIntensity(5);
     setSaved(true);
   }
@@ -35,16 +40,13 @@ export function QuickCheckin() {
           <Chip
             key={id}
             label={emotionLabel(id)}
-            selected={emotion === id}
-            onToggle={() => {
-              setSaved(false);
-              setEmotion(emotion === id ? null : id);
-            }}
+            selected={emotions.includes(id)}
+            onToggle={() => toggle(id)}
           />
         ))}
       </div>
       <IntensitySlider label="وما شدّة هذا الشعور؟" value={intensity} onChange={setIntensity} />
-      {emotion && (
+      {emotions.length > 0 && (
         <button
           type="button"
           onClick={save}
