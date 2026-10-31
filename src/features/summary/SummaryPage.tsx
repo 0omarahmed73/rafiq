@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useRepo } from '../../db/RepoContext';
+import { dayKey } from '../../lib/dates';
 import { buildSummary, type SummaryModel, type SummarySwitches } from './buildSummary';
 import { SummaryPrint } from './SummaryPrint';
 import './print.css';
@@ -34,6 +35,11 @@ export function SummaryPage({ today = new Date() }: { today?: Date }) {
     tagged: true,
   });
   const [model, setModel] = useState<SummaryModel | null>(null);
+  const [profile, setProfile] = useState<{ displayName?: string; therapistName?: string }>();
+
+  useEffect(() => {
+    void repo.getSettings().then((s) => setProfile({ displayName: s.displayName, therapistName: s.therapistName }));
+  }, [repo]);
 
   useEffect(() => {
     let alive = true;
@@ -105,7 +111,7 @@ export function SummaryPage({ today = new Date() }: { today?: Date }) {
       </div>
 
       <div className="print-area rounded-2xl border border-line bg-card p-4">
-        {model && <SummaryPrint model={model} switches={switches} />}
+        {model && <SummaryPrint model={model} switches={switches} profile={profile} generatedOn={dayKey(today)} />}
       </div>
 
       <div className="flex flex-col gap-1.5 print:hidden">

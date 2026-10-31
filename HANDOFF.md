@@ -132,3 +132,7 @@ An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing j
 
 ### Agenda points: edit and delete
 - Repo gained `deleteAgendaPoint` (Store gained `remove`). On the therapist page each own point has pencil and trash icon buttons at the row end (inline edit with حفظ/إلغاء; inline delete confirm). Items flagged from check-ins/practices have no buttons; unflag them where they were flagged.
+
+### «معلوماتي» and the redesigned printed summary
+- Settings gained `displayName`, `therapistName`, `trustedName`, `trustedPhone` (in backup schema) and a «معلوماتي» card (`features/settings/ProfileCard.tsx`). Name and therapist print at the top of the summary when set; the trusted contact is stored only, not printed.
+- `SummaryPrint` redesigned for A4 black-and-white: heavy header rule with name/therapist/period, three boxed totals (hidden when no switch is on), section headings with a 2px rule, check-in rows with a 10-segment intensity bar plus «n / ١٠» (not colour-dependent), rows kept unbroken across pages, footer «ليس تشخيصًا» with the creation date.

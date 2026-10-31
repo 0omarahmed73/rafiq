@@ -14,8 +14,8 @@ const emptyModel: SummaryModel = {
 const all: SummarySwitches = { checkins: true, curve: true, weeklyReviews: true, practices: true, tagged: true };
 const none: SummarySwitches = { checkins: false, curve: false, weeklyReviews: false, practices: false, tagged: false };
 
-function text(model: SummaryModel, switches: SummarySwitches) {
-  const { container } = render(<SummaryPrint model={model} switches={switches} />);
+function text(model: SummaryModel, switches: SummarySwitches, extra: Partial<Parameters<typeof SummaryPrint>[0]> = {}) {
+  const { container } = render(<SummaryPrint model={model} switches={switches} {...extra} />);
   return container.textContent ?? '';
 }
 
@@ -110,5 +110,43 @@ describe('SummaryPrint', () => {
     expect(t).toContain('تصديق المشاعر');
     expect(t).toContain('حزن ٦ / ١٠');
     expect(t).not.toContain('لا توجد بيانات');
+  });
+
+  describe('header and footer', () => {
+    it('names the person, the therapist and the day it was made when they are known', () => {
+      const t = text(emptyModel, all, {
+        profile: { displayName: 'عمر', therapistName: 'د. سارة' },
+        generatedOn: '2026-10-31',
+      });
+      expect(t).toContain('الاسم');
+      expect(t).toContain('عمر');
+      expect(t).toContain('المعالج');
+      expect(t).toContain('د. سارة');
+      expect(t).toContain('أُنشئ في ٣١ أكتوبر ٢٠٢٦');
+    });
+
+    it('leaves out the name and therapist rows when they are not set', () => {
+      const t = text(emptyModel, all, { generatedOn: '2026-10-31' });
+      expect(t).not.toContain('الاسم');
+      expect(t).not.toContain('المعالج:');
+    });
+
+    it('ends with the note that this is not a diagnosis', () => {
+      expect(text(emptyModel, all)).toContain('هذا الملخّص من تسجيلاتي الشخصية وليس تشخيصًا');
+    });
+  });
+
+  it('writes a check-in intensity out of ten beside its emotions', () => {
+    const t = text(
+      {
+        ...emptyModel,
+        checkins: [
+          { id: 'c1', at: new Date(2026, 9, 12, 9, 30).toISOString(), day: '2026-10-12', emotions: ['sadness', 'anxiety'], intensity: 7, tags: [], forNextSession: false, updatedAt: '' },
+        ],
+      },
+      { ...none, checkins: true },
+    );
+    expect(t).toContain('حزن، قلق');
+    expect(t).toContain('٧ / ١٠');
   });
 });

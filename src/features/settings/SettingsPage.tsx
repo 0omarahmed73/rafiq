@@ -5,6 +5,7 @@ import { useRepo } from '../../db/RepoContext';
 import { dayKey } from '../../lib/dates';
 import { downloadText } from '../../lib/download';
 import { AccentPicker } from './AccentPicker';
+import { ProfileCard } from './ProfileCard';
 
 type Mode = 'replace' | 'merge';
 
@@ -204,6 +205,8 @@ export function SettingsPage({
           </button>
         )}
       </section>
+
+      <ProfileCard />
 
       <section className={card} aria-labelledby="about-title">
         <h2 id="about-title" className="text-base font-bold">

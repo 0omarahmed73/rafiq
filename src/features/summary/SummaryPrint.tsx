@@ -12,20 +12,35 @@ const TREND = { up: 'ارتفاع', flat: 'استقرار', down: 'انخفاض'
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="flex flex-col gap-2">
-      <h2 className="border-b border-line pb-1 text-base font-bold">{title}</h2>
+    <section className="flex flex-col gap-3">
+      <h2 className="break-after-avoid border-b-2 border-ink pb-1.5 text-lg font-bold">{title}</h2>
       {children}
     </section>
   );
 }
 
+function IntensityBar({ value }: { value: number }) {
+  return (
+    <span aria-hidden="true" className="flex gap-px">
+      {Array.from({ length: 10 }, (_, i) => (
+        <span key={i} className={`h-2 w-1.5 border border-ink ${i < value ? 'bg-ink' : 'bg-transparent'}`} />
+      ))}
+    </span>
+  );
+}
+
 function CheckinLine({ c }: { c: Checkin }) {
   return (
-    <li className="flex flex-col gap-0.5 text-sm leading-7">
-      <span className="font-semibold">
-        {`${formatArabicDate(c.day)} ${formatArabicTime(c.at)} · ${c.emotions.map(emotionLabel).join('، ')} · ${toArabicDigits(c.intensity)} / ${toArabicDigits(10)}`}
-      </span>
-      {c.note && <span className="text-muted">{c.note}</span>}
+    <li className="break-inside-avoid border-b border-line py-2 last:border-b-0 text-sm leading-7">
+      <div className="flex flex-wrap items-center justify-between gap-x-4">
+        <span className="font-bold">{`${formatArabicDate(c.day)} · ${formatArabicTime(c.at)}`}</span>
+        <span className="flex items-center gap-2">
+          <IntensityBar value={c.intensity} />
+          <span className="font-bold">{`${toArabicDigits(c.intensity)} / ${toArabicDigits(10)}`}</span>
+        </span>
+      </div>
+      <div>{c.emotions.map(emotionLabel).join('، ')}</div>
+      {c.note && <div className="text-muted">{c.note}</div>}
     </li>
   );
 }
@@ -34,8 +49,8 @@ function PracticeBlock({ p }: { p: PracticeRecord }) {
   const def = practiceById(p.practiceId);
   const day = dayKey(new Date(p.completedAt ?? p.startedAt));
   return (
-    <li className="flex flex-col gap-1 text-sm leading-7">
-      <span className="font-semibold">{`${def?.title ?? p.practiceId} · ${formatArabicDate(day)}`}</span>
+    <li className="flex break-inside-avoid flex-col gap-1 border-b border-line pb-3 last:border-b-0 text-sm leading-7">
+      <span className="font-bold">{`${def?.title ?? p.practiceId} · ${formatArabicDate(day)}`}</span>
       {def?.prompts.map((prompt) => {
         const text = formatAnswer(prompt, p.answers[prompt.id]);
         return text ? (
@@ -50,7 +65,18 @@ function PracticeBlock({ p }: { p: PracticeRecord }) {
 }
 
 /** The page the therapist receives. Only what the user switched on, and only what they flagged or shared. */
-export function SummaryPrint({ model, switches }: { model: SummaryModel; switches: SummarySwitches }) {
+export function SummaryPrint({
+  model,
+  switches,
+  profile,
+  generatedOn,
+}: {
+  model: SummaryModel;
+  switches: SummarySwitches;
+  profile?: { displayName?: string; therapistName?: string };
+  /** Day the page was made, `YYYY-MM-DD`. */
+  generatedOn?: string;
+}) {
   const { totals } = model;
   const anySwitch = Object.values(switches).some(Boolean);
   // A curve needs two points to be a curve; with fewer, the section is left out of the page.
@@ -65,26 +91,44 @@ export function SummaryPrint({ model, switches }: { model: SummaryModel; switche
 
   return (
     <article className="flex flex-col gap-4">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-xl font-bold">ملخّص رفيق</h1>
-        <p className="text-sm text-muted">{`${formatArabicFullDate(model.range.from)} – ${formatArabicFullDate(model.range.to)}`}</p>
+      <header className="flex flex-col gap-3 border-b-4 border-ink pb-3">
+        <div className="flex items-baseline justify-between gap-3">
+          <h1 className="text-2xl font-bold">ملخّص رفيق</h1>
+          <span className="text-xs font-semibold text-muted">للمعالج</span>
+        </div>
+        <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-sm">
+          {profile?.displayName && (
+            <>
+              <dt className="text-muted">الاسم:</dt>
+              <dd className="m-0 font-bold">{profile.displayName}</dd>
+            </>
+          )}
+          {profile?.therapistName && (
+            <>
+              <dt className="text-muted">المعالج:</dt>
+              <dd className="m-0 font-bold">{profile.therapistName}</dd>
+            </>
+          )}
+          <dt className="text-muted">الفترة:</dt>
+          <dd className="m-0 font-bold">{`${formatArabicFullDate(model.range.from)} – ${formatArabicFullDate(model.range.to)}`}</dd>
+        </dl>
       </header>
 
       {anySwitch && (
-      <dl className="m-0 flex flex-wrap gap-x-6 gap-y-1 text-sm">
-        <div className="flex gap-1">
-          <dt className="text-muted">أيام التسجيل:</dt>
-          <dd className="m-0 font-bold">{toArabicDigits(totals.daysLogged)}</dd>
-        </div>
-        <div className="flex gap-1">
-          <dt className="text-muted">أكثر شعور:</dt>
-          <dd className="m-0 font-bold">{totals.topEmotion ? emotionLabel(totals.topEmotion) : '—'}</dd>
-        </div>
-        <div className="flex gap-1">
-          <dt className="text-muted">الخطوة الحالية:</dt>
-          <dd className="m-0 font-bold">{toArabicDigits(totals.currentStep)}</dd>
-        </div>
-      </dl>
+        <dl className="m-0 grid grid-cols-3 gap-2 text-center">
+          <div className="rounded-lg border-[1.5px] border-ink p-2">
+            <dd className="m-0 text-xl font-bold">{toArabicDigits(totals.daysLogged)}</dd>
+            <dt className="text-xs text-muted">أيام التسجيل</dt>
+          </div>
+          <div className="rounded-lg border-[1.5px] border-ink p-2">
+            <dd className="m-0 text-xl font-bold">{totals.topEmotion ? emotionLabel(totals.topEmotion) : '—'}</dd>
+            <dt className="text-xs text-muted">أكثر شعور</dt>
+          </div>
+          <div className="rounded-lg border-[1.5px] border-ink p-2">
+            <dd className="m-0 text-xl font-bold">{toArabicDigits(totals.currentStep)}</dd>
+            <dt className="text-xs text-muted">الخطوة الحالية</dt>
+          </div>
+        </dl>
       )}
 
       {!anySwitch && <p className="text-sm text-muted">لم أختر ما يدخل في الملخّص.</p>}
@@ -140,6 +184,10 @@ export function SummaryPrint({ model, switches }: { model: SummaryModel; switche
           </ul>
         </Section>
       )}
+      <footer className="mt-2 flex flex-col gap-0.5 border-t border-line pt-2 text-xs leading-6 text-muted">
+        <span>هذا الملخّص من تسجيلاتي الشخصية وليس تشخيصًا.</span>
+        {generatedOn && <span>{`أُنشئ في ${formatArabicFullDate(generatedOn)}`}</span>}
+      </footer>
     </article>
   );
 }

@@ -30,6 +30,13 @@ const upload = (user: ReturnType<typeof userEvent.setup>, text: string) =>
     new File([text], 'backup.json', { type: 'application/json' }),
   );
 
+describe('SettingsPage profile', () => {
+  it('has a «معلوماتي» section', async () => {
+    setup();
+    expect(await screen.findByRole('heading', { name: 'معلوماتي' })).toBeInTheDocument();
+  });
+});
+
 describe('SettingsPage backup', () => {
   it('downloads a dated backup file and remembers when', async () => {
     const repo = createMemoryRepo();

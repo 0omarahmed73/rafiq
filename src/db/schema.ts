@@ -99,6 +99,11 @@ export interface Settings extends Stamped {
   /** Favourite accent colour id (see lib/accents); an unknown value reads as teal. */
   accent?: string;
   /** Age during the yearly plan, for its title «عامي …». Absent reads as 25. */
+  /** «معلوماتي»: shown at the top of the therapist summary (name, therapist) and in Settings. */
+  displayName?: string;
+  therapistName?: string;
+  trustedName?: string;
+  trustedPhone?: string;
   planAge?: number;
   /** First month of the yearly plan, `YYYY-MM`. Absent reads as 2026-10. */
   planStart?: string;
