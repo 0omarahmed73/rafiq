@@ -5,6 +5,8 @@ import type { PracticeDef, Prompt } from '../../content/schema';
 import { newId } from '../../db/repo';
 import { useRepo } from '../../db/RepoContext';
 import type { PracticeRecord } from '../../db/schema';
+import { dayKey } from '../../lib/dates';
+import { markPracticed } from '../step/stepStatus';
 import { applySink, nextPromptId, POSITION_KEY, previousPromptId, visiblePrompts, type Answers } from './engine';
 import { ChipsPrompt } from './prompts/ChipsPrompt';
 import { ChoicePrompt } from './prompts/ChoicePrompt';
@@ -125,6 +127,7 @@ export function PracticeRunner({
     };
     await repo.savePractice(record);
     await applySink(repo, def, record);
+    await markPracticed(repo, def.stepId, dayKey(new Date()));
     onFinished(record);
   }
 

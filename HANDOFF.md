@@ -1,7 +1,7 @@
 # رفيق (Rafiq): Handoff
 
 Any model or person can continue from this file. It is updated with every task commit.
-Last updated: Task 6b done. Next: Task 10 (journey and step page).
+Last updated: Task 10 done. Next: Task 11 (readiness check).
 
 ## What this is
 An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing journey, tracks check-ins, and builds a printable summary for the user's therapist. All data stays on the device (IndexedDB). It is a supportive tool, not therapy.
@@ -40,10 +40,11 @@ An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing j
 | 4 | Data layer (Repo, Dexie, memory) | done |
 | 5 | Shared UI components | done |
 | 6 | Check-in and Home | done |
+| 6b | Several emotions per day (owner request) | done |
 | 7 | Tracker | done |
 | 8 | Practice engine and runner | done |
 | 9 | Steps 1-3 practices | done |
-| 10 | Journey and Step page | pending |
+| 10 | Journey and Step page | done |
 | 11 | Readiness check | pending |
 | 12 | Steps 4-10 practices | pending |
 | 13 | Therapist sessions and agenda | pending |
@@ -51,6 +52,7 @@ An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing j
 | 15 | Weekly review | pending |
 | 16 | Backup export and import | pending |
 | 17 | Calm, disclaimer, settings, reminders | pending |
+| 17b | Favourite accent colour (owner request) | pending |
 | 18 | PWA, deploy, e2e | pending |
 | - | Final whole-branch review, then finish branch | pending |
 
@@ -72,6 +74,7 @@ An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing j
 - Weekly-review question list has one given question; five more are written by the implementer and flagged for the owner's review (Task 15).
 
 ## Changes log (newest first)
+- Task 10: `/journey` (10 steps as links, nothing locked, status labels, current step marked) and `/step/:id` (core question, lesson, practice links, acceptance decision card, privacy line); `markPracticed` called when a practice finishes. HANDOFF status table gained rows 6b and 17b.
 - Task 6b: Owner request: quick check-in accepts several emotions (one shared intensity); tracker days are buttons and `DayDetail` lists every check-in of the chosen day (default today); `formatArabicTime`; calendar cells are now 44px buttons. Spec section 16 and plan Task 17b added for the favourite-colour request.
 - Task 9: Practices `validate` (5 parts), `accept` (7 questions, branch on 'need', saves keep/change decision), `regulation` (5 prompts), `regulation-followup` (sink `followup` -> Followup row); registry in `content/practices/index.ts` is validated by `validateContent`. Dark-mode calendar shades lightened; legend swatch ringed.
 - Task 8: Practice engine (`features/practice`): `visiblePrompts`, `nextPromptId`/`previousPromptId` (showWhen branching), `applySink` (letters, acceptance decision), `PracticeRunner` (one prompt per screen, autosaved drafts resumed at the same prompt, final screen with 'للنقاش' and 'مشاركة' switches, both off by default), 7 prompt components, `PracticePage` at `/practice/:practiceId`, `validatePractice` + Prompt/PracticeDef schemas in `content/schema.ts`, empty practice registry `content/practices/index.ts`. Chips answers are `{values,text?}`.

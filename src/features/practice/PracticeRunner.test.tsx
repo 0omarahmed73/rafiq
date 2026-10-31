@@ -4,6 +4,7 @@ import type { PracticeDef } from '../../content/schema';
 import { createMemoryRepo } from '../../db/memoryRepo';
 import type { Repo } from '../../db/repo';
 import { RepoProvider } from '../../db/RepoContext';
+import { dayKey } from '../../lib/dates';
 import { PracticeRunner } from './PracticeRunner';
 import { branchingDef } from './testDefs';
 
@@ -91,6 +92,26 @@ describe('PracticeRunner', () => {
     expect(saved.completedAt).toBeTruthy();
     expect(await repo.getDraft('t1')).toBeUndefined();
     expect(onFinished).toHaveBeenCalledTimes(1);
+  });
+
+  it('marks today as practised on the step when the practice is finished', async () => {
+    const repo = createMemoryRepo();
+    const { user } = renderRunner(repo);
+    await finish(user);
+    await user.click(screen.getByRole('button', { name: 'إنهاء التمرين' }));
+
+    const progress = await repo.getStepProgress(branchingDef.stepId);
+    expect(progress.status).toBe('inProgress');
+    expect(progress.daysPracticed).toEqual([dayKey(new Date())]);
+  });
+
+  it('does not mark the step as practised while the practice is only a draft', async () => {
+    const repo = createMemoryRepo();
+    const { user, unmount } = renderRunner(repo);
+    await screen.findByRole('textbox', { name: 'ما الموقف؟' });
+    await next(user);
+    unmount();
+    expect((await repo.getStepProgress(branchingDef.stepId)).daysPracticed).toEqual([]);
   });
 
   it('saves the next-session flag when its switch is on', async () => {

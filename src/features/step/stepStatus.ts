@@ -1,4 +1,5 @@
 import type { Repo } from '../../db/repo';
+import type { DayKey } from '../../lib/dates';
 
 const LAST_STEP = 10;
 
@@ -8,4 +9,17 @@ export async function currentStepId(repo: Repo): Promise<number> {
     if ((await repo.getStepProgress(id)).status !== 'done') return id;
   }
   return LAST_STEP;
+}
+
+/** Records that the user practised this step on `day` (once per day) and starts it if needed. */
+export async function markPracticed(repo: Repo, stepId: number, day: DayKey): Promise<void> {
+  const progress = await repo.getStepProgress(stepId);
+  const daysPracticed = progress.daysPracticed.includes(day)
+    ? progress.daysPracticed
+    : [...progress.daysPracticed, day].sort();
+  await repo.saveStepProgress({
+    ...progress,
+    daysPracticed,
+    status: progress.status === 'done' ? 'done' : 'inProgress',
+  });
 }
