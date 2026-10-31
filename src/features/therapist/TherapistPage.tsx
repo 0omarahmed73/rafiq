@@ -8,6 +8,8 @@ import { toArabicDigits } from '../../lib/digits';
 import { agendaItems, type AgendaItem } from './agenda';
 
 const btn = 'min-h-11 rounded-full border-[1.5px] px-4 text-sm font-bold';
+const iconBtn =
+  'flex h-11 w-11 items-center justify-center rounded-full text-muted transition-colors hover:bg-card hover:text-teal-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal';
 const card = 'flex flex-col gap-2 rounded-2xl border border-line bg-card p-4';
 
 export function TherapistPage() {
@@ -109,44 +111,50 @@ export function TherapistPage() {
                     </div>
                   </form>
                 ) : (
-                  <div className="flex flex-1 flex-col gap-1">
-                    <span className="text-[15px] leading-8">
+                  <>
+                    <span className="flex-1 text-[15px] leading-8">
                       {item.label}
                       <span className="block text-xs text-muted">{formatArabicDate(item.day)}</span>
                     </span>
-                    {item.kind === 'point' && deleting === item.id ? (
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-sm font-semibold">حذف هذه النقطة؟</span>
-                        <button type="button" onClick={() => void removePoint(item.id)} className={`${btn} border-[#b3261e] bg-[#b3261e] text-white`}>
-                          تأكيد الحذف
+                    {item.kind === 'point' && deleting !== item.id && (
+                      <div className="flex shrink-0 items-center">
+                        <button
+                          type="button"
+                          aria-label={`تعديل: ${item.label}`}
+                          onClick={() => setEditing({ id: item.id, text: item.label })}
+                          className={iconBtn}
+                        >
+                          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4z" />
+                            <path d="M13.5 6.5l4 4" />
+                          </svg>
                         </button>
-                        <button type="button" onClick={() => setDeleting(undefined)} className={`${btn} border-line bg-card text-ink`}>
-                          إلغاء
+                        <button
+                          type="button"
+                          aria-label={`حذف: ${item.label}`}
+                          onClick={() => setDeleting(item.id)}
+                          className={iconBtn}
+                        >
+                          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3" />
+                          </svg>
                         </button>
                       </div>
-                    ) : (
-                      item.kind === 'point' && (
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            aria-label={`تعديل: ${item.label}`}
-                            onClick={() => setEditing({ id: item.id, text: item.label })}
-                            className={`${btn} border-line bg-card text-ink`}
-                          >
-                            تعديل
+                    )}
+                    {item.kind === 'point' && deleting === item.id && (
+                      <div className="flex shrink-0 flex-col items-end gap-1.5">
+                        <span className="text-xs font-semibold">حذف هذه النقطة؟</span>
+                        <div className="flex gap-1.5">
+                          <button type="button" onClick={() => void removePoint(item.id)} className={`${btn} min-h-10 border-[#b3261e] bg-[#b3261e] text-white`}>
+                            تأكيد الحذف
                           </button>
-                          <button
-                            type="button"
-                            aria-label={`حذف: ${item.label}`}
-                            onClick={() => setDeleting(item.id)}
-                            className={`${btn} border-line bg-card text-ink`}
-                          >
-                            حذف
+                          <button type="button" onClick={() => setDeleting(undefined)} className={`${btn} min-h-10 border-line bg-card text-ink`}>
+                            إلغاء
                           </button>
                         </div>
-                      )
+                      </div>
                     )}
-                  </div>
+                  </>
                 )}
               </li>
             ))}
