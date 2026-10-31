@@ -7,7 +7,7 @@ describe('saveCheckin', () => {
   it('rejects a check-in with no emotion and saves nothing', async () => {
     const repo = createMemoryRepo();
     await expect(saveCheckin(repo, { emotions: [], intensity: 5 })).rejects.toThrow(
-      new ValidationError('اختر شعورًا واحدًا على الأقل'),
+      new ValidationError('أختار شعورًا واحدًا على الأقل'),
     );
     expect(await repo.listCheckins(wholeRange)).toHaveLength(0);
   });

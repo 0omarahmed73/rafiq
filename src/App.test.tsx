@@ -24,7 +24,7 @@ describe('App', () => {
 
   it('warns when storage is not persistent', () => {
     renderApp('/', false);
-    expect(screen.getByRole('status')).toHaveTextContent('لن تُحفظ بياناتك');
+    expect(screen.getByRole('status')).toHaveTextContent('لن تُحفظ بياناتي');
   });
 
   it('shows no storage warning when storage is persistent', () => {

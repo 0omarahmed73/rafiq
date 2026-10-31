@@ -44,26 +44,31 @@ export function PracticeRunner({
   const [position, setPosition] = useState(def.prompts[0].id);
   const [forNextSession, setForNextSession] = useState(false);
   const [share, setShare] = useState(false);
+  const [error, setError] = useState('');
 
   const meta = useRef({ id: newId(), startedAt: new Date().toISOString() });
   const dirty = useRef(false);
   const finished = useRef(false);
+  const busy = useRef(false);
   const latest = useRef({ answers, position });
   latest.current = { answers, position };
 
   // Resume an unfinished draft of this practice, if there is one.
   useEffect(() => {
     let alive = true;
-    void repo.getDraft(def.id).then((draft) => {
-      if (!alive) return;
-      if (draft) {
-        meta.current = { id: draft.id, startedAt: draft.startedAt };
-        const { [POSITION_KEY]: saved, ...rest } = draft.answers;
-        setAnswers(rest);
-        if (typeof saved === 'string') setPosition(saved);
-      }
-      setReady(true);
-    });
+    void repo
+      .getDraft(def.id)
+      .catch(() => undefined)
+      .then((draft) => {
+        if (!alive) return;
+        if (draft) {
+          meta.current = { id: draft.id, startedAt: draft.startedAt };
+          const { [POSITION_KEY]: saved, ...rest } = draft.answers;
+          setAnswers(rest);
+          if (typeof saved === 'string') setPosition(saved);
+        }
+        setReady(true);
+      });
     return () => {
       alive = false;
     };
@@ -91,12 +96,21 @@ export function PracticeRunner({
     const timer = setTimeout(() => persistRef.current(), 300);
     return () => clearTimeout(timer);
   }, [answers, position, ready]);
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    const flush = () => {
       if (dirty.current) persistRef.current();
-    },
-    [],
-  );
+    };
+    const onHidden = () => {
+      if (document.visibilityState === 'hidden') flush();
+    };
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', onHidden);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', onHidden);
+      flush();
+    };
+  }, []);
 
   const setAnswer = (id: string, value: unknown) => {
     dirty.current = true;
@@ -112,7 +126,10 @@ export function PracticeRunner({
   const visible = visiblePrompts(def, answers);
 
   async function finish() {
+    if (busy.current) return;
+    busy.current = true;
     finished.current = true;
+    setError('');
     const shown = new Set(visible.map((p) => p.id));
     const record: PracticeRecord = {
       id: meta.current.id,
@@ -125,10 +142,17 @@ export function PracticeRunner({
       forNextSession,
       updatedAt: '',
     };
-    await repo.savePractice(record);
-    await applySink(repo, def, record);
-    await applySoothing(repo, def, record);
-    await markPracticed(repo, def.stepId, dayKey(new Date()));
+    try {
+      await repo.savePractice(record);
+      await applySink(repo, def, record);
+      await applySoothing(repo, def, record);
+      await markPracticed(repo, def.stepId, dayKey(new Date()));
+    } catch {
+      busy.current = false;
+      finished.current = false;
+      setError('تعذّر حفظ التمرين، يمكنني المحاولة مرة أخرى.');
+      return;
+    }
     onFinished(record);
   }
 
@@ -136,12 +160,17 @@ export function PracticeRunner({
     const last = visible[visible.length - 1];
     return (
       <div className="flex flex-col gap-5">
-        <h1 className="text-2xl font-bold leading-snug">قبل أن تنتهي</h1>
+        <h1 className="text-2xl font-bold leading-snug">قبل أن أنهي</h1>
         <p className="text-[15px] leading-8 text-ink">
-          ما كتبته خاص بك. يمكنك أن تختار هنا ما يصل إلى معالجك.
+          ما أكتبه خاص بي. أختار هنا ما يصل إلى معالجي.
         </p>
         <Switch label="للنقاش في الجلسة القادمة" checked={forNextSession} onChange={setForNextSession} />
         <Switch label="مشاركة مع معالجي" checked={share} onChange={setShare} />
+        {error && (
+          <p role="alert" className="text-sm font-semibold text-ink">
+            {error}
+          </p>
+        )}
         <div className="flex gap-2.5">
           <button
             type="button"

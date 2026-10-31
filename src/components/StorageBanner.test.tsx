@@ -12,7 +12,7 @@ describe('Banner', () => {
 describe('StorageBanner', () => {
   it('warns that data will not be saved when storage is not persistent', () => {
     render(<StorageBanner persistent={false} />);
-    expect(screen.getByRole('status')).toHaveTextContent('لن تُحفظ بياناتك');
+    expect(screen.getByRole('status')).toHaveTextContent('لن تُحفظ بياناتي');
   });
 
   it('renders nothing when storage is persistent', () => {

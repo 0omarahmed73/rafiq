@@ -109,3 +109,9 @@ An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing j
 - Task 3: `src/content`: Zod schemas, 10 steps (title, core question, lesson), 6 emotion groups / 42 words, `emotionLabel`, `validateContent`. Step 5 lesson reworded gender-neutral.
 - Task 2: `src/lib/dates.ts` (dayKey, addDays, weekStartSaturday, formatArabicDate, DayKey) and `src/lib/digits.ts` (toArabicDigits), local-time based, fixed Arabic weekday/month tables, no Intl.
 - Task 1: Vite + React + TS (strict) + Tailwind 3 + Vitest scaffold; RTL `index.html`; CSS tokens (light/dark); `TabBar` (4 tabs), `Layout`, `routes` (home placeholder + catch-all redirect), `App`, `main.tsx` (self-hosted IBM Plex Sans Arabic via @fontsource). Tests: `TabBar.test.tsx`, `App.test.tsx`.
+
+### Review fix pass
+- Summary hides totals when every switch is off.
+- Practice autosave flushes on `pagehide` / `visibilitychange`; unreadable draft no longer blocks opening.
+- `finish()` guarded against double-tap; failure shows an Arabic alert and allows retry.
+- User-facing strings switched to first person (check-in, tracker, therapist, storage banner, runner end screen).

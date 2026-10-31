@@ -52,7 +52,7 @@ export function TrackerPage({ today = new Date() }: { today?: Date }) {
 
   const intro =
     monthMax.size === 0
-      ? 'ابدأ بتسجيل أول يوم هذا الشهر. كل يوم يُحسب.'
+      ? 'أبدأ بتسجيل أول يوم هذا الشهر. كل يوم يُحسب.'
       : `سجّلت ${daysPhrase(monthMax.size)} هذا الشهر. كل يوم يُحسب.`;
 
   return (

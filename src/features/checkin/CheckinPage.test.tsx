@@ -19,11 +19,20 @@ function setup() {
   return { repo, user: userEvent.setup() };
 }
 
+describe('CheckinPage wording', () => {
+  it('speaks in the first person', async () => {
+    setup();
+    expect(await screen.findByRole('heading', { name: 'ما الذي أشعر به الآن؟' })).toBeInTheDocument();
+    expect(screen.getByText('أختار كلمة أو أكثر. لا توجد مشاعر خاطئة.')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('ماذا حدث؟ وماذا أحتاج الآن؟')).toBeInTheDocument();
+  });
+});
+
 describe('CheckinPage', () => {
   it('shows an Arabic message and saves nothing when no emotion is chosen', async () => {
     const { repo, user } = setup();
     await user.click(screen.getByRole('button', { name: 'حفظ' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('اختر شعورًا واحدًا على الأقل');
+    expect(await screen.findByRole('alert')).toHaveTextContent('أختار شعورًا واحدًا على الأقل');
     expect(await repo.listCheckins(wholeRange)).toHaveLength(0);
   });
 

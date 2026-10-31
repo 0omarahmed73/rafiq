@@ -24,7 +24,7 @@ export async function saveCheckin(
   input: CheckinInput,
   now: Date = new Date(),
 ): Promise<Checkin> {
-  if (input.emotions.length === 0) throw new ValidationError('اختر شعورًا واحدًا على الأقل');
+  if (input.emotions.length === 0) throw new ValidationError('أختار شعورًا واحدًا على الأقل');
   if (!Number.isInteger(input.intensity) || input.intensity < 0 || input.intensity > 10) {
     throw new ValidationError('الشدّة رقم صحيح من صفر إلى عشرة');
   }

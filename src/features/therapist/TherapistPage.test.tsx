@@ -20,7 +20,7 @@ function setup(repo: Repo = createMemoryRepo()) {
 describe('TherapistPage', () => {
   it('links to the note editor and to the summary', async () => {
     setup();
-    expect(await screen.findByRole('link', { name: 'أضف ملاحظات جلسة' })).toHaveAttribute(
+    expect(await screen.findByRole('link', { name: 'إضافة ملاحظات جلسة' })).toHaveAttribute(
       'href',
       '/therapist/note',
     );
@@ -44,7 +44,7 @@ describe('TherapistPage', () => {
 
   it('adds an agenda point that then appears in the list', async () => {
     const { repo, user } = setup();
-    await user.click(await screen.findByRole('button', { name: '+ أضف نقطة' }));
+    await user.click(await screen.findByRole('button', { name: '+ إضافة نقطة' }));
     await user.type(screen.getByRole('textbox', { name: 'نقطة جديدة' }), 'غضبي أكبر من الموقف');
     await user.click(screen.getByRole('button', { name: 'إضافة' }));
 

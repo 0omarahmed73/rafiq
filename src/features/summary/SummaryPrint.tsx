@@ -70,6 +70,7 @@ export function SummaryPrint({ model, switches }: { model: SummaryModel; switche
         <p className="text-sm text-muted">{`${formatArabicFullDate(model.range.from)} – ${formatArabicFullDate(model.range.to)}`}</p>
       </header>
 
+      {anySwitch && (
       <dl className="m-0 flex flex-wrap gap-x-6 gap-y-1 text-sm">
         <div className="flex gap-1">
           <dt className="text-muted">أيام التسجيل:</dt>
@@ -84,6 +85,7 @@ export function SummaryPrint({ model, switches }: { model: SummaryModel; switche
           <dd className="m-0 font-bold">{toArabicDigits(totals.currentStep)}</dd>
         </div>
       </dl>
+      )}
 
       {!anySwitch && <p className="text-sm text-muted">لم أختر ما يدخل في الملخّص.</p>}
       {anySwitch && !hasContent && <p className="text-sm text-muted">لا توجد بيانات في هذه الفترة.</p>}

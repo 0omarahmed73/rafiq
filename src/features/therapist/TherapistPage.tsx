@@ -101,7 +101,7 @@ export function TherapistPage() {
             onClick={() => setAdding(true)}
             className="min-h-11 self-start text-sm font-bold text-teal-ink"
           >
-            + أضف نقطة
+            + إضافة نقطة
           </button>
         )}
       </section>
@@ -110,7 +110,7 @@ export function TherapistPage() {
         to="/therapist/note"
         className="flex min-h-[50px] items-center justify-center rounded-full bg-teal text-base font-bold text-card"
       >
-        أضف ملاحظات جلسة
+        إضافة ملاحظات جلسة
       </Link>
 
       {sessions.length > 0 && (

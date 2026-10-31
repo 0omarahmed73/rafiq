@@ -34,8 +34,8 @@ export function CheckinPage() {
 
   return (
     <div className="flex flex-col gap-5 pb-4">
-      <h1 className="text-2xl font-bold">كيف تشعر الآن؟</h1>
-      <p className="text-sm leading-7 text-muted">اختر كلمة أو أكثر. لا توجد مشاعر خاطئة.</p>
+      <h1 className="text-2xl font-bold">ما الذي أشعر به الآن؟</h1>
+      <p className="text-sm leading-7 text-muted">أختار كلمة أو أكثر. لا توجد مشاعر خاطئة.</p>
 
       {emotionGroups.map((group) => (
         <fieldset key={group.id} className="flex flex-col gap-2 border-0 p-0">
@@ -73,7 +73,7 @@ export function CheckinPage() {
           rows={2}
           value={note}
           onChange={(e) => setNote(e.target.value)}
-          placeholder="ماذا حدث؟ وماذا تحتاج الآن؟"
+          placeholder="ماذا حدث؟ وماذا أحتاج الآن؟"
           className="rounded-2xl border border-line bg-card p-3 text-base leading-7"
         />
       </div>

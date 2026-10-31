@@ -61,7 +61,7 @@ describe('TrackerPage', () => {
 
   it('invites a first entry when the month has none', async () => {
     renderTracker(createMemoryRepo());
-    expect(await screen.findByText(/ابدأ بتسجيل أول يوم/)).toBeInTheDocument();
+    expect(await screen.findByText(/أبدأ بتسجيل أول يوم/)).toBeInTheDocument();
   });
 
   it('lists the most frequent emotions with their counts', async () => {

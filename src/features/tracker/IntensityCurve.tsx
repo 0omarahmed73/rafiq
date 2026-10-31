@@ -20,7 +20,7 @@ const LABELS = {
 
 export function IntensityCurve({ values }: { values: number[] }) {
   if (values.length < 2) {
-    return <p className="text-sm text-muted">سجّل يومين على الأقل لترى المنحنى.</p>;
+    return <p className="text-sm text-muted">أسجّل يومين على الأقل لأرى المنحنى.</p>;
   }
   const points = curvePoints(values, 300, 60);
   return (

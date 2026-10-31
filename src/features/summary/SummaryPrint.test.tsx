@@ -28,6 +28,7 @@ describe('SummaryPrint', () => {
 
   it('says nothing was chosen when every switch is off, without NaN or undefined', () => {
     const t = text(emptyModel, none);
+    expect(t).not.toContain('أيام التسجيل');
     expect(t).toContain('لم أختر ما يدخل في الملخّص');
     expect(t).not.toMatch(/NaN|undefined|null/);
   });
@@ -45,16 +46,25 @@ describe('SummaryPrint', () => {
 
     const alone = text(one, curveOnly);
     expect(alone).not.toContain('منحنى الشدّة');
-    expect(alone).not.toContain('سجّل يومين');
+    expect(alone).not.toContain('أسجّل يومين');
     expect(alone).toContain('لا توجد بيانات في هذه الفترة');
 
     expect(text(two, curveOnly)).toContain('منحنى الشدّة');
   });
 
+  it('prints no totals at all when every switch is off', () => {
+    const t = text({ ...emptyModel, totals: { daysLogged: 24, topEmotion: 'anxiety', currentStep: 2 } }, none);
+    expect(t).not.toContain('أيام التسجيل');
+    expect(t).not.toContain('أكثر شعور');
+    expect(t).not.toContain('الخطوة الحالية');
+    expect(t).not.toContain('قلق');
+    expect(t).toContain('لم أختر ما يدخل في الملخّص');
+  });
+
   it('shows the range and totals in Arabic-Indic digits', () => {
     const t = text(
       { ...emptyModel, totals: { daysLogged: 24, topEmotion: 'anxiety', currentStep: 2 } },
-      none,
+      { ...none, checkins: true },
     );
     expect(t).toContain('٢٤');
     expect(t).toContain('قلق');
