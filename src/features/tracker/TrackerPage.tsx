@@ -56,7 +56,7 @@ export function TrackerPage({ today = new Date() }: { today?: Date }) {
           <h2 className="text-base font-bold">{formatArabicMonthYear(todayKey)}</h2>
           <div className="flex items-center gap-3 text-xs text-muted">
             <span className="flex items-center gap-1">
-              <span className="inline-block h-3.5 w-3.5 rounded bg-shade-light" /> خفيف
+              <span className="inline-block h-3.5 w-3.5 rounded bg-shade-light ring-1 ring-line" /> خفيف
             </span>
             <span className="flex items-center gap-1">
               <span className="inline-block h-3.5 w-3.5 rounded bg-shade-mid" /> متوسط

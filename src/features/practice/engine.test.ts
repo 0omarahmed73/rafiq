@@ -79,6 +79,64 @@ describe('applySink', () => {
     expect(progress.decision).toEqual({ acceptanceChoice: 'change', reasons: ['سبب أول', 'سبب ثانٍ'] });
   });
 
+  describe('followup sink', () => {
+    const regulation = (over: Partial<PracticeRecord> = {}): PracticeRecord =>
+      record({
+        id: 'reg1',
+        practiceId: 'regulation',
+        stepId: 3,
+        completedAt: '2026-10-31T20:00:00.000Z',
+        answers: {
+          feelings: [
+            { id: 'anger', intensity: 9 },
+            { id: 'sadness', intensity: 7 },
+          ],
+        },
+        ...over,
+      });
+    const followupDef = { ...branchingDef, id: 'regulation-followup', stepId: 3, sink: 'followup' as const };
+    const followupRecord = (answers: Record<string, unknown>) =>
+      record({ id: 'fu1', practiceId: 'regulation-followup', stepId: 3, answers });
+
+    it('links the latest completed regulation record and stores before and after', async () => {
+      const repo = createMemoryRepo();
+      await repo.savePractice(regulation({ id: 'old', completedAt: '2026-10-30T20:00:00.000Z' }));
+      await repo.savePractice(regulation());
+      await applySink(
+        repo,
+        followupDef,
+        followupRecord({
+          tried: { values: ['validation', 'breathing'], text: 'مشي قصير' },
+          helped: { value: 'much' },
+          intensityAfter: 3,
+          noticed: { text: 'هدأتُ' },
+        }),
+      );
+      const [saved] = await repo.listFollowups();
+      expect(saved).toMatchObject({
+        practiceRecordId: 'reg1',
+        intensityBefore: 9,
+        intensityAfter: 3,
+        helped: 'much',
+        tried: ['validation', 'breathing', 'مشي قصير'],
+        note: 'هدأتُ',
+      });
+    });
+
+    it('stores nothing when there is no regulation record to follow up', async () => {
+      const repo = createMemoryRepo();
+      await applySink(repo, followupDef, followupRecord({ helped: { value: 'much' }, intensityAfter: 3 }));
+      expect(await repo.listFollowups()).toHaveLength(0);
+    });
+
+    it('stores nothing when the user did not say whether it helped', async () => {
+      const repo = createMemoryRepo();
+      await repo.savePractice(regulation());
+      await applySink(repo, followupDef, followupRecord({ intensityAfter: 3 }));
+      expect(await repo.listFollowups()).toHaveLength(0);
+    });
+  });
+
   it('does nothing for a practice without a sink', async () => {
     const repo = createMemoryRepo();
     await applySink(repo, branchingDef, record());

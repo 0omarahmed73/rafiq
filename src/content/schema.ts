@@ -40,7 +40,13 @@ export const PromptSchema = z.object({
 });
 export type Prompt = z.infer<typeof PromptSchema>;
 
-export const SinkSchema = z.enum(['letter:self', 'letter:gratitude', 'letter:forgiveness', 'acceptDecision']);
+export const SinkSchema = z.enum([
+  'letter:self',
+  'letter:gratitude',
+  'letter:forgiveness',
+  'acceptDecision',
+  'followup',
+]);
 
 export const PracticeDefSchema = z.object({
   id: z.string().min(1),

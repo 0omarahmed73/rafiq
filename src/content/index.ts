@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { emotionGroups } from './emotions';
-import { EmotionGroupSchema, StepSchema } from './schema';
+import { practices } from './practices';
+import { EmotionGroupSchema, StepSchema, validatePractice } from './schema';
 import { steps } from './steps';
 
 export { emotionGroups } from './emotions';
@@ -23,4 +24,7 @@ export function validateContent(): void {
   const parsedGroups = z.array(EmotionGroupSchema).min(1).parse(emotionGroups);
   const ids = parsedGroups.flatMap((g) => g.words.map((w) => w.id));
   if (new Set(ids).size !== ids.length) throw new Error('Duplicate emotion id');
+
+  if (new Set(practices.map((p) => p.id)).size !== practices.length) throw new Error('Duplicate practice id');
+  practices.forEach(validatePractice);
 }
