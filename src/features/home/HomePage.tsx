@@ -6,6 +6,7 @@ import { dayKey, formatArabicDate } from '../../lib/dates';
 import { toArabicDigits } from '../../lib/digits';
 import { QuickCheckin } from '../checkin/QuickCheckin';
 import { currentStepId } from '../step/stepStatus';
+import { WeeklyReviewCard } from './WeeklyReviewCard';
 
 export function HomePage() {
   const repo = useRepo();
@@ -51,6 +52,8 @@ export function HomePage() {
           </Link>
         </section>
       )}
+
+      <WeeklyReviewCard />
     </div>
   );
 }
