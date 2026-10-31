@@ -54,6 +54,12 @@ export function formatArabicMonthYear(key: DayKey): string {
   return `${MONTHS[d.getMonth()]} ${toArabicDigits(d.getFullYear())}`;
 }
 
+/** `٣١ أكتوبر ٢٠٢٦`: no hyphens, which right-to-left text would reorder. */
+export function formatArabicFullDate(key: DayKey): string {
+  const d = parseKey(key);
+  return `${toArabicDigits(d.getDate())} ${MONTHS[d.getMonth()]} ${toArabicDigits(d.getFullYear())}`;
+}
+
 export function formatArabicDate(key: DayKey): string {
   const d = parseKey(key);
   return `${WEEKDAYS[d.getDay()]} ${toArabicDigits(d.getDate())} ${MONTHS[d.getMonth()]}`;

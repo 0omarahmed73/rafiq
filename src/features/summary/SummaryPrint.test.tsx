@@ -32,6 +32,25 @@ describe('SummaryPrint', () => {
     expect(t).not.toMatch(/NaN|undefined|null/);
   });
 
+  it('writes the range as dates with month names, not hyphenated numbers', () => {
+    const t = text(emptyModel, none);
+    expect(t).toContain('١ أكتوبر ٢٠٢٦ – ٣١ أكتوبر ٢٠٢٦');
+    expect(t).not.toContain('٢٠٢٦-١٠');
+  });
+
+  it('draws the intensity curve only when there are at least two days to draw', () => {
+    const one = { ...emptyModel, curve: [{ day: '2026-10-01', max: 5 }] };
+    const two = { ...emptyModel, curve: [{ day: '2026-10-01', max: 5 }, { day: '2026-10-02', max: 7 }] };
+    const curveOnly = { ...none, curve: true };
+
+    const alone = text(one, curveOnly);
+    expect(alone).not.toContain('منحنى الشدّة');
+    expect(alone).not.toContain('سجّل يومين');
+    expect(alone).toContain('لا توجد بيانات في هذه الفترة');
+
+    expect(text(two, curveOnly)).toContain('منحنى الشدّة');
+  });
+
   it('shows the range and totals in Arabic-Indic digits', () => {
     const t = text(
       { ...emptyModel, totals: { daysLogged: 24, topEmotion: 'anxiety', currentStep: 2 } },

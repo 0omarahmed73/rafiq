@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { emotionLabel } from '../../content';
 import { practiceById } from '../../content/practices';
 import type { Checkin, PracticeRecord } from '../../db/schema';
-import { dayKey, formatArabicDate, formatArabicTime } from '../../lib/dates';
+import { dayKey, formatArabicDate, formatArabicFullDate, formatArabicTime } from '../../lib/dates';
 import { toArabicDigits } from '../../lib/digits';
 import { IntensityCurve } from '../tracker/IntensityCurve';
 import type { SummaryModel, SummarySwitches } from './buildSummary';
@@ -53,9 +53,11 @@ function PracticeBlock({ p }: { p: PracticeRecord }) {
 export function SummaryPrint({ model, switches }: { model: SummaryModel; switches: SummarySwitches }) {
   const { totals } = model;
   const anySwitch = Object.values(switches).some(Boolean);
+  // A curve needs two points to be a curve; with fewer, the section is left out of the page.
+  const showCurve = model.curve.length >= 2;
   const hasContent =
     model.checkins.length +
-      model.curve.length +
+      (showCurve ? 1 : 0) +
       model.weeklyReviews.length +
       model.practices.length +
       model.tagged.length >
@@ -65,7 +67,7 @@ export function SummaryPrint({ model, switches }: { model: SummaryModel; switche
     <article className="flex flex-col gap-4">
       <header className="flex flex-col gap-1">
         <h1 className="text-xl font-bold">ملخّص رفيق</h1>
-        <p className="text-sm text-muted">{`${toArabicDigits(model.range.from)} – ${toArabicDigits(model.range.to)}`}</p>
+        <p className="text-sm text-muted">{`${formatArabicFullDate(model.range.from)} – ${formatArabicFullDate(model.range.to)}`}</p>
       </header>
 
       <dl className="m-0 flex flex-wrap gap-x-6 gap-y-1 text-sm">
@@ -96,7 +98,7 @@ export function SummaryPrint({ model, switches }: { model: SummaryModel; switche
         </Section>
       )}
 
-      {model.curve.length > 0 && (
+      {showCurve && (
         <Section title="منحنى الشدّة">
           <IntensityCurve values={model.curve.map((d) => d.max)} />
         </Section>

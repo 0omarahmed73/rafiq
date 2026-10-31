@@ -2,10 +2,18 @@ import {
   addDays,
   dayKey,
   formatArabicDate,
+  formatArabicFullDate,
   formatArabicMonthYear,
   formatArabicTime,
   weekStartSaturday,
 } from './dates';
+
+describe('formatArabicFullDate', () => {
+  it('writes day, month name and year without hyphens, so right-to-left text cannot scramble it', () => {
+    expect(formatArabicFullDate('2026-10-31')).toBe('٣١ أكتوبر ٢٠٢٦');
+    expect(formatArabicFullDate('2026-01-01')).toBe('١ يناير ٢٠٢٦');
+  });
+});
 
 describe('formatArabicTime', () => {
   it('writes local hours and minutes with two digits in Arabic-Indic digits', () => {
