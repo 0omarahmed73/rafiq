@@ -7,6 +7,7 @@ import { dayKey, formatArabicDate } from '../../lib/dates';
 import { toArabicDigits } from '../../lib/digits';
 import { agendaItems, type AgendaItem } from './agenda';
 
+const btn = 'min-h-11 rounded-full border-[1.5px] px-4 text-sm font-bold';
 const card = 'flex flex-col gap-2 rounded-2xl border border-line bg-card p-4';
 
 export function TherapistPage() {
@@ -15,6 +16,8 @@ export function TherapistPage() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState('');
+  const [editing, setEditing] = useState<{ id: string; text: string }>();
+  const [deleting, setDeleting] = useState<string>();
 
   const load = useCallback(async () => {
     const [items, past] = await Promise.all([agendaItems(repo), repo.listSessions()]);
@@ -41,6 +44,21 @@ export function TherapistPage() {
     await load();
   }
 
+  async function saveEdit() {
+    const text = editing?.text.trim();
+    if (!editing || !text) return;
+    const point = (await repo.listAgendaPoints()).find((p) => p.id === editing.id);
+    if (point) await repo.saveAgendaPoint({ ...point, text });
+    setEditing(undefined);
+    await load();
+  }
+
+  async function removePoint(id: string) {
+    await repo.deleteAgendaPoint(id);
+    setDeleting(undefined);
+    await load();
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-[28px] font-bold leading-snug">جلسات المعالج</h1>
@@ -60,15 +78,76 @@ export function TherapistPage() {
                     type="checkbox"
                     aria-label={`تمت مناقشتها: ${item.label}`}
                     onChange={() => void markDiscussed(item.id)}
-                    className="mt-1.5 h-[22px] w-[22px] shrink-0 accent-teal"
+                    className="plan-check"
                   />
                 ) : (
                   <span aria-hidden="true" className="mt-3 h-2 w-2 shrink-0 rounded-full bg-teal" />
                 )}
-                <span className="flex-1 text-[15px] leading-8">
-                  {item.label}
-                  <span className="block text-xs text-muted">{formatArabicDate(item.day)}</span>
-                </span>
+                {editing?.id === item.id ? (
+                  <form
+                    className="flex flex-1 flex-col gap-2"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      void saveEdit();
+                    }}
+                  >
+                    <input
+                      type="text"
+                      aria-label="تعديل النقطة"
+                      autoFocus
+                      value={editing.text}
+                      onChange={(e) => setEditing({ id: item.id, text: e.target.value })}
+                      className="min-h-12 rounded-2xl border border-line bg-card px-3.5 text-base text-ink"
+                    />
+                    <div className="flex gap-2">
+                      <button type="submit" className={`${btn} border-teal bg-teal text-card`}>
+                        حفظ
+                      </button>
+                      <button type="button" onClick={() => setEditing(undefined)} className={`${btn} border-line bg-card text-ink`}>
+                        إلغاء
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <div className="flex flex-1 flex-col gap-1">
+                    <span className="text-[15px] leading-8">
+                      {item.label}
+                      <span className="block text-xs text-muted">{formatArabicDate(item.day)}</span>
+                    </span>
+                    {item.kind === 'point' && deleting === item.id ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-semibold">حذف هذه النقطة؟</span>
+                        <button type="button" onClick={() => void removePoint(item.id)} className={`${btn} border-[#b3261e] bg-[#b3261e] text-white`}>
+                          تأكيد الحذف
+                        </button>
+                        <button type="button" onClick={() => setDeleting(undefined)} className={`${btn} border-line bg-card text-ink`}>
+                          إلغاء
+                        </button>
+                      </div>
+                    ) : (
+                      item.kind === 'point' && (
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            aria-label={`تعديل: ${item.label}`}
+                            onClick={() => setEditing({ id: item.id, text: item.label })}
+                            className={`${btn} border-line bg-card text-ink`}
+                          >
+                            تعديل
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={`حذف: ${item.label}`}
+                            onClick={() => setDeleting(item.id)}
+                            className={`${btn} border-line bg-card text-ink`}
+                          >
+                            حذف
+                          </button>
+                        </div>
+                      )
+                    )}
+                  </div>
+                )}
               </li>
             ))}
           </ul>

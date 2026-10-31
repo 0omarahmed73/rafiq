@@ -17,6 +17,7 @@ export interface Store {
   all<T>(table: TableName): Promise<T[]>;
   get<T>(table: TableName, key: string | number): Promise<T | undefined>;
   put(table: TableName, row: unknown): Promise<void>;
+  remove(table: TableName, key: string | number): Promise<void>;
   clear(table: TableName): Promise<void>;
   /** Runs `fn` atomically; a throw leaves the store unchanged. */
   transaction<T>(fn: () => Promise<T>): Promise<T>;
@@ -145,6 +146,10 @@ export function createRepo(store: Store): Repo {
     listYearPlan: () => list('yearPlan'),
     async saveYearPlanEntry(e) {
       await write('yearPlan', e);
+    },
+
+    async deleteAgendaPoint(id) {
+      await store.remove('agendaPoints', id);
     },
 
     async exportAll() {

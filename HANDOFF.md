@@ -129,3 +129,6 @@ An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing j
 
 ### Input focus
 - Global text-field focus/hover styling at the end of `styles/tokens.css`: 160ms fade to the accent border plus a soft 4px accent ring; follows the chosen accent; reduced-motion rule already shortens transitions.
+
+### Agenda points: edit and delete
+- Repo gained `deleteAgendaPoint` (Store gained `remove`). On the therapist page each own point has تعديل (inline edit, حفظ/إلغاء) and حذف (inline confirm). Items flagged from check-ins/practices have no buttons; unflag them where they were flagged.

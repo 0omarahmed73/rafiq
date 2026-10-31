@@ -27,6 +27,9 @@ export function createMemoryStore(): Store {
       const key = (row as Record<string, string | number>)[KEY_FIELD[table]];
       rows(table).set(key, structuredClone(row));
     },
+    async remove(table, key) {
+      rows(table).delete(key);
+    },
     async clear(table) {
       rows(table).clear();
     },

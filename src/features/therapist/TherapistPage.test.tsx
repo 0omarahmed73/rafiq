@@ -53,6 +53,79 @@ describe('TherapistPage', () => {
     expect(await repo.listAgendaPoints()).toHaveLength(1);
   });
 
+  describe('editing and deleting a point', () => {
+    const seed = async () => {
+      const repo = createMemoryRepo();
+      await repo.saveAgendaPoint({ id: 'a1', text: 'نقطة قديمة', day: '2026-10-30', done: false });
+      return repo;
+    };
+
+    it('edits the text and keeps it in the list', async () => {
+      const repo = await seed();
+      const { user } = setup(repo);
+      await user.click(await screen.findByRole('button', { name: 'تعديل: نقطة قديمة' }));
+      const input = screen.getByRole('textbox', { name: 'تعديل النقطة' });
+      await user.clear(input);
+      await user.type(input, 'نقطة جديدة');
+      await user.click(screen.getByRole('button', { name: 'حفظ' }));
+
+      expect(await screen.findByText('نقطة جديدة')).toBeInTheDocument();
+      expect(screen.queryByText('نقطة قديمة')).not.toBeInTheDocument();
+      expect((await repo.listAgendaPoints())[0]).toMatchObject({ id: 'a1', text: 'نقطة جديدة', done: false });
+    });
+
+    it('cancelling an edit changes nothing', async () => {
+      const repo = await seed();
+      const { user } = setup(repo);
+      await user.click(await screen.findByRole('button', { name: 'تعديل: نقطة قديمة' }));
+      await user.type(screen.getByRole('textbox', { name: 'تعديل النقطة' }), 'xx');
+      await user.click(screen.getByRole('button', { name: 'إلغاء' }));
+
+      expect(screen.getByText('نقطة قديمة')).toBeInTheDocument();
+      expect((await repo.listAgendaPoints())[0].text).toBe('نقطة قديمة');
+    });
+
+    it('does not save an empty edit', async () => {
+      const repo = await seed();
+      const { user } = setup(repo);
+      await user.click(await screen.findByRole('button', { name: 'تعديل: نقطة قديمة' }));
+      await user.clear(screen.getByRole('textbox', { name: 'تعديل النقطة' }));
+      await user.click(screen.getByRole('button', { name: 'حفظ' }));
+
+      expect((await repo.listAgendaPoints())[0].text).toBe('نقطة قديمة');
+    });
+
+    it('asks before deleting, then removes the point', async () => {
+      const repo = await seed();
+      const { user } = setup(repo);
+      await user.click(await screen.findByRole('button', { name: 'حذف: نقطة قديمة' }));
+      expect(await repo.listAgendaPoints()).toHaveLength(1);
+      expect(screen.getByText('حذف هذه النقطة؟')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'تأكيد الحذف' }));
+
+      expect(screen.queryByText('نقطة قديمة')).not.toBeInTheDocument();
+      expect(await repo.listAgendaPoints()).toEqual([]);
+    });
+
+    it('keeps the point when the deletion is cancelled', async () => {
+      const repo = await seed();
+      const { user } = setup(repo);
+      await user.click(await screen.findByRole('button', { name: 'حذف: نقطة قديمة' }));
+      await user.click(screen.getByRole('button', { name: 'إلغاء' }));
+
+      expect(screen.getByText('نقطة قديمة')).toBeInTheDocument();
+      expect(await repo.listAgendaPoints()).toHaveLength(1);
+    });
+
+    it('offers no edit or delete on items flagged from check-ins', async () => {
+      const repo = createMemoryRepo();
+      await repo.addCheckin({ at: '2026-10-30T10:00:00.000Z', day: '2026-10-30', emotions: ['anger'], intensity: 9, tags: [], forNextSession: true });
+      setup(repo);
+      await screen.findByRole('list', { name: 'ما أريد مناقشته' });
+      expect(screen.queryByRole('button', { name: /^(تعديل|حذف):/ })).not.toBeInTheDocument();
+    });
+  });
+
   it('marks an agenda point as discussed, which removes it from the list', async () => {
     const repo = createMemoryRepo();
     await repo.saveAgendaPoint({ id: 'a1', text: 'نقطة', day: '2026-10-30', done: false });

@@ -156,4 +156,17 @@ describe.each(factories)('Repo contract (%s)', (_name, makeStore) => {
       expect(rows[0].updatedAt).toMatch(/^\d{4}-/);
     });
   });
+
+  describe('agenda points', () => {
+    it('deletes one point and leaves the others', async () => {
+      await repo.saveAgendaPoint({ id: 'a1', text: 'أولى', day: '2026-10-30', done: false });
+      await repo.saveAgendaPoint({ id: 'a2', text: 'ثانية', day: '2026-10-30', done: false });
+      await repo.deleteAgendaPoint('a1');
+      expect((await repo.listAgendaPoints()).map((p) => p.id)).toEqual(['a2']);
+    });
+
+    it('ignores an id that does not exist', async () => {
+      await expect(repo.deleteAgendaPoint('missing')).resolves.toBeUndefined();
+    });
+  });
 });

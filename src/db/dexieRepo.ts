@@ -28,6 +28,9 @@ export function createDexieStore(db: RafiqDB): Store {
     put: async (table, row) => {
       await db.table(table).put(row);
     },
+    remove: async (table, key) => {
+      await db.table(table).delete(key);
+    },
     clear: async (table) => {
       await db.table(table).clear();
     },

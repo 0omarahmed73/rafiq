@@ -68,6 +68,8 @@ export interface Repo {
 
   listAgendaPoints(): Promise<AgendaPoint[]>;
   saveAgendaPoint(p: Draft<AgendaPoint>): Promise<void>;
+  /** Removing an id that is not there does nothing. */
+  deleteAgendaPoint(id: string): Promise<void>;
 
   listYearPlan(): Promise<YearPlanEntry[]>;
   /** Upsert by `id`. */
