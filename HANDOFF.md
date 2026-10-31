@@ -146,3 +146,4 @@ An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing j
 - Fonts: IBM Plex Sans Arabic 400/500/600/700 are files in `public/fonts` (with licence), declared with `@font-face` in `index.html` and preloaded, so the splash uses them too; the `@fontsource` npm package was removed. No external font requests anywhere.
 - Splash hides the page scrollbar while it exists (`html:has(#splash){overflow:hidden}`).
 - Splash logo letter is an inline SVG path (extracted from IBM Plex Sans Arabic 700), so it cannot resize when the web font finishes loading.
+- Deployed to Vercel (account 0omarahmed73, project `rafiq`, production URL https://rafiq-iota-neon.vercel.app). Redeploy with `vercel deploy --prod`; the project is not connected to the GitHub repo, so pushes do not deploy automatically.
