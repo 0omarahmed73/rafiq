@@ -126,3 +126,6 @@ An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing j
 - Settings gained `planAge` (default 25) and `planStart` (`YYYY-MM`, default 2026-10); both in backup schema. Title is `عامي <ordinal>` (`src/lib/ordinal.ts`, 1–99); months are labelled from the start month for twelve months. Progress is stored by month index, so changing the start keeps it.
 - Tick boxes use the `.plan-check` class in `styles/tokens.css` (visible border, accent fill, white tick).
 - Each task has a note box (`d:` entries) for what was done.
+
+### Input focus
+- Global text-field focus/hover styling at the end of `styles/tokens.css`: 160ms fade to the accent border plus a soft 4px accent ring; follows the chosen accent; reduced-motion rule already shortens transitions.

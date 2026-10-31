@@ -88,3 +88,27 @@ body {
   outline: 3px solid var(--teal);
   outline-offset: 2px;
 }
+
+/* Text fields: a soft accent ring that fades in on focus, replacing the browser's hard outline. */
+:is(textarea, select, input:not([type='checkbox'], [type='radio'], [type='range'], [type='color'])) {
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    background-color 160ms ease;
+}
+:is(textarea, select, input:not([type='checkbox'], [type='radio'], [type='range'], [type='color'])):hover {
+  border-color: color-mix(in srgb, var(--teal) 45%, var(--line));
+}
+:is(textarea, select, input:not([type='checkbox'], [type='radio'], [type='range'], [type='color'])):focus {
+  outline: none;
+  border-color: var(--teal);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--teal) 22%, transparent);
+}
+:is(textarea, select, input:not([type='checkbox'], [type='radio'], [type='range'], [type='color']))::placeholder {
+  color: var(--muted);
+  opacity: 0.7;
+  transition: opacity 160ms ease;
+}
+:is(textarea, input):focus::placeholder {
+  opacity: 0.4;
+}
