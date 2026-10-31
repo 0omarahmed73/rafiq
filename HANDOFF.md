@@ -1,7 +1,7 @@
 # رفيق (Rafiq): Handoff
 
 Any model or person can continue from this file. It is updated with every task commit.
-Last updated: Task 13 done. Next: Task 14 (summary builder and print view).
+Last updated: Task 14 done. Next: Task 15 (weekly review).
 
 ## What this is
 An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing journey, tracks check-ins, and builds a printable summary for the user's therapist. All data stays on the device (IndexedDB). It is a supportive tool, not therapy.
@@ -48,7 +48,7 @@ An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing j
 | 11 | Readiness check | done |
 | 12 | Steps 4-10 practices | done |
 | 13 | Therapist sessions and agenda | done |
-| 14 | Summary builder and print | pending |
+| 14 | Summary builder and print | done |
 | 15 | Weekly review | pending |
 | 16 | Backup export and import | pending |
 | 17 | Calm, disclaimer, settings, reminders | pending |
@@ -70,6 +70,7 @@ An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing j
 11. Task 11: readiness result messages are gender-neutral (not the plan's «يبدو أنك مستعد» / «ابقَ قليلًا»): «يبدو أن الوقت مناسب للانتقال إلى الخطوة التالية.» and «من الأفضل البقاء قليلًا في هذه الخطوة.»; threshold is a mean of 3.5 or more out of 5; the check never blocks navigation and the user can always press «أنهيتُ هذه الخطوة».
 12. Task 12: new prompt setting `saveToSoothing` ('step1' | 'step9') + `applySoothing()`: finished practices add their list items to the soothing list (duplicates ignored); `ListPrompt` prefills from the soothing list only the first time (an emptied list stays empty). The extra exercises in `docs/content/steps-4-10.html` (critic vs compassionate voice, soothing touch, gradual trust, evidence log, weekly pattern review) were NOT turned into practices; only the numbered prompts were.
 13. Task 13: agenda points are closed with a «تمت مناقشتها» checkbox (they then leave the list); homework ticks in a session note are saved with «حفظ الملاحظات»; session notes are private and never reach the summary.
+14. Task 14: summary rules: check-ins/curve/weekly reviews/practices only when their switch is on; practices only if `share`; weekly reviews only if `share`; flagged («للنقاش») items appear once (not repeated if shown elsewhere); session notes never; with every switch off the page says «لم أختر ما يدخل في الملخّص», with no data «لا توجد بيانات في هذه الفترة». Print forces light colours (`print.css`).
 
 ## Open items for the owner
 - Steps 4-10 content and the readiness questions for steps 1-3 are drafts: the owner's therapist must review them before release.
@@ -77,6 +78,7 @@ An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing j
 - Weekly-review question list has one given question; five more are written by the implementer and flagged for the owner's review (Task 15).
 
 ## Changes log (newest first)
+- Task 14: `/therapist/summary`: date range (default this month), five include-switches, live preview, 'حفظ كملف PDF' (window.print). `buildSummary` enforces privacy (shared/flagged only, no sessions), `formatAnswer` renders practice answers, `SummaryPrint` with empty states, `print.css` (A4, light colours); tab bar hidden when printing.
 - Task 13: `/therapist` (agenda of items flagged for the next session + open points, add/close points, past sessions with homework progress), `/therapist/note[/:id]` (date, what was said, takeaway, homework checklist; private), `agendaItems(repo)` (after the latest session, newest first).
 - Task 12: Practices `understand`, `compassion` (+ `compassion-letter`, `gratitude-letter`), `forgive` (+ `forgiveness-letter`), `boundaries`, `trust`, `care`, `values`; prompt setting `saveToSoothing` + `applySoothing`; `ListPrompt` prefill from the soothing list; `useOptionalRepo`. Every step now has practices.
 - Task 11: `ReadinessCheck` on every step page: 3 statements per step (1-5, labelled ends), `readinessMessage` (mean >= 3.5 is ready), saved in step progress, never blocks; user can mark the step done. `content/readiness.ts` holds the 30 statements.

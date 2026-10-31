@@ -1,0 +1,28 @@
+@page {
+  size: A4;
+  margin: 16mm;
+}
+
+/* The page goes to a therapist on paper or PDF: always light, whatever theme the screen uses. */
+@media print {
+  :root {
+    --bg: #ffffff !important;
+    --card: #ffffff !important;
+    --ink: #000000 !important;
+    --muted: #444444 !important;
+    --line: #bbbbbb !important;
+    --teal: #1f5249 !important;
+    --teal-soft: #ffffff !important;
+    --teal-ink: #1f5249 !important;
+    color-scheme: light !important;
+  }
+
+  body {
+    background: #ffffff;
+  }
+
+  .print-area {
+    border: 0 !important;
+    padding: 0 !important;
+  }
+}

@@ -11,7 +11,7 @@ export function TabBar() {
   return (
     <nav
       aria-label="التنقّل"
-      className="fixed inset-x-0 bottom-0 flex border-t border-line bg-card px-2"
+      className="fixed inset-x-0 bottom-0 flex border-t border-line bg-card px-2 print:hidden"
     >
       {tabs.map((tab) => (
         <NavLink
