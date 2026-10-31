@@ -1,9 +1,24 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useOptionalRepo } from '../../../db/RepoContext';
 import type { PromptProps } from './types';
 
-export function ListPrompt({ value, onChange }: PromptProps) {
+export function ListPrompt({ prompt, value, onChange }: PromptProps) {
+  const repo = useOptionalRepo();
   const items = Array.isArray(value) ? (value as string[]) : [];
   const [draft, setDraft] = useState('');
+
+  // The first time only: start from the user's soothing list. An emptied list stays empty.
+  useEffect(() => {
+    if (prompt.prefill !== 'soothingList' || value !== undefined || !repo) return;
+    let alive = true;
+    void repo.listSoothing().then((list) => {
+      if (alive && list.length > 0) onChange(list.map((s) => s.text));
+    });
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function add() {
     const text = draft.trim();

@@ -51,6 +51,7 @@ export const validate: PracticeDef = {
       label: 'ماذا يريحني الآن؟',
       hint: 'أختار شيئًا لطيفًا أفعله لنفسي الآن، كما أفعل مع شخص أحبّه.',
       prefill: 'soothingList',
+      saveToSoothing: 'step1',
     },
   ],
 };

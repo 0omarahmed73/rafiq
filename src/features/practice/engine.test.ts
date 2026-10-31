@@ -1,6 +1,7 @@
 import { createMemoryRepo } from '../../db/memoryRepo';
 import type { PracticeRecord } from '../../db/schema';
-import { applySink, nextPromptId, visiblePrompts } from './engine';
+import type { PracticeDef } from '../../content/schema';
+import { applySink, applySoothing, nextPromptId, visiblePrompts } from './engine';
 import { branchingDef } from './testDefs';
 
 describe('nextPromptId', () => {
@@ -48,6 +49,42 @@ const record = (over: Partial<PracticeRecord> = {}): PracticeRecord => ({
   forNextSession: false,
   updatedAt: '',
   ...over,
+});
+
+describe('applySoothing', () => {
+  const def: PracticeDef = {
+    id: 's',
+    stepId: 1,
+    title: 'ت',
+    prompts: [
+      { id: 'text', kind: 'text', label: 'نص' },
+      { id: 'soothe', kind: 'list', label: 'ما يريحني', saveToSoothing: 'step1' },
+    ],
+  };
+
+  it('adds each chosen item to the soothing list with its source', async () => {
+    const repo = createMemoryRepo();
+    await applySoothing(repo, def, record({ answers: { soothe: ['الرسم', 'سماع ألبوم'] } }));
+    const list = await repo.listSoothing();
+    expect(list.map((s) => [s.text, s.source]).sort()).toEqual([
+      ['الرسم', 'step1'],
+      ['سماع ألبوم', 'step1'],
+    ]);
+  });
+
+  it('skips blank entries and items already in the list', async () => {
+    const repo = createMemoryRepo();
+    await repo.addSoothing('الرسم', 'user');
+    await applySoothing(repo, def, record({ answers: { soothe: ['الرسم', '  ', 'مشي قصير'] } }));
+    expect((await repo.listSoothing()).map((s) => s.text).sort()).toEqual(['الرسم', 'مشي قصير']);
+  });
+
+  it('does nothing for a prompt without the setting or an unanswered prompt', async () => {
+    const repo = createMemoryRepo();
+    await applySoothing(repo, def, record({ answers: {} }));
+    await applySoothing(repo, branchingDef, record({ answers: { p4: ['x'] } }));
+    expect(await repo.listSoothing()).toHaveLength(0);
+  });
 });
 
 describe('applySink', () => {

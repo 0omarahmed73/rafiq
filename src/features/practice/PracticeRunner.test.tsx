@@ -126,6 +126,24 @@ describe('PracticeRunner', () => {
     expect(saved.share).toBe(false);
   });
 
+  it('adds the soothing choices of a finished practice to the soothing list', async () => {
+    const repo = createMemoryRepo();
+    const def: PracticeDef = {
+      id: 'soothe1',
+      stepId: 1,
+      title: 'تهدئة',
+      prompts: [{ id: 'soothe', kind: 'list', label: 'ماذا يريحني؟', saveToSoothing: 'step1' }],
+    };
+    const { user } = renderRunner(repo, def);
+    await user.type(await screen.findByRole('textbox', { name: 'إضافة' }), 'مشي قصير');
+    await user.click(screen.getByRole('button', { name: 'إضافة' }));
+    await next(user);
+    await user.click(screen.getByRole('button', { name: 'إنهاء التمرين' }));
+
+    const list = await repo.listSoothing();
+    expect(list.map((s) => [s.text, s.source])).toEqual([['مشي قصير', 'step1']]);
+  });
+
   it('writes a letter for a practice with a letter sink', async () => {
     const repo = createMemoryRepo();
     const def: PracticeDef = {

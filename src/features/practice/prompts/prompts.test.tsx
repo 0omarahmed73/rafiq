@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Prompt } from '../../../content/schema';
+import { createMemoryRepo } from '../../../db/memoryRepo';
+import type { Repo } from '../../../db/repo';
+import { RepoProvider } from '../../../db/RepoContext';
 import { ChipsPrompt } from './ChipsPrompt';
 import { EmotionPrompt } from './EmotionPrompt';
 import { ListPrompt } from './ListPrompt';
@@ -50,6 +53,52 @@ describe('ListPrompt', () => {
     render(<Harness prompt={prompt} Component={ListPrompt} onValue={onValue} />);
     await user.type(screen.getByRole('textbox', { name: 'إضافة' }), '   ');
     await user.click(screen.getByRole('button', { name: 'إضافة' }));
+    expect(onValue).not.toHaveBeenCalled();
+  });
+});
+
+describe('ListPrompt prefill', () => {
+  const prompt: Prompt = { id: 'l', kind: 'list', label: 'ما يريحني', prefill: 'soothingList' };
+
+  async function repoWithTwoItems() {
+    const repo = createMemoryRepo();
+    await repo.addSoothing('الرسم', 'user');
+    await repo.addSoothing('سماع ألبوم', 'step1');
+    return repo;
+  }
+
+  function renderPrefilled(repo: Repo, initial?: unknown, onValue?: (v: unknown) => void) {
+    render(
+      <RepoProvider repo={repo}>
+        <Harness prompt={prompt} Component={ListPrompt} initial={initial} onValue={onValue} />
+      </RepoProvider>,
+    );
+  }
+
+  it('fills the list from the soothing list the first time', async () => {
+    renderPrefilled(await repoWithTwoItems());
+    expect(await screen.findByText('الرسم')).toBeInTheDocument();
+    expect(screen.getByText('سماع ألبوم')).toBeInTheDocument();
+  });
+
+  it('keeps the prefilled entries editable', async () => {
+    const user = userEvent.setup();
+    renderPrefilled(await repoWithTwoItems());
+    await user.click(await screen.findByRole('button', { name: 'حذف: الرسم' }));
+    expect(screen.queryByText('الرسم')).not.toBeInTheDocument();
+    expect(screen.getByText('سماع ألبوم')).toBeInTheDocument();
+  });
+
+  it('does not refill after the user has emptied the list', async () => {
+    renderPrefilled(await repoWithTwoItems(), []);
+    await new Promise((r) => setTimeout(r, 30));
+    expect(screen.queryByText('الرسم')).not.toBeInTheDocument();
+  });
+
+  it('does nothing when the soothing list is empty', async () => {
+    const onValue = vi.fn();
+    renderPrefilled(createMemoryRepo(), undefined, onValue);
+    await new Promise((r) => setTimeout(r, 30));
     expect(onValue).not.toHaveBeenCalled();
   });
 });

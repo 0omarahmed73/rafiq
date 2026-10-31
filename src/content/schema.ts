@@ -36,6 +36,8 @@ export const PromptSchema = z.object({
   template: z.string().optional(),
   multi: z.boolean().optional(),
   prefill: z.literal('soothingList').optional(),
+  /** On finish, the items of a list prompt are added to the soothing list with this source. */
+  saveToSoothing: z.enum(['step1', 'step9']).optional(),
   showWhen: z.object({ promptId: z.string().min(1), equals: z.string().min(1) }).optional(),
 });
 export type Prompt = z.infer<typeof PromptSchema>;

@@ -90,6 +90,18 @@ async function saveFollowup(repo: Repo, record: PracticeRecord): Promise<void> {
   });
 }
 
+/** Adds the items of every list prompt marked `saveToSoothing` to the soothing list (duplicates are ignored). */
+export async function applySoothing(repo: Repo, def: PracticeDef, record: PracticeRecord): Promise<void> {
+  for (const prompt of def.prompts) {
+    if (!prompt.saveToSoothing) continue;
+    const items = record.answers[prompt.id];
+    if (!Array.isArray(items)) continue;
+    for (const text of items) {
+      if (typeof text === 'string' && text.trim()) await repo.addSoothing(text, prompt.saveToSoothing);
+    }
+  }
+}
+
 /** Runs the side effect a completed practice declares (a letter, the acceptance decision, a follow-up). */
 export async function applySink(repo: Repo, def: PracticeDef, record: PracticeRecord): Promise<void> {
   if (!def.sink) return;
