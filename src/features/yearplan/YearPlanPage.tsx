@@ -3,7 +3,20 @@ import { Link } from 'react-router-dom';
 import { YEAR_GOALS, YEAR_MONTHS, YEAR_REVIEW_QUESTIONS, YEAR_VISION } from '../../content/yearPlan';
 import { useRepo } from '../../db/RepoContext';
 import { toArabicDigits } from '../../lib/digits';
-import { goalKey, monthPercent, noteKey, overall, reviewKey, taskKey, toMap, type PlanMap } from './progress';
+import {
+  DEFAULT_AGE,
+  DEFAULT_START,
+  goalKey,
+  monthLabel,
+  monthPercent,
+  noteKey,
+  overall,
+  planTitle,
+  reviewKey,
+  taskKey,
+  toMap,
+  type PlanMap,
+} from './progress';
 
 const field =
   'min-h-24 w-full rounded-xl border-[1.5px] border-line bg-card p-3 text-[15px] leading-7 text-ink';
@@ -21,7 +34,7 @@ function Check({ label, checked, onChange, ariaLabel }: {
         aria-label={ariaLabel ?? label}
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
-        className="mt-1.5 h-5 w-5 shrink-0 accent-teal"
+        className="plan-check"
       />
       <span className={checked ? 'text-muted line-through' : ''}>{label}</span>
     </label>
@@ -32,12 +45,16 @@ export function YearPlanPage() {
   const repo = useRepo();
   const [map, setMap] = useState<PlanMap>(new Map());
   const [loaded, setLoaded] = useState(false);
+  const [age, setAge] = useState<number | undefined>(DEFAULT_AGE);
+  const [start, setStart] = useState(DEFAULT_START);
 
   useEffect(() => {
     let alive = true;
-    void repo.listYearPlan().then((rows) => {
+    void Promise.all([repo.listYearPlan(), repo.getSettings()]).then(([rows, settings]) => {
       if (!alive) return;
       setMap(toMap(rows));
+      setAge(settings.planAge ?? DEFAULT_AGE);
+      setStart(settings.planStart ?? DEFAULT_START);
       setLoaded(true);
     });
     return () => {
@@ -53,7 +70,24 @@ export function YearPlanPage() {
     [repo],
   );
 
+  async function saveSetting(patch: { planAge?: number; planStart?: string }) {
+    const { updatedAt: _u, ...current } = await repo.getSettings();
+    await repo.saveSettings({ ...current, ...patch });
+  }
+  const changeAge = (raw: string) => {
+    const n = Number(raw);
+    setAge(raw === '' ? undefined : n);
+    if (Number.isInteger(n) && n >= 1 && n <= 99) void saveSetting({ planAge: n });
+  };
+  const changeStart = (value: string) => {
+    setStart(value);
+    if (/^\d{4}-\d{2}$/.test(value)) void saveSetting({ planStart: value });
+  };
+
   if (!loaded) return null;
+  const startOk = /^\d{4}-\d{2}$/.test(start);
+  const first = startOk ? start : DEFAULT_START;
+  const label = (i: number) => monthLabel(first, i);
   const total = overall(map);
   const text = (id: string) => (typeof map.get(id) === 'string' ? (map.get(id) as string) : '');
 
@@ -64,8 +98,33 @@ export function YearPlanPage() {
       </Link>
       <header className="flex flex-col gap-2">
         <div className="text-sm text-muted">رؤيتي للسنة</div>
-        <h1 className="text-2xl font-bold leading-snug">{YEAR_VISION.motto}</h1>
+        <h1 className="text-2xl font-bold leading-snug">{planTitle(age && age >= 1 && age <= 99 ? age : DEFAULT_AGE)}</h1>
+        <div className="text-lg font-semibold">{YEAR_VISION.motto}</div>
         <p className="text-[15px] leading-8 text-muted">{YEAR_VISION.text}</p>
+        <p className="text-sm text-muted">{`من ${label(0)} إلى ${label(11)}`}</p>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="flex flex-col gap-1 text-sm font-semibold">
+            عمري في هذه السنة
+            <input
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={99}
+              value={age ?? ''}
+              onChange={(e) => changeAge(e.target.value)}
+              className="min-h-11 rounded-xl border-[1.5px] border-line bg-card px-3 text-ink"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm font-semibold">
+            شهر البداية
+            <input
+              type="month"
+              value={start}
+              onChange={(e) => changeStart(e.target.value)}
+              className="min-h-11 rounded-xl border-[1.5px] border-line bg-card px-3 text-ink"
+            />
+          </label>
+        </div>
         <div className="rounded-2xl bg-teal-soft p-3 text-sm font-semibold text-teal-ink">
           {`التقدم: ${toArabicDigits(total.percent)}٪ · ${toArabicDigits(total.tasksDone)} من ${toArabicDigits(total.tasksTotal)} خطوة · ${toArabicDigits(total.goalsDone)} من ${toArabicDigits(total.goalsTotal)} أهداف`}
         </div>
@@ -81,9 +140,9 @@ export function YearPlanPage() {
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-bold">الأشهر</h2>
         {YEAR_MONTHS.map((m, mi) => (
-          <details key={m.name} role="group" aria-label={m.name} className="rounded-2xl border border-line bg-card p-3.5">
+          <details key={m.name} role="group" aria-label={label(mi)} className="rounded-2xl border border-line bg-card p-3.5">
             <summary className="flex min-h-11 cursor-pointer flex-col justify-center gap-0.5">
-              <span className="font-bold">{m.name}</span>
+              <span className="font-bold">{label(mi)}</span>
               <span className="text-sm text-muted">{m.theme}</span>
               <span className="text-xs font-semibold text-teal">{`تقدم الشهر: ${toArabicDigits(monthPercent(map, mi))}٪`}</span>
             </summary>

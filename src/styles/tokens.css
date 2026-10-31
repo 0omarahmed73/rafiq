@@ -64,3 +64,27 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* A clearly visible tick box for the yearly plan: drawn border, filled with the accent when ticked. */
+.plan-check {
+  appearance: none;
+  flex-shrink: 0;
+  width: 1.5rem;
+  height: 1.5rem;
+  margin-top: 0.25rem;
+  border: 2px solid var(--muted);
+  border-radius: 0.4rem;
+  background: var(--card);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 80%;
+}
+.plan-check:checked {
+  border-color: var(--teal);
+  background-color: var(--teal);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.5l3 3 6-7' fill='none' stroke='white' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+.plan-check:focus-visible {
+  outline: 3px solid var(--teal);
+  outline-offset: 2px;
+}

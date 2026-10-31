@@ -111,6 +111,8 @@ const Settings = z.object({
   reminderTime: str.optional(),
   theme: z.enum(['system', 'light', 'dark']),
   accent: str.optional(),
+  planAge: z.number().int().optional(),
+  planStart: str.optional(),
   disclaimerAcceptedAt: str.optional(),
   lastBackupAt: str.optional(),
   lastReminderDay: day.optional(),

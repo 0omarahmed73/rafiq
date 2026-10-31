@@ -20,6 +20,42 @@ function setup(repo: Repo = createMemoryRepo()) {
 
 const first = YEAR_MONTHS[0].weeks[0].tasks[0];
 
+describe('YearPlanPage settings', () => {
+  it('is titled with the saved age', async () => {
+    const repo = createMemoryRepo();
+    await repo.saveSettings({ id: 'settings', theme: 'system', planAge: 27 });
+    setup(repo);
+    expect(await screen.findByRole('heading', { name: 'عامي السابع والعشرون' })).toBeInTheDocument();
+  });
+
+  it('defaults to the twenty-fifth year starting in October 2026', async () => {
+    setup();
+    expect(await screen.findByRole('heading', { name: 'عامي الخامس والعشرون' })).toBeInTheDocument();
+    expect(screen.getByLabelText('شهر البداية')).toHaveValue('2026-10');
+    expect(screen.getByText(/من أكتوبر ٢٠٢٦ إلى سبتمبر ٢٠٢٧/)).toBeInTheDocument();
+  });
+
+  it('saves a new age and start month, relabelling the months and keeping progress', async () => {
+    const repo = createMemoryRepo();
+    await repo.saveYearPlanEntry({ id: 't:0:0:0', value: true });
+    const { user } = setup(repo);
+    const age = await screen.findByLabelText('عمري في هذه السنة');
+    await user.clear(age);
+    await user.type(age, '26');
+    await user.clear(screen.getByLabelText('شهر البداية'));
+    await user.type(screen.getByLabelText('شهر البداية'), '2027-03');
+
+    expect(await screen.findByRole('heading', { name: 'عامي السادس والعشرون' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'مارس ٢٠٢٧' })).toBeInTheDocument();
+    expect(screen.getByText(/من مارس ٢٠٢٧ إلى فبراير ٢٠٢٨/)).toBeInTheDocument();
+    await vi.waitFor(async () => {
+      const s = await repo.getSettings();
+      expect([s.planAge, s.planStart]).toEqual([26, '2027-03']);
+    });
+    expect((await repo.listYearPlan())[0].value).toBe(true);
+  });
+});
+
 describe('YearPlanPage', () => {
   it('shows the vision, the goals and the progress at zero', async () => {
     setup();
@@ -30,11 +66,11 @@ describe('YearPlanPage', () => {
 
   it('saves a ticked task and shows the month percentage', async () => {
     const { repo, user } = setup();
-    await user.click(await screen.findByText(YEAR_MONTHS[0].name));
+    await user.click(await screen.findByText('أكتوبر ٢٠٢٦'));
     await user.click(screen.getByRole('checkbox', { name: first }));
 
     expect((await repo.listYearPlan()).map((e) => [e.id, e.value])).toEqual([['t:0:0:0', true]]);
-    const month = screen.getByRole('group', { name: YEAR_MONTHS[0].name });
+    const month = screen.getByRole('group', { name: 'أكتوبر ٢٠٢٦' });
     expect(within(month).getByText(/تقدم الشهر: ٨٪/)).toBeInTheDocument();
   });
 
@@ -43,17 +79,17 @@ describe('YearPlanPage', () => {
     await repo.saveYearPlanEntry({ id: 't:0:0:0', value: true });
     await repo.saveYearPlanEntry({ id: 'n:m0', value: 'كتبتها قبل' });
     const { user } = setup(repo);
-    await user.click(await screen.findByText(YEAR_MONTHS[0].name));
+    await user.click(await screen.findByText('أكتوبر ٢٠٢٦'));
 
     expect(screen.getByRole('checkbox', { name: first })).toBeChecked();
-    const month = screen.getByRole('group', { name: YEAR_MONTHS[0].name });
+    const month = screen.getByRole('group', { name: 'أكتوبر ٢٠٢٦' });
     expect(within(month).getByRole('textbox', { name: 'ملاحظات الشهر' })).toHaveValue('كتبتها قبل');
   });
 
   it('saves a month note as typed', async () => {
     const { repo, user } = setup();
-    await user.click(await screen.findByText(YEAR_MONTHS[0].name));
-    const month = screen.getByRole('group', { name: YEAR_MONTHS[0].name });
+    await user.click(await screen.findByText('أكتوبر ٢٠٢٦'));
+    const month = screen.getByRole('group', { name: 'أكتوبر ٢٠٢٦' });
     await user.type(within(month).getByRole('textbox', { name: 'ملاحظات الشهر' }), 'جيد');
 
     await vi.waitFor(async () => {

@@ -45,6 +45,13 @@ describe('HomePage', () => {
     expect(link).toHaveTextContent('١ من');
   });
 
+  it('names the yearly plan after the saved age', async () => {
+    const repo = createMemoryRepo();
+    await repo.saveSettings({ id: 'settings', theme: 'system', planAge: 30 });
+    renderHome(repo);
+    expect(await screen.findByRole('link', { name: /عامي الثلاثون/ })).toBeInTheDocument();
+  });
+
   it('has no streak wording', async () => {
     renderHome();
     await screen.findByText('الخطوة ١ من ١٠');

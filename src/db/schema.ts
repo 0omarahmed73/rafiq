@@ -98,6 +98,10 @@ export interface Settings extends Stamped {
   theme: 'system' | 'light' | 'dark';
   /** Favourite accent colour id (see lib/accents); an unknown value reads as teal. */
   accent?: string;
+  /** Age during the yearly plan, for its title «عامي …». Absent reads as 25. */
+  planAge?: number;
+  /** First month of the yearly plan, `YYYY-MM`. Absent reads as 2026-10. */
+  planStart?: string;
   disclaimerAcceptedAt?: string;
   lastBackupAt?: string;
   /** Day the daily reminder was last shown, so it appears once a day. */

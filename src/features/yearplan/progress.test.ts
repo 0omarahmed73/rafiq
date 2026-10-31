@@ -1,5 +1,5 @@
 import { YEAR_GOALS, YEAR_MONTHS, YEAR_REVIEW_QUESTIONS } from '../../content/yearPlan';
-import { goalKey, monthPercent, noteKey, overall, reviewKey, taskKey, toMap } from './progress';
+import { goalKey, monthLabel, monthPercent, noteKey, overall, planTitle, reviewKey, taskKey, toMap } from './progress';
 
 describe('year plan content', () => {
   it('carries the whole plan: 12 goals, 12 months of 4 weeks, 8 review questions', () => {
@@ -44,5 +44,19 @@ describe('progress', () => {
     const map = toMap([{ id: taskKey(0, 0, 0), value: true, updatedAt: '' }]);
     expect(monthPercent(map, 0)).toBe(Math.round(100 / tasks));
     expect(monthPercent(map, 1)).toBe(0);
+  });
+});
+
+describe('plan settings', () => {
+  it('titles the plan with the age in words', () => {
+    expect(planTitle(25)).toBe('عامي الخامس والعشرون');
+    expect(planTitle(31)).toBe('عامي الحادي والثلاثون');
+  });
+
+  it('names twelve months from the chosen start, crossing the year', () => {
+    expect(monthLabel('2026-10', 0)).toBe('أكتوبر ٢٠٢٦');
+    expect(monthLabel('2026-10', 3)).toBe('يناير ٢٠٢٧');
+    expect(monthLabel('2026-10', 11)).toBe('سبتمبر ٢٠٢٧');
+    expect(monthLabel('2027-03', 11)).toBe('فبراير ٢٠٢٨');
   });
 });
