@@ -1,7 +1,7 @@
 # رفيق (Rafiq): Handoff
 
 Any model or person can continue from this file. It is updated with every task commit.
-Last updated: Task 1 done. Next: Task 2 (date and digit helpers).
+Last updated: Task 2 done. Next: Task 3 (content schema, steps, emotions).
 
 ## What this is
 An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing journey, tracks check-ins, and builds a printable summary for the user's therapist. All data stays on the device (IndexedDB). It is a supportive tool, not therapy.
@@ -35,7 +35,7 @@ An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing j
 | Task | What | State |
 |---|---|---|
 | 1 | Scaffold, RTL shell, tab bar | done |
-| 2 | Date and digit helpers | pending |
+| 2 | Date and digit helpers | done |
 | 3 | Content schema, steps, emotions | pending |
 | 4 | Data layer (Repo, Dexie, memory) | pending |
 | 5 | Shared UI components | pending |
@@ -65,4 +65,5 @@ An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing j
 - Weekly-review question list has one given question; five more are written by the implementer and flagged for the owner's review (Task 15).
 
 ## Changes log (newest first)
+- Task 2: `src/lib/dates.ts` (dayKey, addDays, weekStartSaturday, formatArabicDate, DayKey) and `src/lib/digits.ts` (toArabicDigits), local-time based, fixed Arabic weekday/month tables, no Intl.
 - Task 1: Vite + React + TS (strict) + Tailwind 3 + Vitest scaffold; RTL `index.html`; CSS tokens (light/dark); `TabBar` (4 tabs), `Layout`, `routes` (home placeholder + catch-all redirect), `App`, `main.tsx` (self-hosted IBM Plex Sans Arabic via @fontsource). Tests: `TabBar.test.tsx`, `App.test.tsx`.
