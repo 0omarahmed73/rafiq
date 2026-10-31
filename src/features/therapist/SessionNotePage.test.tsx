@@ -91,6 +91,39 @@ describe('SessionNotePage', () => {
       });
     });
 
+    it('edits a step, keeping whether it is done, and saves the change with the notes', async () => {
+      const repo = await seed();
+      const { user } = setup('/therapist/note/s9', repo);
+      await user.click(await screen.findByRole('button', { name: 'تعديل الخطوة: ابداع' }));
+      const input = screen.getByRole('textbox', { name: 'تعديل الخطوة' });
+      await user.clear(input);
+      await user.type(input, 'إبداع جديد');
+      await user.click(screen.getByRole('button', { name: 'حفظ التعديل' }));
+      expect(screen.getByText('إبداع جديد')).toBeInTheDocument();
+      expect(screen.getByRole('checkbox', { name: /إبداع جديد/ })).toBeChecked();
+      await user.click(screen.getByRole('button', { name: 'حفظ الملاحظات' }));
+
+      await vi.waitFor(async () => {
+        expect((await repo.listSessions())[0].homework[0]).toEqual({ text: 'إبداع جديد', done: true });
+      });
+    });
+
+    it('cancelling an edit, or saving it empty, leaves the step as it was', async () => {
+      const repo = await seed();
+      const { user } = setup('/therapist/note/s9', repo);
+      await user.click(await screen.findByRole('button', { name: 'تعديل الخطوة: ابداع' }));
+      await user.type(screen.getByRole('textbox', { name: 'تعديل الخطوة' }), 'xx');
+      await user.click(screen.getByRole('button', { name: 'إلغاء التعديل' }));
+      expect(screen.getByText('ابداع')).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'تعديل الخطوة: ابداع' }));
+      await user.clear(screen.getByRole('textbox', { name: 'تعديل الخطوة' }));
+      await user.click(screen.getByRole('button', { name: 'حفظ التعديل' }));
+      expect(screen.getByRole('textbox', { name: 'تعديل الخطوة' })).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'إلغاء التعديل' }));
+      expect(screen.getByText('ابداع')).toBeInTheDocument();
+    });
+
     it('strikes through a step that is done', async () => {
       const repo = await seed();
       setup('/therapist/note/s9', repo);

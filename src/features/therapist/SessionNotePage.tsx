@@ -8,6 +8,9 @@ import { dayKey } from '../../lib/dates';
 const label = 'text-[13px] font-semibold text-muted';
 const area = 'w-full rounded-2xl border border-line bg-card p-3 text-base leading-8 text-ink';
 
+const iconBtn =
+  'flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:text-teal-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal';
+
 export function SessionNotePage() {
   const repo = useRepo();
   const navigate = useNavigate();
@@ -18,6 +21,7 @@ export function SessionNotePage() {
   const [said, setSaid] = useState('');
   const [takeaway, setTakeaway] = useState('');
   const [homework, setHomework] = useState<HomeworkItem[]>([]);
+  const [editing, setEditing] = useState<{ index: number; text: string }>();
   const [step, setStep] = useState('');
   const [createdAt, setCreatedAt] = useState<string | null>(null);
 
@@ -60,6 +64,13 @@ export function SessionNotePage() {
   }
 
   if (!ready) return null;
+
+  function saveEdit() {
+    const text = editing?.text.trim();
+    if (!editing || !text) return;
+    setHomework((list) => list.map((x, j) => (j === editing.index ? { ...x, text } : x)));
+    setEditing(undefined);
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -107,27 +118,72 @@ export function SessionNotePage() {
           <ul className="m-0 flex list-none flex-col overflow-hidden rounded-2xl border border-line bg-card p-0">
             {homework.map((h, i) => (
               <li key={`${i}-${h.text}`} className="flex items-center border-t border-line first:border-t-0">
-                <label className="flex min-h-14 flex-1 cursor-pointer items-center gap-3 px-3.5 text-[15px] leading-7">
-                  <input
-                    type="checkbox"
-                    checked={h.done}
-                    onChange={() =>
-                      setHomework((list) => list.map((x, j) => (j === i ? { ...x, done: !x.done } : x)))
-                    }
-                    className="plan-check !mt-0"
-                  />
-                  <span className={h.done ? 'text-muted line-through' : ''}>{h.text}</span>
-                </label>
-                <button
-                  type="button"
-                  aria-label={`حذف الخطوة: ${h.text}`}
-                  onClick={() => setHomework((list) => list.filter((_, j) => j !== i))}
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:text-teal-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal"
-                >
-                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3" />
-                  </svg>
-                </button>
+                {editing?.index === i ? (
+                  <form
+                    className="flex flex-1 items-center gap-2 px-3 py-2"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      saveEdit();
+                    }}
+                  >
+                    <input
+                      type="text"
+                      aria-label="تعديل الخطوة"
+                      autoFocus
+                      value={editing.text}
+                      onChange={(e) => setEditing({ index: i, text: e.target.value })}
+                      className="min-h-11 min-w-0 flex-1 rounded-xl border border-line bg-card px-3 text-base text-ink"
+                    />
+                    <button type="submit" className="min-h-11 rounded-full bg-teal px-4 text-sm font-bold text-card">
+                      حفظ التعديل
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditing(undefined)}
+                      className="min-h-11 rounded-full border-[1.5px] border-line px-4 text-sm font-bold text-ink"
+                    >
+                      إلغاء التعديل
+                    </button>
+                  </form>
+                ) : (
+                  <>
+                    <label className="flex min-h-14 flex-1 cursor-pointer items-center gap-3 px-3.5 text-[15px] leading-7">
+                      <input
+                        type="checkbox"
+                        checked={h.done}
+                        onChange={() =>
+                          setHomework((list) => list.map((x, j) => (j === i ? { ...x, done: !x.done } : x)))
+                        }
+                        className="plan-check !mt-0"
+                      />
+                      <span className={h.done ? 'text-muted line-through' : ''}>{h.text}</span>
+                    </label>
+                    <button
+                      type="button"
+                      aria-label={`تعديل الخطوة: ${h.text}`}
+                      onClick={() => setEditing({ index: i, text: h.text })}
+                      className={iconBtn}
+                    >
+                      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4z" />
+                        <path d="M13.5 6.5l4 4" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`حذف الخطوة: ${h.text}`}
+                      onClick={() => {
+                        setEditing(undefined);
+                        setHomework((list) => list.filter((_, j) => j !== i));
+                      }}
+                      className={iconBtn}
+                    >
+                      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3" />
+                      </svg>
+                    </button>
+                  </>
+                )}
               </li>
             ))}
           </ul>
