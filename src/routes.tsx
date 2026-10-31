@@ -1,6 +1,8 @@
 import { Navigate, type RouteObject } from 'react-router-dom';
 import { Layout } from './Layout';
+import { CalmPage } from './features/calm/CalmPage';
 import { CheckinPage } from './features/checkin/CheckinPage';
+import { SettingsPage } from './features/settings/SettingsPage';
 import { HomePage } from './features/home/HomePage';
 import { JourneyPage } from './features/journey/JourneyPage';
 import { PracticePage } from './features/practice/PracticePage';
@@ -19,13 +21,16 @@ export const routes: RouteObject[] = [
       { path: 'checkin', element: <CheckinPage /> },
       { path: 'tracker', element: <TrackerPage /> },
       { path: 'journey', element: <JourneyPage /> },
+      { path: 'calm', element: <CalmPage /> },
+      { path: 'settings', element: <SettingsPage /> },
       { path: 'therapist', element: <TherapistPage /> },
       { path: 'therapist/summary', element: <SummaryPage /> },
       { path: 'therapist/note', element: <SessionNotePage /> },
       { path: 'therapist/note/:id', element: <SessionNotePage /> },
       { path: 'step/:id', element: <StepPage /> },
       { path: 'practice/:practiceId', element: <PracticePage /> },
-      { path: '*', element: <Navigate to="/" replace /> },
     ],
   },
+  // Outside the layout so an unknown address redirects even while the disclaimer is showing.
+  { path: '*', element: <Navigate to="/" replace /> },
 ];

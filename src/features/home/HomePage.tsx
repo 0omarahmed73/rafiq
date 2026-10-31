@@ -6,6 +6,7 @@ import { dayKey, formatArabicDate } from '../../lib/dates';
 import { toArabicDigits } from '../../lib/digits';
 import { QuickCheckin } from '../checkin/QuickCheckin';
 import { currentStepId } from '../step/stepStatus';
+import { HomeReminders } from './HomeReminders';
 import { WeeklyReviewCard } from './WeeklyReviewCard';
 
 export function HomePage() {
@@ -37,6 +38,8 @@ export function HomePage() {
         </Link>
       </div>
 
+      <HomeReminders />
+
       <QuickCheckin />
 
       {step && (
@@ -54,6 +57,10 @@ export function HomePage() {
       )}
 
       <WeeklyReviewCard />
+
+      <Link to="/settings" className="flex min-h-11 items-center text-sm font-semibold text-teal">
+        الإعدادات والنسخ الاحتياطي ‹
+      </Link>
     </div>
   );
 }
