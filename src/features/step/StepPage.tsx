@@ -5,6 +5,7 @@ import { practicesForStep } from '../../content/practices';
 import { useRepo } from '../../db/RepoContext';
 import type { StepProgress } from '../../db/schema';
 import { toArabicDigits } from '../../lib/digits';
+import { ReadinessCheck } from './ReadinessCheck';
 
 const CHOICE_LABEL = { keep: 'أتقبّله وأُبقيه', change: 'أتقبّله وأغيّره' } as const;
 
@@ -78,6 +79,8 @@ export function StepPage() {
           </li>
         ))}
       </ul>
+
+      <ReadinessCheck stepId={step.id} />
 
       <p className="text-[13px] leading-7 text-muted">
         كل ما أكتبه في التمارين خاص بي، ولا يظهر في ملخّص معالجي إلا إذا اخترتُ مشاركته.

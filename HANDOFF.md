@@ -1,7 +1,7 @@
 # رفيق (Rafiq): Handoff
 
 Any model or person can continue from this file. It is updated with every task commit.
-Last updated: Task 10 done. Next: Task 11 (readiness check).
+Last updated: Task 11 done. Next: Task 12 (practices for steps 4 to 10, letters, soothing list).
 
 ## What this is
 An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing journey, tracks check-ins, and builds a printable summary for the user's therapist. All data stays on the device (IndexedDB). It is a supportive tool, not therapy.
@@ -45,7 +45,7 @@ An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing j
 | 8 | Practice engine and runner | done |
 | 9 | Steps 1-3 practices | done |
 | 10 | Journey and Step page | done |
-| 11 | Readiness check | pending |
+| 11 | Readiness check | done |
 | 12 | Steps 4-10 practices | pending |
 | 13 | Therapist sessions and agenda | pending |
 | 14 | Summary builder and print | pending |
@@ -67,6 +67,7 @@ An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing j
 8. Task 9: content wording is first person (no gendered imperatives); the regulation record is 5 prompts (one per screen), not the canvas's single-screen form. Dark-mode calendar shades were lightened after a visual check.
 9. Task 6b (owner request): "multi emotions in the same day" was read as (a) the quick check-in takes several emotions with one shared intensity, and (b) tapping a day in the tracker lists all of that day's check-ins (time, emotions, intensity, note). If the owner meant per-emotion intensities within one check-in, that is a data-model change (not done).
 10. Owner request queued: favourite accent colour (six palettes, light and dark, contrast tested, stored in `settings.accent`). Planned as Task 17b, built with the Settings page. See spec section 16 and the plan.
+11. Task 11: readiness result messages are gender-neutral (not the plan's «يبدو أنك مستعد» / «ابقَ قليلًا»): «يبدو أن الوقت مناسب للانتقال إلى الخطوة التالية.» and «من الأفضل البقاء قليلًا في هذه الخطوة.»; threshold is a mean of 3.5 or more out of 5; the check never blocks navigation and the user can always press «أنهيتُ هذه الخطوة».
 
 ## Open items for the owner
 - Steps 4-10 content and the readiness questions for steps 1-3 are drafts: the owner's therapist must review them before release.
@@ -74,6 +75,7 @@ An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing j
 - Weekly-review question list has one given question; five more are written by the implementer and flagged for the owner's review (Task 15).
 
 ## Changes log (newest first)
+- Task 11: `ReadinessCheck` on every step page: 3 statements per step (1-5, labelled ends), `readinessMessage` (mean >= 3.5 is ready), saved in step progress, never blocks; user can mark the step done. `content/readiness.ts` holds the 30 statements.
 - Task 10: `/journey` (10 steps as links, nothing locked, status labels, current step marked) and `/step/:id` (core question, lesson, practice links, acceptance decision card, privacy line); `markPracticed` called when a practice finishes. HANDOFF status table gained rows 6b and 17b.
 - Task 6b: Owner request: quick check-in accepts several emotions (one shared intensity); tracker days are buttons and `DayDetail` lists every check-in of the chosen day (default today); `formatArabicTime`; calendar cells are now 44px buttons. Spec section 16 and plan Task 17b added for the favourite-colour request.
 - Task 9: Practices `validate` (5 parts), `accept` (7 questions, branch on 'need', saves keep/change decision), `regulation` (5 prompts), `regulation-followup` (sink `followup` -> Followup row); registry in `content/practices/index.ts` is validated by `validateContent`. Dark-mode calendar shades lightened; legend swatch ringed.

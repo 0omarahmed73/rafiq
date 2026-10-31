@@ -68,6 +68,12 @@ describe('StepPage', () => {
     expect(screen.queryByText('قرارك')).not.toBeInTheDocument();
   });
 
+  it('offers the readiness check without hiding the way to other steps', async () => {
+    renderStep('/step/4');
+    expect(await screen.findByRole('heading', { name: 'هل أنا جاهز للخطوة التالية؟' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '‹ الرحلة' })).toHaveAttribute('href', '/journey');
+  });
+
   it('says the step does not exist for an unknown id', () => {
     renderStep('/step/99');
     expect(screen.getByText('هذه الخطوة غير موجودة')).toBeInTheDocument();
