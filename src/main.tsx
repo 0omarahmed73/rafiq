@@ -1,7 +1,3 @@
-import '@fontsource/ibm-plex-sans-arabic/arabic-400.css';
-import '@fontsource/ibm-plex-sans-arabic/arabic-500.css';
-import '@fontsource/ibm-plex-sans-arabic/arabic-600.css';
-import '@fontsource/ibm-plex-sans-arabic/arabic-700.css';
 import './styles/tokens.css';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -9,6 +5,7 @@ import { createBrowserRouter } from 'react-router-dom';
 import { App } from './App';
 import { openDb } from './db/open';
 import { installAccents } from './lib/accents';
+import { hideSplash } from './lib/splash';
 import { routes } from './routes';
 
 async function boot() {
@@ -20,6 +17,8 @@ async function boot() {
       <App router={router} repo={repo} persistent={persistent} />
     </StrictMode>,
   );
+  // Let the first screen paint underneath before the splash fades.
+  requestAnimationFrame(() => requestAnimationFrame(() => hideSplash()));
 }
 
 void boot();

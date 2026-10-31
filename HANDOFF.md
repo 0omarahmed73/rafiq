@@ -83,6 +83,7 @@ An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing j
 - Help-line numbers per country are not added yet (they must be verified, never invented).
 - Weekly-review question list has one given question; five more are written by the implementer and flagged for the owner's review (Task 15).
 
+- **Planned, not started (owner asked to add to scope, build later):** device-to-device sync with no server. WebRTC data channel; the offer and answer are exchanged as QR codes (text-paste fallback when there is no webcam); transfer in chunks reusing `exportAll`/`mergeAll` (newer `updatedAt` wins) in both directions; add deletion markers so deletes sync; a «مزامنة بين أجهزتي» card in Settings; unit tests for the message format and merge, e2e with two browser contexts; needs a spec and plan first. Optional public STUN server only for address discovery.
 - **Not verified on a real phone:** installing the PWA on Android, offline use there, and printing to PDF from a phone browser. Desktop Chrome (Playwright) verified offline use and a PDF render.
 - **Not deployed:** nothing is pushed or published; `vercel.json` is ready. The owner decides when and where to deploy.
 
@@ -141,3 +142,5 @@ An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing j
 - Session note homework: visible tick boxes, done steps struck through, trash button per step (removal saved with the notes), placeholder on the new-step field, «إضافة» disabled while empty.
 - Printed summary is in colour: `SummaryPage` sets `data-theme="light"` on `beforeprint` (restored on `afterprint`) so paper gets the light palette of the chosen accent; `print.css` only forces a white page and exact colour output.
 - Homework steps can also be edited inline (pencil icon; حفظ التعديل / إلغاء التعديل).
+- Splash screen: static markup + CSS in `index.html` (calm fade only, no movement), shown at least 1.5s (`SPLASH_MIN_MS`) then faded out by `src/lib/splash.ts` after the first render; respects reduced motion and dark mode. iOS launch images (`apple-touch-startup-image`) not made; Android uses manifest `background_color` + icon.
+- Fonts: IBM Plex Sans Arabic 400/500/600/700 are files in `public/fonts` (with licence), declared with `@font-face` in `index.html` and preloaded, so the splash uses them too; the `@fontsource` npm package was removed. No external font requests anywhere.
