@@ -33,6 +33,7 @@ export const TABLES: TableName[] = [
   'soothingList',
   'settings',
   'agendaPoints',
+  'yearPlan',
 ];
 
 /** Primary key field of each table. */
@@ -47,6 +48,7 @@ export const KEY_FIELD: Record<TableName, 'id' | 'stepId'> = {
   soothingList: 'id',
   settings: 'id',
   agendaPoints: 'id',
+  yearPlan: 'id',
 };
 
 const nowIso = () => new Date().toISOString();
@@ -140,6 +142,11 @@ export function createRepo(store: Store): Repo {
       await write('agendaPoints', p);
     },
 
+    listYearPlan: () => list('yearPlan'),
+    async saveYearPlanEntry(e) {
+      await write('yearPlan', e);
+    },
+
     async exportAll() {
       const out: Record<string, unknown[]> = {};
       for (const t of TABLES) out[t] = await list(t);
@@ -149,13 +156,13 @@ export function createRepo(store: Store): Repo {
       store.transaction(async () => {
         for (const t of TABLES) {
           await store.clear(t);
-          for (const row of d[t]) await store.put(t, row);
+          for (const row of d[t] ?? []) await store.put(t, row);
         }
       }),
     mergeAll: (d) =>
       store.transaction(async () => {
         for (const t of TABLES) {
-          for (const row of d[t] as unknown as Record<string, unknown>[]) {
+          for (const row of (d[t] ?? []) as unknown as Record<string, unknown>[]) {
             const existing = await store.get<{ updatedAt: string }>(t, row[KEY_FIELD[t]] as string | number);
             if (!existing || (row.updatedAt as string) > existing.updatedAt) await store.put(t, row);
           }

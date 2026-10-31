@@ -17,6 +17,7 @@ export class RafiqDB extends Dexie {
       settings: 'id',
       agendaPoints: 'id',
     });
+    this.version(2).stores({ yearPlan: 'id' });
   }
 }
 

@@ -10,6 +10,7 @@ import { StepPage } from './features/step/StepPage';
 import { SummaryPage } from './features/summary/SummaryPage';
 import { SessionNotePage } from './features/therapist/SessionNotePage';
 import { TherapistPage } from './features/therapist/TherapistPage';
+import { YearPlanPage } from './features/yearplan/YearPlanPage';
 import { TrackerPage } from './features/tracker/TrackerPage';
 
 export const routes: RouteObject[] = [
@@ -22,6 +23,7 @@ export const routes: RouteObject[] = [
       { path: 'tracker', element: <TrackerPage /> },
       { path: 'journey', element: <JourneyPage /> },
       { path: 'calm', element: <CalmPage /> },
+      { path: 'year', element: <YearPlanPage /> },
       { path: 'settings', element: <SettingsPage /> },
       { path: 'therapist', element: <TherapistPage /> },
       { path: 'therapist/summary', element: <SummaryPage /> },

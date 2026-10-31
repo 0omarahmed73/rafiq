@@ -115,3 +115,9 @@ An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing j
 - Practice autosave flushes on `pagehide` / `visibilitychange`; unreadable draft no longer blocks opening.
 - `finish()` guarded against double-tap; failure shows an Arabic alert and allows retry.
 - User-facing strings switched to first person (check-in, tracker, therapist, storage banner, runner end screen).
+
+### Merged: «عامي الخامس والعشرون» yearly plan (from my25year.vercel.app)
+- Route `/year` (`src/features/yearplan/YearPlanPage.tsx`); card on Home (`YearPlanCard`).
+- Content generated from the source app into `src/content/yearPlan.ts` (12 goals, 12 months × 4 weeks, 146 tasks, 8 review questions).
+- Storage: new `yearPlan` table (Dexie version 2), one row per answer (`t:` task, `g:` goal, `n:m` month note, `r:` review). Included in backups; old backups without it still import.
+- Not carried over: print/PDF of the plan, per-task detail notes, JSON import of the old app's `omar_year_plan_v4` localStorage data.

@@ -6,6 +6,7 @@ import { dayKey, formatArabicDate } from '../../lib/dates';
 import { toArabicDigits } from '../../lib/digits';
 import { QuickCheckin } from '../checkin/QuickCheckin';
 import { currentStepId } from '../step/stepStatus';
+import { YearPlanCard } from './YearPlanCard';
 import { HomeReminders } from './HomeReminders';
 import { WeeklyReviewCard } from './WeeklyReviewCard';
 
@@ -57,6 +58,8 @@ export function HomePage() {
       )}
 
       <WeeklyReviewCard />
+
+      <YearPlanCard />
 
       <Link to="/settings" className="flex min-h-11 items-center text-sm font-semibold text-teal">
         الإعدادات والنسخ الاحتياطي ‹

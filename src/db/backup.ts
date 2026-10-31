@@ -119,6 +119,8 @@ const Settings = z.object({
 
 const AgendaPoint = z.object({ id, text: str, day, done: z.boolean(), ...stamp });
 
+const YearPlanEntry = z.object({ id, value: z.union([z.boolean(), str]), ...stamp });
+
 const Backup = z.object({
   version: z.literal(1),
   exportedAt: str,
@@ -133,6 +135,7 @@ const Backup = z.object({
     soothingList: z.array(SoothingItem),
     settings: z.array(Settings).max(1),
     agendaPoints: z.array(AgendaPoint),
+    yearPlan: z.array(YearPlanEntry).default([]),
   }),
 });
 

@@ -11,6 +11,7 @@ import type {
   SoothingItem,
   StepProgress,
   WeeklyReview,
+  YearPlanEntry,
 } from './schema';
 
 /** A record as the caller supplies it: the repo stamps `updatedAt` on every write. */
@@ -67,6 +68,10 @@ export interface Repo {
 
   listAgendaPoints(): Promise<AgendaPoint[]>;
   saveAgendaPoint(p: Draft<AgendaPoint>): Promise<void>;
+
+  listYearPlan(): Promise<YearPlanEntry[]>;
+  /** Upsert by `id`. */
+  saveYearPlanEntry(e: Draft<YearPlanEntry>): Promise<void>;
 
   exportAll(): Promise<AllData>;
   /** Atomic: all or nothing. */

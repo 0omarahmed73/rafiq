@@ -111,6 +111,15 @@ export interface AgendaPoint extends Stamped {
   done: boolean;
 }
 
+/**
+ * One answer in the yearly plan. `id` names the thing answered: `t:month:week:task` (done),
+ * `g:goal` (done), `d:month:week:task` (note), `n:m<month>` (month note), `r:<question>` (review).
+ */
+export interface YearPlanEntry extends Stamped {
+  id: string;
+  value: boolean | string;
+}
+
 /** Every table, as stored. `settings` holds zero or one row. */
 export interface AllData {
   checkins: Checkin[];
@@ -123,6 +132,7 @@ export interface AllData {
   soothingList: SoothingItem[];
   settings: Settings[];
   agendaPoints: AgendaPoint[];
+  yearPlan: YearPlanEntry[];
 }
 
 export type TableName = keyof AllData;

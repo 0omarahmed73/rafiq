@@ -57,6 +57,8 @@ async function populated(): Promise<Repo> {
   await repo.addSoothing('الرسم', 'step1');
   await repo.saveSettings({ id: 'settings', theme: 'dark', accent: 'rose' });
   await repo.saveAgendaPoint({ id: 'a1', text: 'نقطة', day: '2026-10-30', done: false });
+  await repo.saveYearPlanEntry({ id: 't:0:0:1', value: true });
+  await repo.saveYearPlanEntry({ id: 'n:m0', value: 'ملاحظة الشهر' });
   return repo;
 }
 
@@ -66,12 +68,21 @@ describe('exportBackup', () => {
     expect(file.version).toBe(1);
     expect(file.exportedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     expect(Object.keys(file.data).sort()).toEqual(
-      ['agendaPoints', 'checkins', 'followups', 'letters', 'practices', 'sessions', 'settings', 'soothingList', 'stepProgress', 'weeklyReviews'].sort(),
+      ['agendaPoints', 'checkins', 'followups', 'letters', 'practices', 'sessions', 'settings', 'soothingList', 'stepProgress', 'weeklyReviews', 'yearPlan'].sort(),
     );
   });
 });
 
 describe('importBackup', () => {
+  it('still reads a backup made before the yearly plan existed', async () => {
+    const file = await exportBackup(await populated());
+    const { yearPlan: _omit, ...older } = file.data;
+    const repo = createMemoryRepo();
+    await importBackup(repo, { ...file, data: older }, 'replace');
+    expect(await repo.listYearPlan()).toEqual([]);
+    expect(await repo.listWeeklyReviews()).toHaveLength(1);
+  });
+
   it('restores everything from an exported file, as an object or as text', async () => {
     const file = await exportBackup(await populated());
 

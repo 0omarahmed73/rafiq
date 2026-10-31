@@ -36,6 +36,15 @@ describe('HomePage', () => {
     expect(screen.getByText('تنظيم الذات')).toBeInTheDocument();
   });
 
+  it('links to the yearly plan, with its overall progress', async () => {
+    const repo = createMemoryRepo();
+    await repo.saveYearPlanEntry({ id: 't:0:0:0', value: true });
+    renderHome(repo);
+    const link = await screen.findByRole('link', { name: /عامي الخامس والعشرون/ });
+    expect(link).toHaveAttribute('href', '/year');
+    expect(link).toHaveTextContent('١ من');
+  });
+
   it('has no streak wording', async () => {
     renderHome();
     await screen.findByText('الخطوة ١ من ١٠');

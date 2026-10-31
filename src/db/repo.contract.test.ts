@@ -138,4 +138,22 @@ describe.each(factories)('Repo contract (%s)', (_name, makeStore) => {
     ).rejects.toThrow('boom');
     expect(await repo.listLetters()).toHaveLength(0);
   });
+
+  describe('year plan', () => {
+    it('starts empty', async () => {
+      expect(await repo.listYearPlan()).toEqual([]);
+    });
+
+    it('keeps one entry per id, the latest write winning', async () => {
+      await repo.saveYearPlanEntry({ id: 't:0:0:0', value: true });
+      await repo.saveYearPlanEntry({ id: 't:0:0:0', value: false });
+      await repo.saveYearPlanEntry({ id: 'n:m1', value: 'نص' });
+      const rows = await repo.listYearPlan();
+      expect(rows.map((r) => [r.id, r.value]).sort()).toEqual([
+        ['n:m1', 'نص'],
+        ['t:0:0:0', false],
+      ]);
+      expect(rows[0].updatedAt).toMatch(/^\d{4}-/);
+    });
+  });
 });
