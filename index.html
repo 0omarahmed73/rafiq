@@ -58,21 +58,19 @@
       #splash.splash-hide { opacity: 0; pointer-events: none; }
       /* Everything is on screen from the first frame; only the exit moves. */
       #splash .logo {
+        flex: none;
         width: 116px;
         height: 116px;
         margin-bottom: 18px;
         border-radius: 50%;
         background: #2f6f66;
-        color: #fff;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 74px;
-        font-weight: 700;
-        line-height: 1;
-        padding-bottom: 12px;
         box-shadow: 0 0 0 12px rgba(47, 111, 102, 0.1), 0 0 0 26px rgba(47, 111, 102, 0.05);
       }
+      /* The letter is a drawn shape, not text, so it cannot change size when the font loads. */
+      #splash .logo svg { width: auto; height: 54px; fill: #fff; }
       #splash .name { font-size: 36px; font-weight: 700; line-height: 1.3; }
       #splash .tagline { font-size: 16px; color: #51655f; }
       #splash .note { position: absolute; bottom: max(28px, env(safe-area-inset-bottom)); font-size: 13px; color: #51655f; }
@@ -88,7 +86,7 @@
   </head>
   <body>
     <div id="splash" aria-hidden="true">
-      <div class="logo">ر</div>
+      <div class="logo"><svg viewBox="-60 -323 324 563" aria-hidden="true"><path transform="scale(1 -1)" d="M-60 -90H-20Q71 -90 113.5 -53.0Q156 -16 155 70Q155 93 152.0 118.5Q149 144 144 173L123 306L232 323L247 230Q255 182 259.5 141.5Q264 101 264 75Q264 3 246.0 -55.0Q228 -113 192.0 -154.5Q156 -196 103.0 -218.0Q50 -240 -19 -240H-60Z"/></svg></div>
       <div class="name">رفيق</div>
       <div class="tagline">يرافقني في رحلة العناية بنفسي</div>
       <div class="note">بياناتي تبقى على جهازي</div>

@@ -145,3 +145,4 @@ An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing j
 - Splash screen: static markup + CSS in `index.html` (visible from the first frame, no entrance animation; only a 350ms fade-out), shown at least 1.2s (`SPLASH_MIN_MS`) then faded out by `src/lib/splash.ts` after the first render; respects reduced motion and dark mode. iOS launch images (`apple-touch-startup-image`) not made; Android uses manifest `background_color` + icon.
 - Fonts: IBM Plex Sans Arabic 400/500/600/700 are files in `public/fonts` (with licence), declared with `@font-face` in `index.html` and preloaded, so the splash uses them too; the `@fontsource` npm package was removed. No external font requests anywhere.
 - Splash hides the page scrollbar while it exists (`html:has(#splash){overflow:hidden}`).
+- Splash logo letter is an inline SVG path (extracted from IBM Plex Sans Arabic 700), so it cannot resize when the web font finishes loading.
