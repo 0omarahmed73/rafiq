@@ -1,7 +1,7 @@
 # رفيق (Rafiq): Handoff
 
 Any model or person can continue from this file. It is updated with every task commit.
-Last updated: Task 3 done. Next: Task 4 (data layer: Repo, Dexie, memory fallback).
+Last updated: Task 4 done. Next: Task 5 (shared UI components and storage banner).
 
 ## What this is
 An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing journey, tracks check-ins, and builds a printable summary for the user's therapist. All data stays on the device (IndexedDB). It is a supportive tool, not therapy.
@@ -37,7 +37,7 @@ An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing j
 | 1 | Scaffold, RTL shell, tab bar | done |
 | 2 | Date and digit helpers | done |
 | 3 | Content schema, steps, emotions | done |
-| 4 | Data layer (Repo, Dexie, memory) | pending |
+| 4 | Data layer (Repo, Dexie, memory) | done |
 | 5 | Shared UI components | pending |
 | 6 | Check-in and Home | pending |
 | 7 | Tracker | pending |
@@ -58,6 +58,8 @@ An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing j
 1. `rafiq/` is its own git repo, not part of the Mashhad repo. Reason: the parent `.gitignore` is an allow-list that ignores `rafiq/`, and the parent publishes to a Vercel deploy. Cost if wrong: one remote/URL change later.
 2. Task 1: `src/test/setup.ts` wraps `globalThis.Request` to drop `init.signal`. Reason: under jsdom, Node's native `Request` rejects jsdom's `AbortSignal`, which React Router's data router passes on navigation (redirect test failed without it). Test-only; cost if wrong: remove the wrapper if jsdom/Node versions align later.
 3. Task 1: App takes a `router` prop (`App({ router })`) instead of using `BrowserRouter` directly, so tests can pass `createMemoryRouter`. Same behaviour in the browser (`createBrowserRouter` in `main.tsx`).
+4. Task 4: added `src/db/repoCore.ts`: one `createRepo(store)` implementation over a tiny `Store` interface (Dexie store and in-memory store both implement it). Reason: avoids duplicating ~25 repo methods; the contract suite runs against both. Cost if wrong: split into two classes.
+5. Task 4: `Settings` gained `lastReminderDay` (Task 17's `reminderDue` needs it); `AllData.settings` is an array of 0..1 rows so every table merges the same way; `addSoothing` ignores duplicate text. Cost if wrong: small edits in Tasks 16/17.
 
 ## Open items for the owner
 - Steps 4-10 content and the readiness questions for steps 1-3 are drafts: the owner's therapist must review them before release.
@@ -65,6 +67,7 @@ An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing j
 - Weekly-review question list has one given question; five more are written by the implementer and flagged for the owner's review (Task 15).
 
 ## Changes log (newest first)
+- Task 4: `src/db`: record types (`schema.ts`), `Repo` interface (`repo.ts`), shared `createRepo` (`repoCore.ts`), Dexie store + `RafiqDB` (`dexieRepo.ts`), memory store (`memoryRepo.ts`), `openDb` with in-memory fallback (`open.ts`), `RepoProvider`/`useRepo`. Contract tests run on both stores.
 - Task 3: `src/content`: Zod schemas, 10 steps (title, core question, lesson), 6 emotion groups / 42 words, `emotionLabel`, `validateContent`. Step 5 lesson reworded gender-neutral.
 - Task 2: `src/lib/dates.ts` (dayKey, addDays, weekStartSaturday, formatArabicDate, DayKey) and `src/lib/digits.ts` (toArabicDigits), local-time based, fixed Arabic weekday/month tables, no Intl.
 - Task 1: Vite + React + TS (strict) + Tailwind 3 + Vitest scaffold; RTL `index.html`; CSS tokens (light/dark); `TabBar` (4 tabs), `Layout`, `routes` (home placeholder + catch-all redirect), `App`, `main.tsx` (self-hosted IBM Plex Sans Arabic via @fontsource). Tests: `TabBar.test.tsx`, `App.test.tsx`.
