@@ -9,6 +9,12 @@ export interface AccentTokens {
   shadeMid: string;
   shadeStrong: string;
   shadeStrongInk: string;
+  /** The page colours, tinted by the accent so the whole theme follows it. */
+  bg: string;
+  card: string;
+  ink: string;
+  muted: string;
+  line: string;
 }
 
 export interface Accent {
@@ -34,6 +40,11 @@ export const ACCENTS: Record<AccentId, Accent> = {
       shadeMid: '#9CC7BE',
       shadeStrong: '#3E8077',
       shadeStrongInk: '#FFFFFF',
+      bg: '#F3F6F4',
+      card: '#FFFFFF',
+      ink: '#17302B',
+      muted: '#51655F',
+      line: '#DCE5E1',
     },
     dark: {
       teal: '#5FB3A6',
@@ -43,6 +54,11 @@ export const ACCENTS: Record<AccentId, Accent> = {
       shadeMid: '#35756C',
       shadeStrong: '#5FB3A6',
       shadeStrongInk: '#0F1B18',
+      bg: '#0F1B18',
+      card: '#16262A',
+      ink: '#E6F0EC',
+      muted: '#A3B6B0',
+      line: '#27403A',
     },
   },
   blue: {
@@ -55,6 +71,11 @@ export const ACCENTS: Record<AccentId, Accent> = {
       shadeMid: '#7E9ABE',
       shadeStrong: '#4D77AC',
       shadeStrongInk: '#FFFFFF',
+      bg: '#F2F3F5',
+      card: '#FFFFFF',
+      ink: '#162231',
+      muted: '#606C7B',
+      line: '#DCE0E5',
     },
     dark: {
       teal: '#7396C4',
@@ -64,6 +85,11 @@ export const ACCENTS: Record<AccentId, Accent> = {
       shadeMid: '#496992',
       shadeStrong: '#7396C4',
       shadeStrongInk: '#0F1B18',
+      bg: '#10151C',
+      card: '#181F28',
+      ink: '#E6EAEF',
+      muted: '#7E8A9A',
+      line: '#252F3C',
     },
   },
   purple: {
@@ -76,6 +102,11 @@ export const ACCENTS: Record<AccentId, Accent> = {
       shadeMid: '#A38FBC',
       shadeStrong: '#8060A9',
       shadeStrongInk: '#FFFFFF',
+      bg: '#F3F2F5',
+      card: '#FFFFFF',
+      ink: '#221631',
+      muted: '#716581',
+      line: '#E0DCE5',
     },
     dark: {
       teal: '#A289C2',
@@ -85,6 +116,11 @@ export const ACCENTS: Record<AccentId, Accent> = {
       shadeMid: '#745A96',
       shadeStrong: '#A289C2',
       shadeStrongInk: '#0F1B18',
+      bg: '#15101C',
+      card: '#1F1828',
+      ink: '#EAE6EF',
+      muted: '#8D819C',
+      line: '#2F253C',
     },
   },
   rose: {
@@ -97,6 +133,11 @@ export const ACCENTS: Record<AccentId, Accent> = {
       shadeMid: '#C0879A',
       shadeStrong: '#B15976',
       shadeStrongInk: '#FFFFFF',
+      bg: '#F5F2F3',
+      card: '#FFFFFF',
+      ink: '#31161F',
+      muted: '#7E636C',
+      line: '#E5DCDF',
     },
     dark: {
       teal: '#C77F97',
@@ -106,6 +147,11 @@ export const ACCENTS: Record<AccentId, Accent> = {
       shadeMid: '#9A5169',
       shadeStrong: '#C77F97',
       shadeStrongInk: '#0F1B18',
+      bg: '#1C1014',
+      card: '#28181D',
+      ink: '#EFE6E9',
+      muted: '#9C818A',
+      line: '#3C252D',
     },
   },
   amber: {
@@ -118,6 +164,11 @@ export const ACCENTS: Record<AccentId, Accent> = {
       shadeMid: '#C48B5A',
       shadeStrong: '#A36733',
       shadeStrongInk: '#FFFFFF',
+      bg: '#F5F3F2',
+      card: '#FFFFFF',
+      ink: '#312316',
+      muted: '#786A5E',
+      line: '#E5E0DC',
     },
     dark: {
       teal: '#CD803C',
@@ -127,6 +178,11 @@ export const ACCENTS: Record<AccentId, Accent> = {
       shadeMid: '#8B5B32',
       shadeStrong: '#CD803C',
       shadeStrongInk: '#0F1B18',
+      bg: '#1C1510',
+      card: '#281F18',
+      ink: '#EFEAE6',
+      muted: '#98897C',
+      line: '#3C3025',
     },
   },
   green: {
@@ -139,6 +195,11 @@ export const ACCENTS: Record<AccentId, Accent> = {
       shadeMid: '#70A981',
       shadeStrong: '#468158',
       shadeStrongInk: '#FFFFFF',
+      bg: '#F2F5F3',
+      card: '#FFFFFF',
+      ink: '#16311E',
+      muted: '#5A7261',
+      line: '#DCE5DF',
     },
     dark: {
       teal: '#53A26B',
@@ -148,6 +209,11 @@ export const ACCENTS: Record<AccentId, Accent> = {
       shadeMid: '#437050',
       shadeStrong: '#53A26B',
       shadeStrongInk: '#0F1B18',
+      bg: '#101C13',
+      card: '#18281D',
+      ink: '#E6EFE9',
+      muted: '#799681',
+      line: '#253C2C',
     },
   },
 };
@@ -160,7 +226,8 @@ export function normalizeAccent(value: string | undefined): AccentId {
 const vars = (t: AccentTokens) =>
   `--teal:${t.teal};--teal-soft:${t.tealSoft};--teal-ink:${t.tealInk};` +
   `--shade-light:${t.shadeLight};--shade-mid:${t.shadeMid};--shade-strong:${t.shadeStrong};` +
-  `--shade-strong-ink:${t.shadeStrongInk};`;
+  `--shade-strong-ink:${t.shadeStrongInk};` +
+  `--bg:${t.bg};--card:${t.card};--ink:${t.ink};--muted:${t.muted};--line:${t.line};`;
 
 /**
  * CSS rules that override the accent tokens for `html[data-accent=…]`, in light mode, in the
@@ -178,7 +245,10 @@ export function accentCss(): string {
 }
 
 export function applyAccent(value: string | undefined): void {
-  document.documentElement.dataset.accent = normalizeAccent(value);
+  const id = normalizeAccent(value);
+  document.documentElement.dataset.accent = id;
+  // The browser toolbar follows the chosen colour too.
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', ACCENTS[id].light.teal);
 }
 
 /** Adds the accent rules to the page once and applies the saved accent. Call before the first render. */

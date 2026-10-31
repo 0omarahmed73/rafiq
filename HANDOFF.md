@@ -1,7 +1,7 @@
 # رفيق (Rafiq): Handoff
 
 Any model or person can continue from this file. It is updated with every task commit.
-Last updated: Task 18 done. Next: Final whole-branch review.
+Last updated: Task 17c done. Next: Fix pass from the final review (autosave on tab close, finish double-tap, gendered strings, summary totals), then owner requests: personal information, report design.
 
 ## What this is
 An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing journey, tracks check-ins, and builds a printable summary for the user's therapist. All data stays on the device (IndexedDB). It is a supportive tool, not therapy.
@@ -76,6 +76,7 @@ An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing j
 17. Task 17: `DisclaimerGate` wraps the `Layout` (the `/calm` page is never behind it); the unknown-route redirect lives outside the layout. The calm page's danger sentence is first person and **no phone numbers are included** (a test enforces no 3+ digit runs); country help lines must be added only after verification. Settings: export/import backup (confirmation inside the page, merge or replace), daily reminder time, notification permission button, about. Home shows reminder banners (daily + 21-day backup) and links to Settings.
 18. Task 17b (owner request): favourite accent colour. Six palettes in `src/lib/accents.ts` (teal default, blue, purple, rose, amber, green), each with light and dark tokens; `accents.test.ts` checks WCAG contrast >= 4.5:1 for every palette in both modes. Chosen in Settings (`AccentPicker`), saved as `settings.accent` (included in backups), applied via `data-accent` on `<html>` by `installAccents()` in `main.tsx` before first render. The disclaimer heading was reworded to a neutral «مرحبًا في رفيق».
 19. Task 18: PWA via `vite-plugin-pwa` (autoUpdate, precaches the shell, fonts and icons; manifest `رفيق`, rtl/ar, teal), `vercel.json` rewrite, README, Playwright e2e (`npm run e2e`, runs `build + preview` with the installed Google Chrome). Icons are PNGs rendered with Chrome from the project font. The summary was checked as a real PDF (A4, light, rtl): two print issues were found and fixed test-first (hyphenated date range scrambled by rtl; curve placeholder printed).
+20. Task 17c (owner request): the accent colour changes the whole theme: each palette in `src/lib/accents.ts` also carries hue-tinted `bg`, `card`, `ink`, `muted`, `line` (light and dark) and the toolbar colour (`meta theme-color`). Print stays neutral (`print.css` forces light tokens).
 
 ## Open items for the owner
 - Steps 4-10 content and the readiness questions for steps 1-3 are drafts: the owner's therapist must review them before release.
@@ -86,6 +87,7 @@ An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing j
 - **Not deployed:** nothing is pushed or published; `vercel.json` is ready. The owner decides when and where to deploy.
 
 ## Changes log (newest first)
+- Task 17c: Accent colour now also tints the page background, cards, text, muted text and borders (both modes) and the browser toolbar; contrast of every palette is tested.
 - Task 18: PWA (`vite-plugin-pwa`, manifest, icons from Chrome), `vercel.json`, README, Playwright e2e (full day flow + offline); print fixes found by rendering the summary to PDF: `formatArabicFullDate` for the date range, curve omitted below two days.
 - Task 17b: Accent colour (owner request): `lib/accents.ts` (6 palettes x light/dark, `accentCss`, `applyAccent`, `installAccents`), `lib/color.ts` (contrast helpers), `AccentPicker` in Settings, `Settings.accent` + backup schema; contrast of every palette is tested. Disclaimer heading made gender-neutral.
 - Task 17: `/calm` (breathing, 5-4-3-2-1 grounding, danger sentence, no numbers), `DisclaimerGate` (accept once; /calm never blocked), `/settings` (backup export/import with in-page confirmation, daily reminder time, notification permission, about), `HomeReminders` (daily + 21-day backup banners), `lib/reminders.ts`, `lib/download.ts`. Redirect for unknown routes moved outside the layout.
