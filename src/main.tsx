@@ -7,12 +7,17 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createBrowserRouter } from 'react-router-dom';
 import { App } from './App';
+import { openDb } from './db/open';
 import { routes } from './routes';
 
-const router = createBrowserRouter(routes);
+async function boot() {
+  const { repo, persistent } = await openDb();
+  const router = createBrowserRouter(routes);
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <App router={router} repo={repo} persistent={persistent} />
+    </StrictMode>,
+  );
+}
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App router={router} />
-  </StrictMode>,
-);
+void boot();

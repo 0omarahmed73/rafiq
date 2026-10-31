@@ -1,7 +1,7 @@
 # رفيق (Rafiq): Handoff
 
 Any model or person can continue from this file. It is updated with every task commit.
-Last updated: Task 4 done. Next: Task 5 (shared UI components and storage banner).
+Last updated: Task 5 done. Next: Task 6 (check-in flow and Home).
 
 ## What this is
 An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing journey, tracks check-ins, and builds a printable summary for the user's therapist. All data stays on the device (IndexedDB). It is a supportive tool, not therapy.
@@ -38,7 +38,7 @@ An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing j
 | 2 | Date and digit helpers | done |
 | 3 | Content schema, steps, emotions | done |
 | 4 | Data layer (Repo, Dexie, memory) | done |
-| 5 | Shared UI components | pending |
+| 5 | Shared UI components | done |
 | 6 | Check-in and Home | pending |
 | 7 | Tracker | pending |
 | 8 | Practice engine and runner | pending |
@@ -67,6 +67,7 @@ An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing j
 - Weekly-review question list has one given question; five more are written by the implementer and flagged for the owner's review (Task 15).
 
 ## Changes log (newest first)
+- Task 5: Components: `Chip`, `Switch`, `IntensitySlider` (0-10, Arabic digits), `ProgressSegments`, `Banner`, `StorageBanner`. `App` now takes `router`, `repo`, `persistent` and provides the repo; `main.tsx` opens the DB in `boot()` before rendering.
 - Task 4: `src/db`: record types (`schema.ts`), `Repo` interface (`repo.ts`), shared `createRepo` (`repoCore.ts`), Dexie store + `RafiqDB` (`dexieRepo.ts`), memory store (`memoryRepo.ts`), `openDb` with in-memory fallback (`open.ts`), `RepoProvider`/`useRepo`. Contract tests run on both stores.
 - Task 3: `src/content`: Zod schemas, 10 steps (title, core question, lesson), 6 emotion groups / 42 words, `emotionLabel`, `validateContent`. Step 5 lesson reworded gender-neutral.
 - Task 2: `src/lib/dates.ts` (dayKey, addDays, weekStartSaturday, formatArabicDate, DayKey) and `src/lib/digits.ts` (toArabicDigits), local-time based, fixed Arabic weekday/month tables, no Intl.
