@@ -1,7 +1,7 @@
 # رفيق (Rafiq): Handoff
 
 Any model or person can continue from this file. It is updated with every task commit.
-Last updated: Task 15 done. Next: Task 16 (backup export and import).
+Last updated: Task 16 done. Next: Task 17 (calm page, disclaimer, settings, reminders), then 17b (accent colour).
 
 ## What this is
 An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing journey, tracks check-ins, and builds a printable summary for the user's therapist. All data stays on the device (IndexedDB). It is a supportive tool, not therapy.
@@ -50,7 +50,7 @@ An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing j
 | 13 | Therapist sessions and agenda | done |
 | 14 | Summary builder and print | done |
 | 15 | Weekly review | done |
-| 16 | Backup export and import | pending |
+| 16 | Backup export and import | done |
 | 17 | Calm, disclaimer, settings, reminders | pending |
 | 17b | Favourite accent colour (owner request) | pending |
 | 18 | PWA, deploy, e2e | pending |
@@ -72,6 +72,7 @@ An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing j
 13. Task 13: agenda points are closed with a «تمت مناقشتها» checkbox (they then leave the list); homework ticks in a session note are saved with «حفظ الملاحظات»; session notes are private and never reach the summary.
 14. Task 14: summary rules: check-ins/curve/weekly reviews/practices only when their switch is on; practices only if `share`; weekly reviews only if `share`; flagged («للنقاش») items appear once (not repeated if shown elsewhere); session notes never; with every switch off the page says «لم أختر ما يدخل في الملخّص», with no data «لا توجد بيانات في هذه الفترة». Print forces light colours (`print.css`).
 15. Task 15: weekly review = previous Saturday-to-Friday week, created on Home once per week only if that week has a check-in; no AI. The six weekly questions are first person (the first from the plan, reworded gender-neutral; five written by the implementer: **owner/therapist to review** in `src/content/weeklyQuestions.ts`).
+16. Task 16: `importBackup` accepts the file as text or an object, validates everything with Zod before touching the repo, then writes atomically (replace or merge by `updatedAt`). Zod strips unknown fields, so **Task 17b must add `accent` to the Settings schema in `src/db/backup.ts`** or the colour choice would be lost on import.
 
 ## Open items for the owner
 - Steps 4-10 content and the readiness questions for steps 1-3 are drafts: the owner's therapist must review them before release.
@@ -79,6 +80,7 @@ An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing j
 - Weekly-review question list has one given question; five more are written by the implementer and flagged for the owner's review (Task 15).
 
 ## Changes log (newest first)
+- Task 16: `src/db/backup.ts`: `exportBackup`, `importBackup(repo, textOrObject, 'replace'|'merge')`, `BackupError` (الملف غير صالح / إصدار الملف غير مدعوم); full Zod validation before any write; a bad file changes nothing.
 - Task 15: Weekly review: `reviewWeekStart`, `generateWeeklyReview` (top 3 emotions, trend, steps practised, rotating question), `ensureWeeklyReview` (one per week, only with check-ins), `WeeklyReviewCard` on Home (answer + share switch, off by default), `content/weeklyQuestions.ts`.
 - Task 14: `/therapist/summary`: date range (default this month), five include-switches, live preview, 'حفظ كملف PDF' (window.print). `buildSummary` enforces privacy (shared/flagged only, no sessions), `formatAnswer` renders practice answers, `SummaryPrint` with empty states, `print.css` (A4, light colours); tab bar hidden when printing.
 - Task 13: `/therapist` (agenda of items flagged for the next session + open points, add/close points, past sessions with homework progress), `/therapist/note[/:id]` (date, what was said, takeaway, homework checklist; private), `agendaItems(repo)` (after the latest session, newest first).
