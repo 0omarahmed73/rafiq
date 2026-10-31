@@ -75,10 +75,13 @@
       #splash .tagline { font-size: 16px; color: #51655f; }
       #splash .note { position: absolute; bottom: max(28px, env(safe-area-inset-bottom)); font-size: 13px; color: #51655f; }
       @media (prefers-color-scheme: dark) {
-        #splash { background: radial-gradient(circle at 50% 40%, #1b322c 0%, #0f1b18 62%); color: #e6f0ec; }
-        #splash .tagline, #splash .note { color: #a3b6b0; }
-        #splash .logo { background: #3f8f84; box-shadow: 0 0 0 12px rgba(63, 143, 132, 0.16), 0 0 0 26px rgba(63, 143, 132, 0.08); }
+        :root:not([data-theme='light']) #splash { background: radial-gradient(circle at 50% 40%, #1b322c 0%, #0f1b18 62%); color: #e6f0ec; }
+        :root:not([data-theme='light']) #splash .tagline, :root:not([data-theme='light']) #splash .note { color: #a3b6b0; }
+        :root:not([data-theme='light']) #splash .logo { background: #3f8f84; box-shadow: 0 0 0 12px rgba(63, 143, 132, 0.16), 0 0 0 26px rgba(63, 143, 132, 0.08); }
       }
+      :root[data-theme='dark'] #splash { background: radial-gradient(circle at 50% 40%, #1b322c 0%, #0f1b18 62%); color: #e6f0ec; }
+      :root[data-theme='dark'] #splash .tagline, :root[data-theme='dark'] #splash .note { color: #a3b6b0; }
+      :root[data-theme='dark'] #splash .logo { background: #3f8f84; box-shadow: 0 0 0 12px rgba(63, 143, 132, 0.16), 0 0 0 26px rgba(63, 143, 132, 0.08); }
       @media (prefers-reduced-motion: reduce) {
         #splash { transition: none; }
       }

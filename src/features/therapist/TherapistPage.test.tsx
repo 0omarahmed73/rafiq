@@ -138,30 +138,14 @@ describe('TherapistPage', () => {
 
   it('shows past sessions with their homework progress, newest first', async () => {
     const repo = createMemoryRepo();
-    await repo.saveSession({
-      id: 's1',
-      date: '2026-10-20',
-      therapistSaid: 'بدأنا بتصديق المشاعر',
-      takeaway: '',
-      homework: [
-        { text: 'أ', done: true },
-        { text: 'ب', done: true },
-        { text: 'ج', done: true },
-      ],
-      createdAt: '2026-10-20T09:00:00.000Z',
-    });
-    await repo.saveSession({
-      id: 's2',
-      date: '2026-10-27',
-      therapistSaid: 'اتفقنا على الانتظار قبل الردّ',
-      takeaway: '',
-      homework: [
-        { text: 'أ', done: true },
-        { text: 'ب', done: false },
-        { text: 'ج', done: true },
-      ],
-      createdAt: '2026-10-27T09:00:00.000Z',
-    });
+    const session = (id: string, date: string, said: string) =>
+      repo.saveSession({ id, date, therapistSaid: said, takeaway: '', homework: [], createdAt: `${date}T09:00:00.000Z` });
+    const hw = (id: string, sessionId: string, done: boolean) =>
+      repo.saveHomework({ id, sessionId, text: id, done, createdAt: '2026-10-20T09:00:00.000Z' });
+    await session('s1', '2026-10-20', 'بدأنا بتصديق المشاعر');
+    await session('s2', '2026-10-27', 'اتفقنا على الانتظار قبل الردّ');
+    for (const [id, done] of [['a', true], ['b', true], ['c', true]] as const) await hw(id, 's1', done);
+    for (const [id, done] of [['d', true], ['e', false], ['f', true]] as const) await hw(id, 's2', done);
     setup(repo);
 
     const list = await screen.findByRole('list', { name: 'الجلسات السابقة' });
@@ -172,5 +156,18 @@ describe('TherapistPage', () => {
     expect(items[0]).toHaveTextContent('اتفقنا على الانتظار قبل الردّ');
     expect(items[1]).toHaveTextContent('الواجب: ٣ من ٣');
     expect(within(items[0]).getByRole('link')).toHaveAttribute('href', '/therapist/note/s2');
+  });
+
+  it('shows no homework count for a session without homework', async () => {
+    const repo = createMemoryRepo();
+    await repo.saveSession({ id: 's1', date: '2026-10-20', therapistSaid: 'جلسة', takeaway: '', homework: [], createdAt: '2026-10-20T09:00:00.000Z' });
+    setup(repo);
+    const items = within(await screen.findByRole('list', { name: 'الجلسات السابقة' })).getAllByRole('listitem');
+    expect(items[0]).not.toHaveTextContent('الواجب');
+  });
+
+  it('has a link to واجباتي', async () => {
+    setup(createMemoryRepo());
+    expect(await screen.findByRole('link', { name: /واجباتي/ })).toHaveAttribute('href', '/therapist/homework');
   });
 });

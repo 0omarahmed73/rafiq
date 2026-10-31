@@ -17,5 +17,5 @@ export function PracticePage() {
       </div>
     );
   }
-  return <PracticeRunner def={def} onFinished={() => navigate(`/step/${def.stepId}`)} />;
+  return <PracticeRunner def={def} onFinished={(record) => def.stepId === 4 ? navigate('/triggers', { replace: true, state: { savedRecordId: record.id } }) : navigate(`/step/${def.stepId}`)} />;
 }

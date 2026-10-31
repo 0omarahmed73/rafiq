@@ -5,6 +5,7 @@ import { practicesForStep } from '../../content/practices';
 import { useRepo } from '../../db/RepoContext';
 import type { StepProgress } from '../../db/schema';
 import { toArabicDigits } from '../../lib/digits';
+import { SelfUnderstandingGuide } from './SelfUnderstandingGuide';
 import { ReadinessCheck } from './ReadinessCheck';
 
 const CHOICE_LABEL = { keep: 'أتقبّله وأُبقيه', change: 'أتقبّله وأغيّره' } as const;
@@ -47,12 +48,25 @@ export function StepPage() {
 
       <h1 className="text-[28px] font-bold leading-snug">{step.title}</h1>
 
+      {step.id === 4 && (
+        <Link to="/triggers" aria-label="محفزاتي" className="flex min-h-14 items-center justify-between gap-3 rounded-2xl border border-line bg-card p-4">
+          <span className="text-[15px] font-semibold text-teal-ink">محفزاتي</span>
+          <span className="text-[13px] text-muted">سجلاتي المحفوظة ‹</span>
+        </Link>
+      )}
+
+      {step.id === 4 ? (
+        <SelfUnderstandingGuide question={step.coreQuestion} lesson={step.lesson} />
+      ) : (
+        <>
       <section className="rounded-2xl bg-teal-soft p-4">
         <div className="mb-1 text-xs font-semibold text-teal-ink">السؤال الأساسي</div>
         <p className="text-[17px] font-semibold leading-8">{step.coreQuestion}</p>
       </section>
 
       <p className="text-[15px] leading-8">{step.lesson}</p>
+        </>
+      )}
 
       {decision && (
         <section className="flex flex-col gap-2 rounded-2xl border border-line bg-card p-4">
@@ -80,7 +94,7 @@ export function StepPage() {
         ))}
       </ul>
 
-      <ReadinessCheck stepId={step.id} />
+      <ReadinessCheck key={step.id} stepId={step.id} />
 
       <p className="text-[13px] leading-7 text-muted">
         كل ما أكتبه في التمارين خاص بي، ولا يظهر في ملخّص معالجي إلا إذا اخترتُ مشاركته.

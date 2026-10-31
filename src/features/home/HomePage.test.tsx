@@ -58,3 +58,9 @@ describe('HomePage', () => {
     expect(document.body.textContent).not.toMatch(/streak|سلسلة/i);
   });
 });
+
+
+it('makes the private trigger journal discoverable from Home', async () => {
+  renderHome();
+  expect(await screen.findByRole('link', { name: 'محفزاتي' })).toHaveAttribute('href', '/triggers');
+});

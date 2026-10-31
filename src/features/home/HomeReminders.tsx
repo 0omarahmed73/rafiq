@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Banner } from '../../components/Banner';
 import { useRepo } from '../../db/RepoContext';
 import { dayKey } from '../../lib/dates';
+import { isAndroidPlatform } from '../../platform/documents';
 import { reminderDue, shouldShowBackupReminder } from '../../lib/reminders';
 
 /** The daily check-in reminder and the 21-day backup reminder, as banners at the top of Home. */
@@ -18,8 +19,9 @@ export function HomeReminders({ now = new Date() }: { now?: Date }) {
       setBackupDue(shouldShowBackupReminder(s.lastBackupAt ?? s.disclaimerAcceptedAt, now));
       const due = reminderDue(s.reminderTime, s.lastReminderDay, now);
       setDailyDue(due);
-      // Where the user allowed notifications, also say it once as a notification.
-      if (due && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      // In the browser, where the user allowed notifications, also say it once as a notification.
+      // The Android app has its own native reminder, so no browser Notification is made there.
+      if (due && !isAndroidPlatform() && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
         try {
           new Notification('رفيق', { body: 'حان وقت تسجيل مشاعري اليوم.' });
           await repo.saveSettings({ ...s, lastReminderDay: dayKey(now) });

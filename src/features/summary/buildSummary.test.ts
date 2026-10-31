@@ -126,4 +126,18 @@ describe('buildSummary', () => {
     expect(model.totals.currentStep).toBe(1);
     expect([model.checkins, model.curve, model.weeklyReviews, model.practices, model.tagged].every((a) => a.length === 0)).toBe(true);
   });
+
+  it('never includes homework titles, notes, answers or photos, whatever the switches', async () => {
+    const repo = createMemoryRepo();
+    await repo.saveSession({ id: 's1', date: '2026-10-20', therapistSaid: 'سرّ الجلسة', takeaway: 'سرّ آخر', homework: [], createdAt: '2026-10-20T09:00:00.000Z' });
+    await repo.saveHomework({ id: 'h1', sessionId: 's1', text: 'عنوان واجب سري', notes: 'ملاحظة واجب سرية', answer: 'إجابة واجب سرية', done: true, createdAt: '2026-10-20T09:00:00.000Z' });
+    await repo.saveHomeworkImage({ id: 'i1', homeworkId: 'h1', dataUrl: 'data:image/jpeg;base64,PRIVATEPHOTO', createdAt: '2026-10-20T09:00:00.000Z' });
+    await checkin(repo, '2026-10-20', { forNextSession: true });
+    for (const switches of [all, none]) {
+      const text = JSON.stringify(await buildSummary(repo, range, switches));
+      for (const secret of ['عنوان واجب سري', 'ملاحظة واجب سرية', 'إجابة واجب سرية', 'PRIVATEPHOTO', 'سرّ الجلسة']) {
+        expect(text).not.toContain(secret);
+      }
+    }
+  });
 });

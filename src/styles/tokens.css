@@ -3,6 +3,9 @@
 @tailwind utilities;
 
 :root {
+  color-scheme: light;
+  --app-safe-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  --app-safe-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
   --bg: #f3f6f4;
   --card: #ffffff;
   --ink: #17302b;
@@ -49,6 +52,26 @@
   --shade-strong: #5fb3a6;
   --shade-strong-ink: #0f1b18;
   color-scheme: dark;
+}
+
+/* Capacitor supplies the variables; standalone browsers use their native safe-area env values. */
+#root {
+  min-height: 100dvh;
+  padding-top: var(--app-safe-top);
+  padding-bottom: var(--app-safe-bottom);
+}
+
+.app-layout {
+  min-height: calc(100dvh - var(--app-safe-top) - var(--app-safe-bottom));
+}
+
+.app-tab-bar {
+  padding-bottom: var(--app-safe-bottom);
+}
+
+@media print {
+  #root { min-height: 0; padding: 0; }
+  .app-layout { min-height: 0; }
 }
 
 body {
@@ -111,4 +134,25 @@ body {
 }
 :is(textarea, input):focus::placeholder {
   opacity: 0.4;
+}
+
+
+/* A brief acknowledgement only after the person chooses to finish a step. */
+.step-completion[data-animate='true'] {
+  animation: step-complete-enter 360ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.completion-check { stroke-dasharray: 1; stroke-dashoffset: 0; }
+.step-completion[data-animate='true'] .completion-check {
+  animation: step-complete-check 420ms ease-out both;
+}
+@keyframes step-complete-enter {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes step-complete-check {
+  from { stroke-dashoffset: 1; }
+  to { stroke-dashoffset: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .step-completion, .step-completion .completion-check { animation: none !important; }
 }

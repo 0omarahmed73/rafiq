@@ -78,6 +78,26 @@ export interface Session extends Stamped {
   createdAt: string;
 }
 
+/** One piece of homework from a session. The old `Session.homework` array is kept only for data made before this existed. */
+export interface Homework extends Stamped {
+  id: string;
+  sessionId: string;
+  /** The title: what the homework is. */
+  text: string;
+  notes?: string;
+  answer?: string;
+  done: boolean;
+  createdAt: string;
+}
+
+/** A shrunk photo of a homework, stored as a data URL. Kept apart so listing homework never loads photos. */
+export interface HomeworkImage extends Stamped {
+  id: string;
+  homeworkId: string;
+  dataUrl: string;
+  createdAt: string;
+}
+
 export interface StepProgress extends Stamped {
   stepId: number;
   status: 'notStarted' | 'inProgress' | 'done';
@@ -142,6 +162,8 @@ export interface AllData {
   settings: Settings[];
   agendaPoints: AgendaPoint[];
   yearPlan: YearPlanEntry[];
+  homework: Homework[];
+  homeworkImages: HomeworkImage[];
 }
 
 export type TableName = keyof AllData;

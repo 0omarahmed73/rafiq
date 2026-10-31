@@ -16,15 +16,23 @@ export function TherapistPage() {
   const repo = useRepo();
   const [agenda, setAgenda] = useState<AgendaItem[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [homeworkBySession, setHomeworkBySession] = useState<Record<string, { done: number; total: number }>>({});
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState('');
   const [editing, setEditing] = useState<{ id: string; text: string }>();
   const [deleting, setDeleting] = useState<string>();
 
   const load = useCallback(async () => {
-    const [items, past] = await Promise.all([agendaItems(repo), repo.listSessions()]);
+    const [items, past, homework] = await Promise.all([agendaItems(repo), repo.listSessions(), repo.listHomework()]);
+    const counts: Record<string, { done: number; total: number }> = {};
+    for (const h of homework) {
+      const c = (counts[h.sessionId] ??= { done: 0, total: 0 });
+      c.total += 1;
+      if (h.done) c.done += 1;
+    }
     setAgenda(items);
     setSessions(past);
+    setHomeworkBySession(counts);
   }, [repo]);
 
   useEffect(() => {
@@ -209,9 +217,11 @@ export function TherapistPage() {
                 <Link to={`/therapist/note/${s.id}`} className={`${card} gap-1`}>
                   <span className="flex justify-between text-[13px] text-muted">
                     <span>{formatArabicDate(s.date)}</span>
-                    <span className="font-semibold text-teal-ink">
-                      {`الواجب: ${toArabicDigits(s.homework.filter((h) => h.done).length)} من ${toArabicDigits(s.homework.length)}`}
-                    </span>
+                    {homeworkBySession[s.id] && (
+                      <span className="font-semibold text-teal-ink">
+                        {`الواجب: ${toArabicDigits(homeworkBySession[s.id].done)} من ${toArabicDigits(homeworkBySession[s.id].total)}`}
+                      </span>
+                    )}
                   </span>
                   <span className="line-clamp-2 text-[15px] leading-7">{s.therapistSaid}</span>
                 </Link>
@@ -220,6 +230,10 @@ export function TherapistPage() {
           </ul>
         </div>
       )}
+
+      <Link to="/therapist/homework" className="flex min-h-12 items-center justify-between px-1 text-[15px] font-semibold text-teal">
+        واجباتي <span aria-hidden="true">‹</span>
+      </Link>
 
       <Link to="/therapist/summary" className="flex min-h-12 items-center justify-between px-1 text-[15px] font-semibold text-teal">
         إنشاء ملخّص لأعطيه لمعالجي <span aria-hidden="true">‹</span>

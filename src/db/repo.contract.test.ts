@@ -157,6 +157,99 @@ describe.each(factories)('Repo contract (%s)', (_name, makeStore) => {
     });
   });
 
+  describe('deleting a practice record', () => {
+    it('removes only that record, drafts and finished ones alike', async () => {
+      await repo.savePractice(practice({ id: 'keep', completedAt: '2026-10-31T10:05:00.000Z' }));
+      await repo.savePractice(practice({ id: 'gone', completedAt: '2026-10-31T10:06:00.000Z' }));
+      await repo.savePractice(practice({ id: 'draft', practiceId: 'accept' }));
+      await repo.deletePractice('gone');
+      await repo.deletePractice('draft');
+      expect((await repo.listPractices()).map((p) => p.id)).toEqual(['keep']);
+      expect(await repo.getDraft('accept')).toBeUndefined();
+    });
+
+    it('ignores an id that does not exist', async () => {
+      await expect(repo.deletePractice('missing')).resolves.toBeUndefined();
+    });
+  });
+
+  describe('homework', () => {
+    const hw = (over: Record<string, unknown> = {}) => ({
+      id: 'h1',
+      sessionId: 's1',
+      text: 'أقرأ الفصل',
+      done: false,
+      createdAt: '2026-10-27T09:00:00.000Z',
+      ...over,
+    });
+    const img = (over: Record<string, unknown> = {}) => ({
+      id: 'i1',
+      homeworkId: 'h1',
+      dataUrl: 'data:image/jpeg;base64,AAAA',
+      createdAt: '2026-10-27T09:00:00.000Z',
+      ...over,
+    });
+
+    it('saves, gets and lists homework newest first', async () => {
+      await repo.saveHomework(hw({ id: 'old', createdAt: '2026-10-01T09:00:00.000Z' }));
+      await repo.saveHomework(hw({ id: 'new', createdAt: '2026-10-30T09:00:00.000Z' }));
+      expect((await repo.listHomework()).map((h) => h.id)).toEqual(['new', 'old']);
+      expect(await repo.getHomework('new')).toMatchObject({ id: 'new', text: 'أقرأ الفصل' });
+      expect((await repo.getHomework('new'))!.updatedAt).toMatch(/^\d{4}-/);
+      expect(await repo.getHomework('missing')).toBeUndefined();
+    });
+
+    it('lists homework by session, oldest first', async () => {
+      await repo.saveHomework(hw({ id: 'b', createdAt: '2026-10-28T09:00:00.000Z' }));
+      await repo.saveHomework(hw({ id: 'a', createdAt: '2026-10-27T09:00:00.000Z' }));
+      await repo.saveHomework(hw({ id: 'other', sessionId: 's2' }));
+      expect((await repo.listHomeworkBySession('s1')).map((h) => h.id)).toEqual(['a', 'b']);
+    });
+
+    it('lists the images of one homework, oldest first', async () => {
+      await repo.saveHomeworkImage(img({ id: 'second', createdAt: '2026-10-27T10:00:00.000Z' }));
+      await repo.saveHomeworkImage(img({ id: 'first', createdAt: '2026-10-27T09:00:00.000Z' }));
+      await repo.saveHomeworkImage(img({ id: 'x', homeworkId: 'h2' }));
+      expect((await repo.listHomeworkImages('h1')).map((i) => i.id)).toEqual(['first', 'second']);
+    });
+
+    it('deleting a homework deletes its images and no one elses', async () => {
+      await repo.saveHomework(hw({ id: 'h1' }));
+      await repo.saveHomework(hw({ id: 'h2' }));
+      await repo.saveHomeworkImage(img({ id: 'a', homeworkId: 'h1' }));
+      await repo.saveHomeworkImage(img({ id: 'b', homeworkId: 'h2' }));
+      await repo.deleteHomework('h1');
+      expect((await repo.listHomework()).map((h) => h.id)).toEqual(['h2']);
+      expect((await repo.exportAll()).homeworkImages.map((i) => i.id)).toEqual(['b']);
+    });
+
+    it('counts images per homework without returning them', async () => {
+      await repo.saveHomework(hw({ id: 'h1' }));
+      await repo.saveHomework(hw({ id: 'h2' }));
+      await repo.saveHomework(hw({ id: 'h3' }));
+      await repo.saveHomeworkImage(img({ id: 'a', homeworkId: 'h1' }));
+      await repo.saveHomeworkImage(img({ id: 'b', homeworkId: 'h1' }));
+      await repo.saveHomeworkImage(img({ id: 'c', homeworkId: 'h2' }));
+      expect(await repo.countHomeworkImages()).toEqual({ h1: 2, h2: 1 });
+    });
+
+    it('deletes one image and ignores a missing id', async () => {
+      await repo.saveHomeworkImage(img({ id: 'a' }));
+      await repo.deleteHomeworkImage('a');
+      await expect(repo.deleteHomeworkImage('a')).resolves.toBeUndefined();
+      await expect(repo.deleteHomework('missing')).resolves.toBeUndefined();
+      expect(await repo.listHomeworkImages('h1')).toEqual([]);
+    });
+
+    it('exports homework and images with the rest of the data', async () => {
+      await repo.saveHomework(hw());
+      await repo.saveHomeworkImage(img());
+      const all = await repo.exportAll();
+      expect(all.homework).toHaveLength(1);
+      expect(all.homeworkImages).toHaveLength(1);
+    });
+  });
+
   describe('agenda points', () => {
     it('deletes one point and leaves the others', async () => {
       await repo.saveAgendaPoint({ id: 'a1', text: 'أولى', day: '2026-10-30', done: false });

@@ -8,14 +8,15 @@ export const SPLASH_MIN_MS = 1200;
  */
 export function hideSplash(
   doc: Document = document,
-  opts: { reducedMotion?: boolean; elapsedMs?: number; minMs?: number } = {},
+  opts: { reducedMotion?: boolean; elapsedMs?: number; minMs?: number; native?: boolean } = {},
 ): void {
   const el = doc.getElementById('splash');
   if (!el) return;
   const reduced =
     opts.reducedMotion ?? (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches);
   const elapsed = opts.elapsedMs ?? (typeof performance !== 'undefined' ? performance.now() : SPLASH_MIN_MS);
-  const wait = Math.max(0, (opts.minMs ?? SPLASH_MIN_MS) - elapsed);
+  // Inside the Android app the system splash has already been shown, so there is no second forced wait.
+  const wait = Math.max(0, (opts.minMs ?? (opts.native ? 0 : SPLASH_MIN_MS)) - elapsed);
 
   const run = () => {
     if (reduced) {

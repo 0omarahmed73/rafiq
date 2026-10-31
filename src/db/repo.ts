@@ -4,6 +4,8 @@ import type {
   AllData,
   Checkin,
   Followup,
+  Homework,
+  HomeworkImage,
   Letter,
   PracticeRecord,
   Session,
@@ -41,6 +43,22 @@ export interface Repo {
   getDraft(practiceId: string): Promise<PracticeRecord | undefined>;
   /** Filtered by the day of `completedAt ?? startedAt`; drafts are included. */
   listPractices(range?: DayRange): Promise<PracticeRecord[]>;
+  deletePractice(id: string): Promise<void>;
+
+  saveHomework(h: Draft<Homework>): Promise<void>;
+  getHomework(id: string): Promise<Homework | undefined>;
+  /** Newest first. */
+  listHomework(): Promise<Homework[]>;
+  /** Oldest first. */
+  listHomeworkBySession(sessionId: string): Promise<Homework[]>;
+  /** Also deletes the homework's photos, atomically. */
+  deleteHomework(id: string): Promise<void>;
+  saveHomeworkImage(i: Draft<HomeworkImage>): Promise<void>;
+  /** Oldest first. */
+  listHomeworkImages(homeworkId: string): Promise<HomeworkImage[]>;
+  deleteHomeworkImage(id: string): Promise<void>;
+  /** Number of photos per homework id (homework without photos is absent). */
+  countHomeworkImages(): Promise<Record<string, number>>;
 
   addFollowup(f: NewRecord<Followup>): Promise<Followup>;
   listFollowups(): Promise<Followup[]>;

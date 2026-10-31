@@ -24,6 +24,18 @@ describe('hideSplash', () => {
     expect(document.getElementById('splash')).toBeNull();
   });
 
+  it('does not add the browser minimum wait inside the Android app', () => {
+    const el = addSplash();
+    hideSplash(document, { reducedMotion: false, elapsedMs: 0, native: true });
+    expect(el.classList.contains('splash-hide')).toBe(true);
+  });
+
+  it('still keeps the minimum wait in the browser', () => {
+    const el = addSplash();
+    hideSplash(document, { reducedMotion: false, elapsedMs: 0 });
+    expect(el.classList.contains('splash-hide')).toBe(false);
+  });
+
   it('does nothing when there is no splash', () => {
     document.body.innerHTML = '';
     expect(() => hideSplash(document, { reducedMotion: false })).not.toThrow();

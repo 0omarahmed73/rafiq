@@ -1,5 +1,6 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, within, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import { readinessQuestions } from '../../content/readiness';
 import { createMemoryRepo } from '../../db/memoryRepo';
 import type { Repo } from '../../db/repo';
@@ -9,7 +10,7 @@ import { ReadinessCheck } from './ReadinessCheck';
 function setup(repo: Repo = createMemoryRepo(), stepId = 2) {
   render(
     <RepoProvider repo={repo}>
-      <ReadinessCheck stepId={stepId} />
+      <MemoryRouter><ReadinessCheck stepId={stepId} /></MemoryRouter>
     </RepoProvider>,
   );
   return { repo, user: userEvent.setup(), questions: readinessQuestions[stepId] };
@@ -88,5 +89,43 @@ describe('ReadinessCheck', () => {
     expect(await screen.findByText('يبدو أن الوقت مناسب للانتقال إلى الخطوة التالية.')).toBeInTheDocument();
     const group = screen.getByRole('group', { name: questions[0] });
     expect(within(group).getByRole('radio', { name: '٥' })).toBeChecked();
+  });
+});
+
+
+describe('ReadinessCheck completion flow', () => {
+  it('lets me complete a step without making readiness answers a gate', async () => {
+    const { repo, user } = setup();
+    await user.click(await screen.findByRole('button', { name: 'أنهيتُ هذه الخطوة' }));
+    await waitFor(async () => expect((await repo.getStepProgress(2)).status).toBe('done'));
+    expect(screen.getByRole('link', { name: 'أنتقل إلى الخطوة التالية' })).toHaveAttribute('href', '/step/3');
+    expect(screen.getByText('أقدّر ما أنجزتُه في هذه الخطوة.')).toBeVisible();
+    expect((await repo.getStepProgress(2)).readiness).toBeUndefined();
+  });
+
+  it('keeps the next action available when a completed step is reopened', async () => {
+    const repo = createMemoryRepo();
+    await repo.saveStepProgress({ stepId: 4, status: 'done', daysPracticed: [] });
+    setup(repo, 4);
+    expect(await screen.findByRole('link', { name: 'أنتقل إلى الخطوة التالية' })).toHaveAttribute('href', '/step/5');
+    expect(screen.queryByRole('button', { name: 'أنهيتُ هذه الخطوة' })).not.toBeInTheDocument();
+  });
+
+  it('returns to the journey after step ten instead of creating step eleven', async () => {
+    const repo = createMemoryRepo();
+    await repo.saveStepProgress({ stepId: 10, status: 'done', daysPracticed: [] });
+    setup(repo, 10);
+    expect(await screen.findByRole('link', { name: 'أعود إلى رحلتي' })).toHaveAttribute('href', '/journey');
+    expect(screen.queryByRole('link', { name: 'أنتقل إلى الخطوة التالية' })).not.toBeInTheDocument();
+  });
+
+  it('does not celebrate or advance when completion could not be saved', async () => {
+    const { repo, user } = setup();
+    await screen.findByRole('button', { name: 'أنهيتُ هذه الخطوة' });
+    vi.spyOn(repo, 'saveStepProgress').mockRejectedValueOnce(new Error('write unavailable'));
+    await user.click(screen.getByRole('button', { name: 'أنهيتُ هذه الخطوة' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('أحتاج إلى المحاولة مرة أخرى لحفظ إتمام هذه الخطوة.');
+    expect(screen.queryByRole('link', { name: 'أنتقل إلى الخطوة التالية' })).not.toBeInTheDocument();
+    expect((await repo.getStepProgress(2)).status).toBe('notStarted');
   });
 });

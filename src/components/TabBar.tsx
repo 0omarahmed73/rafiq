@@ -60,7 +60,7 @@ export function TabBar() {
   return (
     <nav
       aria-label="التنقّل"
-      className="fixed inset-x-0 bottom-0 mx-auto flex max-w-xl border-t border-line bg-card px-2 print:hidden"
+      className="app-tab-bar fixed inset-x-0 bottom-0 mx-auto flex max-w-xl border-t border-line bg-card px-2 print:hidden"
     >
       {tabs.map((tab) => (
         <NavLink

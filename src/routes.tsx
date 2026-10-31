@@ -8,9 +8,12 @@ import { JourneyPage } from './features/journey/JourneyPage';
 import { PracticePage } from './features/practice/PracticePage';
 import { StepPage } from './features/step/StepPage';
 import { SummaryPage } from './features/summary/SummaryPage';
+import { HomeworkListPage } from './features/therapist/HomeworkListPage';
+import { HomeworkPage } from './features/therapist/HomeworkPage';
 import { SessionNotePage } from './features/therapist/SessionNotePage';
 import { TherapistPage } from './features/therapist/TherapistPage';
 import { YearPlanPage } from './features/yearplan/YearPlanPage';
+import { TriggerJournalPage } from './features/triggers/TriggerJournalPage';
 import { TrackerPage } from './features/tracker/TrackerPage';
 
 export const routes: RouteObject[] = [
@@ -21,6 +24,7 @@ export const routes: RouteObject[] = [
       { index: true, element: <HomePage /> },
       { path: 'checkin', element: <CheckinPage /> },
       { path: 'tracker', element: <TrackerPage /> },
+      { path: 'triggers', element: <TriggerJournalPage /> },
       { path: 'journey', element: <JourneyPage /> },
       { path: 'calm', element: <CalmPage /> },
       { path: 'year', element: <YearPlanPage /> },
@@ -29,6 +33,8 @@ export const routes: RouteObject[] = [
       { path: 'therapist/summary', element: <SummaryPage /> },
       { path: 'therapist/note', element: <SessionNotePage /> },
       { path: 'therapist/note/:id', element: <SessionNotePage /> },
+      { path: 'therapist/homework', element: <HomeworkListPage /> },
+      { path: 'therapist/homework/:id', element: <HomeworkPage /> },
       { path: 'step/:id', element: <StepPage /> },
       { path: 'practice/:practiceId', element: <PracticePage /> },
     ],

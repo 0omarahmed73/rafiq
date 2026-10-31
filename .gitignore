@@ -7,3 +7,18 @@ playwright-report
 .claude
 docs/
 .vercel
+
+# Native Android build output and machine-specific configuration
+android/.gradle/
+android/build/
+android/app/build/
+android/app/src/main/assets/public/
+android/local.properties
+android/captures/
+android/*.jks
+android/*.keystore
+android/app/*.jks
+android/app/*.keystore
+android/**/*.jks
+android/**/*.keystore
+android/**/key.properties

@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useRepo } from '../../db/RepoContext';
 import { dayKey } from '../../lib/dates';
 import { buildSummary, type SummaryModel, type SummarySwitches } from './buildSummary';
+import { isAndroidPlatform, printSummaryDocument } from '../../platform/documents';
+import { buildPrintDocument } from './printDocument';
 import { SummaryPrint } from './SummaryPrint';
 import './print.css';
 
@@ -36,6 +38,10 @@ export function SummaryPage({ today = new Date() }: { today?: Date }) {
   });
   const [model, setModel] = useState<SummaryModel | null>(null);
   const [profile, setProfile] = useState<{ displayName?: string; therapistName?: string }>();
+  const [accent, setAccent] = useState<string>();
+  const [printing, setPrinting] = useState(false);
+  const [printError, setPrintError] = useState(false);
+  const printArea = useRef<HTMLDivElement>(null);
 
   // Paper is white: print in the light colours of the chosen accent, whatever the screen theme is.
   useEffect(() => {
@@ -58,7 +64,10 @@ export function SummaryPage({ today = new Date() }: { today?: Date }) {
   }, []);
 
   useEffect(() => {
-    void repo.getSettings().then((s) => setProfile({ displayName: s.displayName, therapistName: s.therapistName }));
+    void repo.getSettings().then((s) => {
+      setProfile({ displayName: s.displayName, therapistName: s.therapistName });
+      setAccent(s.accent);
+    });
   }, [repo]);
 
   useEffect(() => {
@@ -68,6 +77,25 @@ export function SummaryPage({ today = new Date() }: { today?: Date }) {
       alive = false;
     };
   }, [repo, range, switches]);
+
+  async function save() {
+    if (!isAndroidPlatform()) {
+      window.print();
+      return;
+    }
+    const article = printArea.current?.querySelector('article');
+    if (printing || !article) return;
+    setPrinting(true);
+    setPrintError(false);
+    try {
+      await document.fonts?.ready;
+      await printSummaryDocument(buildPrintDocument(article as HTMLElement, accent));
+    } catch {
+      setPrintError(true);
+    } finally {
+      setPrinting(false);
+    }
+  }
 
   const dateInput = 'min-h-12 w-full rounded-2xl border border-line bg-card px-3.5 text-base text-ink';
 
@@ -130,18 +158,24 @@ export function SummaryPage({ today = new Date() }: { today?: Date }) {
         <h2 className="text-[13px] font-semibold text-muted">معاينة</h2>
       </div>
 
-      <div className="print-area rounded-2xl border border-line bg-card p-4">
+      <div ref={printArea} className="print-area rounded-2xl border border-line bg-card p-4">
         {model && <SummaryPrint model={model} switches={switches} profile={profile} generatedOn={dayKey(today)} />}
       </div>
 
       <div className="flex flex-col gap-1.5 print:hidden">
         <button
           type="button"
-          onClick={() => window.print()}
-          className="min-h-12 rounded-full bg-teal px-6 text-base font-bold text-card"
+          onClick={() => void save()}
+          disabled={printing}
+          className="min-h-12 rounded-full bg-teal px-6 text-base font-bold text-card disabled:opacity-60"
         >
           حفظ كملف PDF
         </button>
+        {printError && (
+          <p role="alert" className="text-center text-sm font-semibold text-ink">
+            تعذّرت الطباعة، يمكنني المحاولة مرة أخرى.
+          </p>
+        )}
         <p className="text-center text-xs text-muted">يُنشأ على جهازي. أرسله بالطريقة التي أفضّلها.</p>
       </div>
     </div>

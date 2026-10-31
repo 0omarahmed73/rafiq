@@ -6,6 +6,9 @@ import type { Repo } from '../../db/repo';
 import { RepoProvider } from '../../db/RepoContext';
 import { HomeReminders } from './HomeReminders';
 
+const documents = vi.hoisted(() => ({ isAndroidPlatform: vi.fn(() => false) }));
+vi.mock('../../platform/documents', () => documents);
+
 function setup(repo: Repo, now: Date) {
   render(
     <RepoProvider repo={repo}>
@@ -65,5 +68,29 @@ describe('HomeReminders', () => {
     setup(repo, new Date(2026, 9, 31, 19, 0));
     await new Promise((r) => setTimeout(r, 30));
     expect(screen.queryByText('حان وقت تسجيل مشاعري اليوم.')).not.toBeInTheDocument();
+  });
+});
+
+describe('HomeReminders on Android', () => {
+  afterEach(() => {
+    documents.isAndroidPlatform.mockReturnValue(false);
+    vi.unstubAllGlobals();
+  });
+
+  it('shows the banner but never creates a browser Notification, because the native reminder covers it', async () => {
+    documents.isAndroidPlatform.mockReturnValue(true);
+    const created = vi.fn();
+    class FakeNotification {
+      static permission = 'granted';
+      constructor(...args: unknown[]) {
+        created(...args);
+      }
+    }
+    vi.stubGlobal('Notification', FakeNotification);
+    const repo = createMemoryRepo();
+    await repo.saveSettings({ id: 'settings', theme: 'system', reminderTime: '08:00', lastBackupAt: '2026-10-30T10:00:00.000Z' });
+    setup(repo, new Date(2026, 9, 31, 21, 0));
+    expect(await screen.findByText('حان وقت تسجيل مشاعري اليوم.')).toBeInTheDocument();
+    expect(created).not.toHaveBeenCalled();
   });
 });

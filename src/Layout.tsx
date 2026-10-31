@@ -5,7 +5,7 @@ import { DisclaimerGate } from './features/settings/DisclaimerGate';
 export function Layout() {
   return (
     <DisclaimerGate>
-      <div className="mx-auto min-h-screen max-w-xl pb-24">
+      <div className="app-layout mx-auto max-w-xl pb-24">
         <main className="px-4 pt-6">
           <Outlet />
         </main>

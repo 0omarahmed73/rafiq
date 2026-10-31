@@ -3,6 +3,7 @@ import { defineConfig, devices } from '@playwright/test';
 // The end-to-end run uses the production build behind `vite preview`, as the PWA is served in real life.
 export default defineConfig({
   testDir: 'e2e',
+  testIgnore: 'android-shell.spec.ts',
   timeout: 90_000,
   reporter: 'list',
   use: {

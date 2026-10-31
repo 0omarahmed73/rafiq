@@ -57,6 +57,11 @@ export function HomePage() {
         </section>
       )}
 
+      <Link to="/triggers" aria-label="محفزاتي" className="flex min-h-20 flex-col justify-center gap-1 rounded-2xl border border-line bg-card p-4">
+        <span className="text-base font-bold text-teal-ink">محفزاتي</span>
+        <span className="text-sm leading-7 text-muted">أعود إلى سجلاتي لفهم ذاتي، أو أضيف سجلًا جديدًا.</span>
+      </Link>
+
       <WeeklyReviewCard />
 
       <YearPlanCard />

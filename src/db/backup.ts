@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { Repo } from './repo';
+import { legacyHomework } from './legacyHomework';
 import type { AllData } from './schema';
 
 export class BackupError extends Error {
@@ -127,6 +128,26 @@ const AgendaPoint = z.object({ id, text: str, day, done: z.boolean(), ...stamp }
 
 const YearPlanEntry = z.object({ id, value: z.union([z.boolean(), str]), ...stamp });
 
+const Homework = z.object({
+  id,
+  sessionId: id,
+  text: str,
+  notes: str.optional(),
+  answer: str.optional(),
+  done: z.boolean(),
+  createdAt: id,
+  ...stamp,
+});
+
+// Only inline images: a backup file must never be able to point the app at a web address.
+const HomeworkImage = z.object({
+  id,
+  homeworkId: id,
+  dataUrl: z.string().startsWith('data:image/'),
+  createdAt: id,
+  ...stamp,
+});
+
 const Backup = z.object({
   version: z.literal(1),
   exportedAt: str,
@@ -142,6 +163,8 @@ const Backup = z.object({
     settings: z.array(Settings).max(1),
     agendaPoints: z.array(AgendaPoint),
     yearPlan: z.array(YearPlanEntry).default([]),
+    homework: z.array(Homework).default([]),
+    homeworkImages: z.array(HomeworkImage).default([]),
   }),
 });
 
@@ -176,6 +199,14 @@ export async function importBackup(repo: Repo, file: unknown, mode: 'replace' | 
   const parsed = Backup.safeParse(value);
   if (!parsed.success) throw new BackupError(INVALID);
 
-  const data = parsed.data.data as AllData;
+  const parsedData = parsed.data.data as AllData;
+  // Backups made before homework had its own records keep it inside the sessions: convert it here.
+  const known = new Set(parsedData.homework.map((h) => h.id));
+  const converted = parsedData.sessions.flatMap(legacyHomework).filter((h) => !known.has(h.id));
+  const data: AllData = {
+    ...parsedData,
+    sessions: parsedData.sessions.map((s) => (s.homework.length ? { ...s, homework: [] } : s)),
+    homework: [...parsedData.homework, ...converted],
+  };
   await (mode === 'replace' ? repo.replaceAll(data) : repo.mergeAll(data));
 }

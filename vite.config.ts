@@ -2,10 +2,10 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
-    VitePWA({
+    ...(mode === 'android' ? [] : [VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['icon.svg', 'icons/*.png'],
       manifest: {
@@ -30,6 +30,6 @@ export default defineConfig({
         navigateFallback: '/index.html',
         cleanupOutdatedCaches: true,
       },
-    }),
+    })]),
   ],
-});
+}));

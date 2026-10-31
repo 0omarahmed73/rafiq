@@ -22,7 +22,7 @@ describe('practices for steps 4 to 10', () => {
   });
 
   it('files the practices under their steps', () => {
-    expect(practicesForStep(4).map((p) => p.id)).toEqual(['understand']);
+    expect(practicesForStep(4).map((p) => p.id)).toEqual(['self-understanding', 'understand']);
     expect(practicesForStep(5).map((p) => p.id)).toEqual(['compassion', 'compassion-letter', 'gratitude-letter']);
     expect(practicesForStep(6).map((p) => p.id)).toEqual(['forgive', 'forgiveness-letter']);
     expect(practicesForStep(7).map((p) => p.id)).toEqual(['boundaries']);

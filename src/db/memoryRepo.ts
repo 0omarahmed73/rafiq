@@ -33,6 +33,19 @@ export function createMemoryStore(): Store {
     async clear(table) {
       rows(table).clear();
     },
+    async where<T>(table: TableName, field: string, value: string | number) {
+      return [...rows(table).values()]
+        .filter((r) => (r as Record<string, unknown>)[field] === value)
+        .map((r) => structuredClone(r)) as T[];
+    },
+    async keysWhere(table, field, value) {
+      return [...rows(table).entries()]
+        .filter(([, r]) => (r as Record<string, unknown>)[field] === value)
+        .map(([key]) => key);
+    },
+    async countWhere(table, field, value) {
+      return [...rows(table).values()].filter((r) => (r as Record<string, unknown>)[field] === value).length;
+    },
     async transaction<T>(fn: () => Promise<T>) {
       const snapshot = new Map([...data].map(([name, m]) => [name, new Map(m)] as const));
       try {

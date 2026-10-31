@@ -1,5 +1,7 @@
 import Dexie, { type Table } from 'dexie';
 import type { Repo } from './repo';
+import { legacyHomework } from './legacyHomework';
+import type { Session } from './schema';
 import { createRepo, type Store } from './repoCore';
 
 export class RafiqDB extends Dexie {
@@ -18,6 +20,16 @@ export class RafiqDB extends Dexie {
       agendaPoints: 'id',
     });
     this.version(2).stores({ yearPlan: 'id' });
+    this.version(3)
+      .stores({ homework: 'id, sessionId, createdAt', homeworkImages: 'id, homeworkId' })
+      .upgrade(async (tx) => {
+        // Homework used to be a list of {text, done} inside each session; it becomes its own records.
+        for (const session of (await tx.table('sessions').toArray()) as Session[]) {
+          if (!session.homework?.length) continue;
+          await tx.table('homework').bulkPut(legacyHomework(session));
+          await tx.table('sessions').put({ ...session, homework: [] });
+        }
+      });
   }
 }
 
@@ -34,6 +46,9 @@ export function createDexieStore(db: RafiqDB): Store {
     clear: async (table) => {
       await db.table(table).clear();
     },
+    where: (table, field, value) => db.table(table).where(field).equals(value).toArray(),
+    keysWhere: async (table, field, value) => (await db.table(table).where(field).equals(value).primaryKeys()) as (string | number)[],
+    countWhere: (table, field, value) => db.table(table).where(field).equals(value).count(),
     // Dexie's overloads for `transaction` blow up the type checker; this loose shape is all we use.
     transaction: <T>(fn: () => Promise<T>) =>
       (db.transaction as unknown as (mode: 'rw', tables: Table[], scope: () => Promise<T>) => Promise<T>).call(

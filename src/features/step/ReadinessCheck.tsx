@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { readinessQuestions } from '../../content/readiness';
 import { useRepo } from '../../db/RepoContext';
 import { toArabicDigits } from '../../lib/digits';
 import { readinessMessage } from '../../lib/readiness';
+import { StepCompletion } from './StepCompletion';
 
 const MESSAGE = {
   ready: 'يبدو أن الوقت مناسب للانتقال إلى الخطوة التالية.',
@@ -16,16 +17,20 @@ export function ReadinessCheck({ stepId }: { stepId: number }) {
   const [answers, setAnswers] = useState<(number | null)[]>([null, null, null]);
   const [saved, setSaved] = useState<number[] | null>(null);
   const [done, setDone] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [finishing, setFinishing] = useState(false);
+  const [justCompleted, setJustCompleted] = useState(false);
+  const [error, setError] = useState('');
+  const busy = useRef(false);
 
   useEffect(() => {
     let alive = true;
     void repo.getStepProgress(stepId).then((p) => {
       if (!alive) return;
       setDone(p.status === 'done');
-      if (p.readiness) {
-        setAnswers(p.readiness.answers);
-        setSaved(p.readiness.answers);
-      }
+      setAnswers(p.readiness?.answers ?? [null, null, null]);
+      setSaved(p.readiness?.answers ?? null);
+      setLoaded(true);
     });
     return () => {
       alive = false;
@@ -46,9 +51,21 @@ export function ReadinessCheck({ stepId }: { stepId: number }) {
   }
 
   async function finishStep() {
-    const progress = await repo.getStepProgress(stepId);
-    await repo.saveStepProgress({ ...progress, status: 'done' });
-    setDone(true);
+    if (busy.current || done || !loaded) return;
+    busy.current = true;
+    setFinishing(true);
+    setError('');
+    try {
+      const progress = await repo.getStepProgress(stepId);
+      await repo.saveStepProgress({ ...progress, status: 'done' });
+      setJustCompleted(true);
+      setDone(true);
+    } catch {
+      setError('أحتاج إلى المحاولة مرة أخرى لحفظ إتمام هذه الخطوة.');
+    } finally {
+      busy.current = false;
+      setFinishing(false);
+    }
   }
 
   return (
@@ -98,22 +115,22 @@ export function ReadinessCheck({ stepId }: { stepId: number }) {
       </button>
 
       {saved && (
-        <div className="flex flex-col gap-3">
-          <p role="status" className="rounded-xl bg-teal-soft p-3 text-[15px] font-semibold leading-7 text-teal-ink">
-            {MESSAGE[readinessMessage(saved)]}
-          </p>
-          {done ? (
-            <p className="text-sm font-semibold text-teal-ink">تم تسجيل هذه الخطوة كمكتملة.</p>
-          ) : (
-            <button
-              type="button"
-              onClick={finishStep}
-              className="min-h-12 rounded-full border-[1.5px] border-teal bg-card px-6 text-[15px] font-bold text-teal-ink"
-            >
-              أنهيتُ هذه الخطوة
-            </button>
-          )}
-        </div>
+        <p role="status" className="rounded-xl bg-teal-soft p-3 text-[15px] font-semibold leading-7 text-teal-ink">
+          {MESSAGE[readinessMessage(saved)]}
+        </p>
+      )}
+      {error && <p role="alert" className="text-sm leading-7 text-ink">{error}</p>}
+      {done ? (
+        <StepCompletion stepId={stepId} animate={justCompleted} />
+      ) : (
+        <button
+          type="button"
+          onClick={() => void finishStep()}
+          disabled={!loaded || finishing}
+          className="min-h-12 rounded-full border-[1.5px] border-teal bg-card px-6 text-[15px] font-bold text-teal-ink disabled:opacity-50"
+        >
+          أنهيتُ هذه الخطوة
+        </button>
       )}
     </section>
   );

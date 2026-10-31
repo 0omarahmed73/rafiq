@@ -5,6 +5,7 @@ import { care } from './care';
 import { compassion, compassionLetter, gratitudeLetter } from './compassion';
 import { forgive, forgivenessLetter } from './forgive';
 import { regulation, regulationFollowup } from './regulation';
+import { selfUnderstanding } from './selfUnderstanding';
 import { trust } from './trust';
 import { understand } from './understand';
 import { validate } from './validate';
@@ -16,6 +17,7 @@ export const practices: PracticeDef[] = [
   accept,
   regulation,
   regulationFollowup,
+  selfUnderstanding,
   understand,
   compassion,
   compassionLetter,

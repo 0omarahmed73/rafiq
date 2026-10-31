@@ -1,4 +1,6 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { readinessQuestions } from '../../content/readiness';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { accept } from '../../content/practices/accept';
 import { steps } from '../../content';
@@ -83,4 +85,38 @@ describe('StepPage', () => {
     renderStep('/step/1');
     expect(await screen.findByText(/ولا يظهر في ملخّص معالجي إلا إذا اخترتُ مشاركته/)).toBeInTheDocument();
   });
+});
+
+
+describe('Step4 owner guide', () => {
+  it('shows shame story, non-judging rules and the new problem practice', async () => {
+    renderStep('/step/4');
+    expect(await screen.findByRole('heading', { name: 'قصة الخزي' })).toBeVisible();
+    expect(screen.getByText('مشكلة صعبة لم أصل فيها إلى حلّ بعد')).toBeVisible();
+    expect(screen.getByText(/أكتب قصة الخزي كما عشتُها، بصدق ووضوح/)).toBeVisible();
+    expect(screen.getByText(/أقرأ قصتي دون أحكام قاسية ودون جلد للذات/)).toBeVisible();
+    expect(screen.getByText('ألاحظ النمط الذي أكرره، وأسأل: ممَّ كان يحاول حمايتي؟')).toBeInTheDocument();
+    expect(screen.getByText('أسأل نفسي بإنصاف: هل توفّر لي ما يكفي من الأمان والدعم حين حاولتُ التغيير؟')).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/نمط تكيّفي|ترجمة صادقة|المقولبة|أتفحّص/);
+    expect(screen.getByRole('link', { name: 'أفهم مشكلة صعبة' })).toHaveAttribute('href', '/practice/self-understanding');
+    expect(screen.getByRole('link', { name: 'تتبّع المحفّز' })).toHaveAttribute('href', '/practice/understand');
+  });
+});
+
+
+it('opens the next step with its own unanswered readiness controls', async () => {
+  const repo = createMemoryRepo();
+  await repo.saveStepProgress({ stepId: 2, status: 'done', daysPracticed: [], readiness: { answers: [5, 5, 5], at: '2026-10-31T10:00:00Z' } });
+  renderStep('/step/2', repo);
+  await userEvent.setup().click(await screen.findByRole('link', { name: 'أنتقل إلى الخطوة التالية' }));
+  await screen.findByRole('heading', { name: 'تنظيم الذات' });
+  const group = screen.getByRole('group', { name: readinessQuestions[3][0] });
+  for (const input of within(group).getAllByRole('radio')) expect(input).not.toBeChecked();
+  expect(screen.queryByText('يبدو أن الوقت مناسب للانتقال إلى الخطوة التالية.')).not.toBeInTheDocument();
+});
+
+
+it('links Step4 to the saved journal', async () => {
+  renderStep('/step/4');
+  expect(await screen.findByRole('link', { name: 'محفزاتي' })).toHaveAttribute('href', '/triggers');
 });
