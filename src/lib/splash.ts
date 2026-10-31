@@ -1,6 +1,6 @@
-const FADE_MS = 500;
+const FADE_MS = 350;
 /** Long enough to be seen and to feel calm, short enough not to get in the way. */
-export const SPLASH_MIN_MS = 1500;
+export const SPLASH_MIN_MS = 1200;
 
 /**
  * Fades out and removes the static splash that index.html shows while the app starts. It stays up
