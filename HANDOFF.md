@@ -1,7 +1,7 @@
 # رفيق (Rafiq): Handoff
 
 Any model or person can continue from this file. It is updated with every task commit.
-Last updated: Task 17c done. Next: Fix pass from the final review (autosave on tab close, finish double-tap, gendered strings, summary totals), then owner requests: personal information, report design.
+Last updated: Task 17d done. Next: Fix pass from the final review.
 
 ## What this is
 An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing journey, tracks check-ins, and builds a printable summary for the user's therapist. All data stays on the device (IndexedDB). It is a supportive tool, not therapy.
@@ -87,6 +87,7 @@ An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing j
 - **Not deployed:** nothing is pushed or published; `vercel.json` is ready. The owner decides when and where to deploy.
 
 ## Changes log (newest first)
+- Task 17d: Bottom tab bar: a decorative icon per tab (house, route, chart, clipboard), bar capped at app width, 64px tabs (owner request).
 - Task 17c: Accent colour now also tints the page background, cards, text, muted text and borders (both modes) and the browser toolbar; contrast of every palette is tested.
 - Task 18: PWA (`vite-plugin-pwa`, manifest, icons from Chrome), `vercel.json`, README, Playwright e2e (full day flow + offline); print fixes found by rendering the summary to PDF: `formatArabicFullDate` for the date range, curve omitted below two days.
 - Task 17b: Accent colour (owner request): `lib/accents.ts` (6 palettes x light/dark, `accentCss`, `applyAccent`, `installAccents`), `lib/color.ts` (contrast helpers), `AccentPicker` in Settings, `Settings.accent` + backup schema; contrast of every palette is tested. Disclaimer heading made gender-neutral.
