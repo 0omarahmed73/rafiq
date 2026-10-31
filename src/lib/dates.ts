@@ -43,6 +43,11 @@ export function weekStartSaturday(d: Date): DayKey {
   return dayKey(day);
 }
 
+export function formatArabicMonthYear(key: DayKey): string {
+  const d = parseKey(key);
+  return `${MONTHS[d.getMonth()]} ${toArabicDigits(d.getFullYear())}`;
+}
+
 export function formatArabicDate(key: DayKey): string {
   const d = parseKey(key);
   return `${WEEKDAYS[d.getDay()]} ${toArabicDigits(d.getDate())} ${MONTHS[d.getMonth()]}`;

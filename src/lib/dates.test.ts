@@ -1,4 +1,10 @@
-import { addDays, dayKey, formatArabicDate, weekStartSaturday } from './dates';
+import { addDays, dayKey, formatArabicDate, formatArabicMonthYear, weekStartSaturday } from './dates';
+
+describe('formatArabicMonthYear', () => {
+  it('writes the month name and the year in Arabic-Indic digits', () => {
+    expect(formatArabicMonthYear('2026-10-31')).toBe('أكتوبر ٢٠٢٦');
+  });
+});
 
 describe('dayKey', () => {
   it('keeps a late-night time on the same local day', () => {

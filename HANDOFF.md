@@ -1,7 +1,7 @@
 # رفيق (Rafiq): Handoff
 
 Any model or person can continue from this file. It is updated with every task commit.
-Last updated: Task 6 done. Next: Task 7 (tracker).
+Last updated: Task 7 done. Next: Task 8 (practice engine and runner).
 
 ## What this is
 An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing journey, tracks check-ins, and builds a printable summary for the user's therapist. All data stays on the device (IndexedDB). It is a supportive tool, not therapy.
@@ -40,7 +40,7 @@ An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing j
 | 4 | Data layer (Repo, Dexie, memory) | done |
 | 5 | Shared UI components | done |
 | 6 | Check-in and Home | done |
-| 7 | Tracker | pending |
+| 7 | Tracker | done |
 | 8 | Practice engine and runner | pending |
 | 9 | Steps 1-3 practices | pending |
 | 10 | Journey and Step page | pending |
@@ -67,6 +67,7 @@ An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing j
 - Weekly-review question list has one given question; five more are written by the implementer and flagged for the owner's review (Task 15).
 
 ## Changes log (newest first)
+- Task 7: `/tracker`: `shadeFor`, `trendOf`, `MonthCalendar` (only logged days, grid-placed, Saturday-first), `IntensityCurve` (last 7 logged days, right-to-left), `TopEmotions`, neutral intro text (no failure/streak wording). Shade tokens added (light/dark). `formatArabicMonthYear` added to dates.
 - Task 6: `saveCheckin` + `ValidationError` (rejects no emotion / intensity outside integer 0..10; files by local day), `QuickCheckin` (chip + slider default 5 + حفظ), `CheckinPage`, `HomePage` (calm button, quick check-in, current step card), `currentStepId` pulled forward from Task 10 (Task 10 adds `markPracticed`). Routes: `/`, `/checkin`.
 - Task 5: Components: `Chip`, `Switch`, `IntensitySlider` (0-10, Arabic digits), `ProgressSegments`, `Banner`, `StorageBanner`. `App` now takes `router`, `repo`, `persistent` and provides the repo; `main.tsx` opens the DB in `boot()` before rendering.
 - Task 4: `src/db`: record types (`schema.ts`), `Repo` interface (`repo.ts`), shared `createRepo` (`repoCore.ts`), Dexie store + `RafiqDB` (`dexieRepo.ts`), memory store (`memoryRepo.ts`), `openDb` with in-memory fallback (`open.ts`), `RepoProvider`/`useRepo`. Contract tests run on both stores.
