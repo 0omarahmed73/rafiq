@@ -7,6 +7,7 @@
 تطبيق عربي هادئ وخاص، يرافقني في عشر خطوات للعناية بنفسي، ويبقى كل ما أكتبه فيه **على جهازي فقط**.
 
 [![افتح التطبيق](https://img.shields.io/badge/افتح%20التطبيق-rafiq--iota--neon.vercel.app-2F6F66?style=for-the-badge&logo=vercel&logoColor=white)](https://rafiq-iota-neon.vercel.app)
+[![حمّل تطبيق أندرويد](https://img.shields.io/badge/حمّل%20تطبيق%20أندرويد-APK%200.1.0-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/0omarahmed73/rafiq/releases/latest/download/rafiq-0.1.0-release.apk)
 
 ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)
@@ -80,11 +81,11 @@
 
 ### على أندرويد (ملف APK)
 
-1. أنزّل ملف `rafiq-0.1.0-release.apk` وأفتحه على الهاتف.
+1. أنزّل [rafiq-0.1.0-release.apk](https://github.com/0omarahmed73/rafiq/releases/latest/download/rafiq-0.1.0-release.apk) من صفحة [الإصدارات](https://github.com/0omarahmed73/rafiq/releases/latest) وأفتحه على الهاتف.
 2. إن طلب الهاتف ذلك، أسمح بالتثبيت من هذا المصدر.
 3. بيانات تطبيق أندرويد مستقلة عن بيانات المتصفح. أنقلها بنسخة احتياطية إن أردت ([انظر النسخ الاحتياطي](#النسخ-الاحتياطي-ونقل-بياناتي)).
 
-> يحتاج بناء الـ APK إلى مفتاح توقيع يملكه صاحب المشروع. لا يوجد مفتاح داخل المستودع.
+> الملف موقَّع بمفتاح الإصدار، وبصمته SHA-256 مكتوبة في صفحة الإصدار للتحقق منه. مفتاح التوقيع نفسه ليس في المستودع.
 
 ---
 
