@@ -1,4 +1,4 @@
-import { hideSplash } from './splash';
+import { ANDROID_WEB_SPLASH_MS, hideSplash } from './splash';
 
 function addSplash() {
   document.body.innerHTML = '<div id="splash"></div>';
@@ -24,10 +24,19 @@ describe('hideSplash', () => {
     expect(document.getElementById('splash')).toBeNull();
   });
 
-  it('does not add the browser minimum wait inside the Android app', () => {
+  it('inside the Android app keeps the web splash visible long enough to play its animation, counted from when it is revealed', () => {
+    vi.useFakeTimers();
     const el = addSplash();
-    hideSplash(document, { reducedMotion: false, elapsedMs: 0, native: true });
+    hideSplash(document, { reducedMotion: false, elapsedMs: 5000, native: true });
+    vi.advanceTimersByTime(ANDROID_WEB_SPLASH_MS - 1);
+    expect(el.classList.contains('splash-hide')).toBe(false);
+    vi.advanceTimersByTime(1);
     expect(el.classList.contains('splash-hide')).toBe(true);
+    vi.useRealTimers();
+  });
+
+  it('gives the animation at least a second on Android', () => {
+    expect(ANDROID_WEB_SPLASH_MS).toBeGreaterThanOrEqual(1000);
   });
 
   it('still keeps the minimum wait in the browser', () => {

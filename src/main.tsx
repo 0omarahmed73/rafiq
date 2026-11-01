@@ -6,10 +6,8 @@ import { App } from './App';
 import { openDb } from './db/open';
 import { installAccents } from './lib/accents';
 import { applyTheme } from './lib/theme';
-import { hideSplash } from './lib/splash';
 import { installAndroidLifecycle } from './platform/lifecycle';
-import { isAndroidPlatform } from './platform/documents';
-import { releaseNativeSplash } from './platform/launch';
+import { handOverSplash } from './platform/launch';
 import { installReminderLifecycle, reconcileDailyReminder } from './platform/notifications';
 import { routes } from './routes';
 
@@ -29,9 +27,8 @@ async function boot() {
       <App router={router} repo={repo} persistent={persistent} />
     </StrictMode>,
   );
-  void releaseNativeSplash(splashStartedAt);
-  // Let the first screen paint underneath before the splash fades.
-  requestAnimationFrame(() => requestAnimationFrame(() => hideSplash(document, { native: isAndroidPlatform() })));
+  // Let the first screen paint underneath, then hand over from the system splash and fade the web splash.
+  void handOverSplash(splashStartedAt);
 }
 
 void boot();

@@ -1,14 +1,14 @@
 import { Capacitor } from '@capacitor/core';
 import { SplashScreen } from '@capacitor/splash-screen';
-import { SPLASH_MIN_MS } from '../lib/splash';
+import { hideSplash } from '../lib/splash';
 
 /**
- * Android: after the app has rendered, keep the system splash up until the web splash is ready and the minimum
- * startup time has passed. This avoids a flash on quick launches and a blank screen on slow storage.
+ * Android: once the app has rendered and the web splash has painted, hide the system splash. By default it
+ * hands over at once, so the animated web splash (name, tagline) is seen instead of being cut off.
  */
 export async function releaseNativeSplash(
   splashStartedAt = performance.now(),
-  minimumVisibleMs = SPLASH_MIN_MS,
+  minimumVisibleMs = 0,
 ): Promise<void> {
   if (Capacitor.getPlatform() !== 'android') return;
   await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
@@ -19,4 +19,18 @@ export async function releaseNativeSplash(
   } catch {
     // The system splash is only decoration; a failure must never block the app.
   }
+}
+
+/**
+ * Android: the system splash (the mark alone) hands over to the animated web splash, which stays for its own time and
+ * then fades. Browser: the web splash fades after its normal minimum.
+ */
+export async function handOverSplash(splashStartedAt = performance.now()): Promise<void> {
+  if (Capacitor.getPlatform() === 'android') {
+    await releaseNativeSplash(splashStartedAt);
+    hideSplash(document, { native: true });
+    return;
+  }
+  await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+  hideSplash(document);
 }
