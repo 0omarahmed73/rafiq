@@ -82,6 +82,12 @@ describe.each(factories)('Repo contract (%s)', (_name, makeStore) => {
 
   it('defaults settings to the system theme', async () => {
     expect((await repo.getSettings()).theme).toBe('system');
+    expect((await repo.getSettings()).currentCountryCode).toBeUndefined();
+  });
+
+  it('stores an optional country code without defaulting one', async () => {
+    await repo.saveSettings({ id: 'settings', theme: 'system', currentCountryCode: 'EG' });
+    expect((await repo.getSettings()).currentCountryCode).toBe('EG');
   });
 
   it('does not store the same soothing text twice', async () => {
@@ -120,6 +126,24 @@ describe.each(factories)('Repo contract (%s)', (_name, makeStore) => {
     notes = (await repo.exportAll()).checkins.map((c) => c.note).sort();
     expect(notes).toEqual(['incoming-newer', 'only-local']);
     expect(onlyLocal.id).toBeTruthy();
+  });
+
+  it('propagates deletion tombstones in either merge direction', async () => {
+    await repo.savePractice(practice({ id: 'delete-me' }));
+    const beforeDelete = await repo.exportAll();
+    await repo.deletePractice('delete-me');
+    const afterDelete = await repo.exportAll();
+    expect(afterDelete.syncTombstones).toHaveLength(1);
+    expect(afterDelete.syncTombstones[0]).toMatchObject({ table: 'practices', recordId: 'delete-me' });
+
+    await repo.mergeAll(beforeDelete);
+    expect((await repo.listPractices()).map((p) => p.id)).not.toContain('delete-me');
+
+    const other = createRepo(makeStore());
+    await other.mergeAll(beforeDelete);
+    await other.mergeAll(afterDelete);
+    expect((await other.listPractices()).map((p) => p.id)).not.toContain('delete-me');
+    expect((await other.exportAll()).syncTombstones).toHaveLength(1);
   });
 
   it('leaves the store unchanged when a transaction fails', async () => {
@@ -221,6 +245,10 @@ describe.each(factories)('Repo contract (%s)', (_name, makeStore) => {
       await repo.deleteHomework('h1');
       expect((await repo.listHomework()).map((h) => h.id)).toEqual(['h2']);
       expect((await repo.exportAll()).homeworkImages.map((i) => i.id)).toEqual(['b']);
+      expect((await repo.exportAll()).syncTombstones.map((t) => [t.table, t.recordId]).sort()).toEqual([
+        ['homework', 'h1'],
+        ['homeworkImages', 'a'],
+      ]);
     });
 
     it('counts images per homework without returning them', async () => {
@@ -247,6 +275,15 @@ describe.each(factories)('Repo contract (%s)', (_name, makeStore) => {
       const all = await repo.exportAll();
       expect(all.homework).toHaveLength(1);
       expect(all.homeworkImages).toHaveLength(1);
+      expect(all.homeworkImages[0].kind).toBe('prompt');
+    });
+
+    it('shares a six-photo total across prompt and answer images', async () => {
+      for (let i = 0; i < 6; i += 1) await repo.saveHomeworkImage(img({ id: `prompt-${i}` }));
+      await expect(repo.saveHomeworkImage(img({ id: 'answer-1', kind: 'answer' }))).rejects.toThrow('Homework photo limit reached');
+      await repo.deleteHomeworkImage('prompt-0');
+      await repo.saveHomeworkImage(img({ id: 'answer-1', kind: 'answer' }));
+      expect((await repo.listHomeworkImages('h1')).map((image) => image.kind).sort()).toEqual(['answer', 'prompt', 'prompt', 'prompt', 'prompt', 'prompt']);
     });
   });
 

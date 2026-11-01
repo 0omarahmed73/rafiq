@@ -11,6 +11,8 @@ const documents = vi.hoisted(() => ({
   isAndroidPlatform: vi.fn(),
   saveBackupDocument: vi.fn(),
   readBackupDocument: vi.fn(),
+  canShareBackup: vi.fn(),
+  shareBackupDocument: vi.fn(),
 }));
 
 vi.mock('../../platform/documents', () => documents);
@@ -50,6 +52,17 @@ describe('SettingsPage profile', () => {
   it('has a «معلوماتي» section', async () => {
     setup();
     expect(await screen.findByRole('heading', { name: 'معلوماتي' })).toBeInTheDocument();
+  });
+
+  it('saves a manually selected country code for local support information', async () => {
+    const repo = createMemoryRepo();
+    const { user } = setup(repo);
+    const country = await screen.findByRole('combobox', { name: 'بلد أرقام الدعم' });
+
+    await user.selectOptions(country, 'US');
+
+    await waitFor(async () => expect((await repo.getSettings()).currentCountryCode).toBe('US'));
+    expect(await screen.findByRole('status')).toHaveTextContent('حُفظ بلدي على هذا الجهاز.');
   });
 });
 
@@ -153,6 +166,58 @@ describe('SettingsPage backup', () => {
     expect(JSON.parse(text).data.soothingList[0].text).toBe('الرسم');
     expect(download).not.toHaveBeenCalled();
     await waitFor(async () => expect((await repo.getSettings()).lastBackupAt).toMatch(/^\d{4}-\d{2}-\d{2}T/));
+  });
+
+  it('hides the share button where sharing is unavailable', async () => {
+    documents.canShareBackup.mockReturnValue(false);
+    setup();
+
+    await screen.findByRole('button', { name: 'تصدير نسخة احتياطية' });
+    expect(screen.queryByRole('button', { name: 'مشاركة نسخة احتياطية' })).not.toBeInTheDocument();
+  });
+
+  it('shares the full backup, says only that the sheet opened, and does not record a backup', async () => {
+    const repo = createMemoryRepo();
+    await repo.addSoothing('الرسم', 'user');
+    documents.canShareBackup.mockReturnValue(true);
+    documents.shareBackupDocument.mockResolvedValue('opened');
+    const { user } = setup(repo);
+
+    await user.click(await screen.findByRole('button', { name: 'مشاركة نسخة احتياطية' }));
+
+    await waitFor(() => expect(documents.shareBackupDocument).toHaveBeenCalledOnce());
+    const [filename, text] = documents.shareBackupDocument.mock.calls[0];
+    expect(filename).toMatch(/^rafiq-backup-\d{4}-\d{2}-\d{2}\.json$/);
+    expect(JSON.parse(text).data.soothingList[0].text).toBe('الرسم');
+    expect(await screen.findByRole('status')).toHaveTextContent('فتحتُ قائمة المشاركة.');
+    expect((await repo.getSettings()).lastBackupAt).toBeUndefined();
+    expect(screen.getByText(/أشاركها مع تطبيق أثق به فقط/)).toBeInTheDocument();
+  });
+
+  it('shows nothing when the share sheet is dismissed on the web', async () => {
+    documents.canShareBackup.mockReturnValue(true);
+    documents.shareBackupDocument.mockResolvedValue('cancelled');
+    const { user } = setup();
+
+    await user.click(await screen.findByRole('button', { name: 'مشاركة نسخة احتياطية' }));
+
+    await waitFor(() => expect(documents.shareBackupDocument).toHaveBeenCalledOnce());
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('reports a share failure in Arabic and lets the user retry', async () => {
+    documents.canShareBackup.mockReturnValue(true);
+    documents.shareBackupDocument.mockRejectedValueOnce(new Error('no chooser')).mockResolvedValueOnce('opened');
+    const { user } = setup();
+    const button = await screen.findByRole('button', { name: 'مشاركة نسخة احتياطية' });
+
+    await user.click(button);
+    expect(await screen.findByRole('alert')).toHaveTextContent('تعذّرت المشاركة، يمكنني المحاولة مرة أخرى.');
+
+    await user.click(button);
+    expect(await screen.findByRole('status')).toHaveTextContent('فتحتُ قائمة المشاركة.');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('does not update lastBackupAt when Android saving is cancelled', async () => {
@@ -405,25 +470,33 @@ describe('SettingsPage theme', () => {
 describe('SettingsPage developer attribution', () => {
   beforeEach(() => documents.isAndroidPlatform.mockReturnValue(false));
 
-  it('shows the developer name, role and public addresses as plain selectable text', async () => {
+  it('shows the developer name, role and clickable public profile links', async () => {
     setup();
     const section = (await screen.findByRole('heading', { name: 'عن المطوّر' })).closest('section')!;
     expect(section).toHaveTextContent('Omar A. Saeed');
     expect(section).toHaveTextContent('Full Stack Developer');
     expect(section).not.toHaveTextContent('مطوّر ويب متكامل');
     for (const label of ['جيت هب', 'لينكد إن', 'الموقع الشخصي']) expect(section).toHaveTextContent(label);
-    for (const address of ['github.com/0omarahmed73', 'linkedin.com/in/0omarahmed73', 'omarasaeed.dev']) {
-      const item = Array.from(section.querySelectorAll('bdi')).find((el) => el.textContent === address);
-      expect(item, address).toBeTruthy();
-      expect(item).toHaveAttribute('dir', 'ltr');
+    const links = [
+      ['github.com/0omarahmed73', 'https://github.com/0omarahmed73'],
+      ['linkedin.com/in/0omarahmed73', 'https://linkedin.com/in/0omarahmed73'],
+      ['omarasaeed.dev', 'https://omarasaeed.dev'],
+    ];
+    for (const [address, href] of links) {
+      const link = screen.getByRole('link', { name: address });
+      expect(link).toHaveAttribute('href', href);
+      expect(link).toHaveAttribute('target', '_blank');
+      expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+      expect(link.querySelector('bdi')).toHaveAttribute('dir', 'ltr');
     }
     expect(section).not.toHaveTextContent('linkedin.con');
   });
 
-  it('has no links, images or other remote content in the attribution', async () => {
+  it('uses only links for remote content in the attribution', async () => {
     setup();
     const section = (await screen.findByRole('heading', { name: 'عن المطوّر' })).closest('section')!;
-    expect(section.querySelectorAll('a, img, iframe, video, audio, link, script, [href], [src]')).toHaveLength(0);
+    expect(section.querySelectorAll('a')).toHaveLength(3);
+    expect(section.querySelectorAll('img, iframe, video, audio, link, script, [src]')).toHaveLength(0);
     expect(section.querySelector('ul')).toHaveAccessibleName('عناوين المطوّر');
   });
 

@@ -10,11 +10,26 @@ beforeEach(() => {
   vi.mocked(Capacitor.getPlatform).mockReturnValue('android');
   vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => cb(0));
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
 
 describe('releaseNativeSplash', () => {
   it('hands the screen to the web splash with no extra fade on Android', async () => {
-    await releaseNativeSplash();
+    await releaseNativeSplash(performance.now() - 1200);
+    expect(SplashScreen.hide).toHaveBeenCalledWith({ fadeOutDuration: 0 });
+  });
+
+  it('keeps the native splash visible until the minimum startup time has passed', async () => {
+    vi.useFakeTimers();
+    const release = releaseNativeSplash(performance.now(), 1200);
+    await Promise.resolve();
+    expect(SplashScreen.hide).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1200);
+    await release;
+
     expect(SplashScreen.hide).toHaveBeenCalledWith({ fadeOutDuration: 0 });
   });
 
@@ -26,6 +41,6 @@ describe('releaseNativeSplash', () => {
 
   it('never throws when the native call fails', async () => {
     vi.mocked(SplashScreen.hide).mockRejectedValueOnce(new Error('no splash'));
-    await expect(releaseNativeSplash()).resolves.toBeUndefined();
+    await expect(releaseNativeSplash(performance.now() - 1200)).resolves.toBeUndefined();
   });
 });

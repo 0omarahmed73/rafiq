@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MAX_PHOTOS } from '../lib/image';
 import type { Repo } from './repo';
 import { legacyHomework } from './legacyHomework';
 import type { AllData } from './schema';
@@ -112,6 +113,7 @@ const Settings = z.object({
   reminderTime: str.optional(),
   theme: z.enum(['system', 'light', 'dark']),
   accent: str.optional(),
+  currentCountryCode: str.optional(),
   displayName: str.optional(),
   therapistName: str.optional(),
   trustedName: str.optional(),
@@ -143,8 +145,20 @@ const Homework = z.object({
 const HomeworkImage = z.object({
   id,
   homeworkId: id,
+  kind: z.enum(['prompt', 'answer']).default('prompt'),
   dataUrl: z.string().startsWith('data:image/'),
   createdAt: id,
+  ...stamp,
+});
+
+const SyncTombstone = z.object({
+  id,
+  table: z.enum([
+    'checkins', 'practices', 'followups', 'letters', 'weeklyReviews', 'sessions', 'stepProgress', 'soothingList',
+    'settings', 'agendaPoints', 'yearPlan', 'homework', 'homeworkImages',
+  ]),
+  recordId: id,
+  deletedAt: str,
   ...stamp,
 });
 
@@ -165,6 +179,7 @@ const Backup = z.object({
     yearPlan: z.array(YearPlanEntry).default([]),
     homework: z.array(Homework).default([]),
     homeworkImages: z.array(HomeworkImage).default([]),
+    syncTombstones: z.array(SyncTombstone).default([]),
   }),
 });
 
@@ -182,7 +197,7 @@ export async function exportBackup(repo: Repo): Promise<BackupFile> {
  * Restores a backup given as text or as a parsed object. The file is fully validated before the
  * repo is touched, and the write itself is atomic, so a bad file changes nothing.
  */
-export async function importBackup(repo: Repo, file: unknown, mode: 'replace' | 'merge'): Promise<void> {
+export function parseBackupFile(file: unknown): BackupFile {
   let value = file;
   if (typeof file === 'string') {
     try {
@@ -205,8 +220,22 @@ export async function importBackup(repo: Repo, file: unknown, mode: 'replace' | 
   const converted = parsedData.sessions.flatMap(legacyHomework).filter((h) => !known.has(h.id));
   const data: AllData = {
     ...parsedData,
+    syncTombstones: parsedData.syncTombstones ?? [],
     sessions: parsedData.sessions.map((s) => (s.homework.length ? { ...s, homework: [] } : s)),
     homework: [...parsedData.homework, ...converted],
   };
+  const photoCounts = new Map<string, number>();
+  const homeworkIds = new Set(data.homework.map((homework) => homework.id));
+  for (const photo of data.homeworkImages) {
+    if (!homeworkIds.has(photo.homeworkId)) throw new BackupError(INVALID);
+    const count = (photoCounts.get(photo.homeworkId) ?? 0) + 1;
+    if (count > MAX_PHOTOS) throw new BackupError(INVALID);
+    photoCounts.set(photo.homeworkId, count);
+  }
+  return { version: 1, exportedAt: parsed.data.exportedAt, data };
+}
+
+export async function importBackup(repo: Repo, file: unknown, mode: 'replace' | 'merge'): Promise<void> {
+  const { data } = parseBackupFile(file);
   await (mode === 'replace' ? repo.replaceAll(data) : repo.mergeAll(data));
 }

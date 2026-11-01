@@ -14,7 +14,7 @@ const V1 = {
   agendaPoints: 'id',
 };
 
-describe('Dexie upgrade to version 3', () => {
+describe('Dexie upgrades', () => {
   it('turns old session homework into homework rows, once', async () => {
     const name = `rafiq-upgrade-${Math.random().toString(36).slice(2)}`;
     const old = new Dexie(name);
@@ -48,5 +48,27 @@ describe('Dexie upgrade to version 3', () => {
     await again.open();
     expect(await again.table('homework').count()).toBe(2);
     again.close();
+  });
+
+  it('upgrades existing homework images as prompt photos and adds tombstones', async () => {
+    const name = `rafiq-photo-upgrade-${Math.random().toString(36).slice(2)}`;
+    const old = new Dexie(name);
+    old.version(1).stores(V1);
+    old.version(2).stores({ yearPlan: 'id' });
+    old.version(3).stores({ homework: 'id, sessionId, createdAt', homeworkImages: 'id, homeworkId' });
+    await old.table('homeworkImages').put({
+      id: 'legacy-image',
+      homeworkId: 'legacy-homework',
+      dataUrl: 'data:image/jpeg;base64,AAAA',
+      createdAt: '2026-10-27T09:00:00.000Z',
+      updatedAt: '2026-10-27T09:00:00.000Z',
+    });
+    old.close();
+
+    const upgraded = new RafiqDB(name);
+    await upgraded.open();
+    expect(await upgraded.table('homeworkImages').get('legacy-image')).toMatchObject({ kind: 'prompt' });
+    expect(await upgraded.table('syncTombstones').count()).toBe(0);
+    upgraded.close();
   });
 });

@@ -37,7 +37,10 @@ export async function setDailyReminder(time: string | undefined, requestPermissi
 
   let allowed = (await LocalNotifications.checkPermissions()).display === 'granted';
   if (!allowed && requestPermission) allowed = (await LocalNotifications.requestPermissions()).display === 'granted';
-  if (!allowed) return 'permission-needed';
+  if (!allowed) {
+    await LocalNotifications.cancel(only);
+    return 'permission-needed';
+  }
 
   await LocalNotifications.createChannel({ id: CHANNEL_ID, name: 'التذكير اليومي', importance: 3 });
   await LocalNotifications.cancel(only);
@@ -63,6 +66,7 @@ export async function reconcileDailyReminder(repo: Pick<Repo, 'getSettings'>): P
     const { reminderTime } = await repo.getSettings();
     if (reminderTime === undefined) await setDailyReminder(undefined, false);
     else if (await getReminderPermission()) await setDailyReminder(reminderTime, false);
+    else await setDailyReminder(undefined, false);
   } catch {
     // The reminder is a convenience; a native failure must never block the app.
   }

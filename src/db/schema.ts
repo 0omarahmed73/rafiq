@@ -94,8 +94,20 @@ export interface Homework extends Stamped {
 export interface HomeworkImage extends Stamped {
   id: string;
   homeworkId: string;
+  /** Existing homework photos are prompts; answer photos remain a separate private kind. */
+  kind: 'prompt' | 'answer';
   dataUrl: string;
   createdAt: string;
+}
+
+export type SyncableTableName = Exclude<TableName, 'syncTombstones'>;
+
+/** A synced delete marker; it remains until an explicitly newer row revives the same id. */
+export interface SyncTombstone extends Stamped {
+  id: string;
+  table: SyncableTableName;
+  recordId: string;
+  deletedAt: string;
 }
 
 export interface StepProgress extends Stamped {
@@ -118,6 +130,8 @@ export interface Settings extends Stamped {
   theme: 'system' | 'light' | 'dark';
   /** Favourite accent colour id (see lib/accents); an unknown value reads as teal. */
   accent?: string;
+  /** ISO 3166-1 alpha-2 country selected by the user for local crisis contacts. */
+  currentCountryCode?: string;
   /** Age during the yearly plan, for its title «عامي …». Absent reads as 25. */
   /** «معلوماتي»: shown at the top of the therapist summary (name, therapist) and in Settings. */
   displayName?: string;
@@ -164,6 +178,7 @@ export interface AllData {
   yearPlan: YearPlanEntry[];
   homework: Homework[];
   homeworkImages: HomeworkImage[];
+  syncTombstones: SyncTombstone[];
 }
 
 export type TableName = keyof AllData;

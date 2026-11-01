@@ -83,6 +83,17 @@ describe('setDailyReminder', () => {
     expect(ln.schedule).not.toHaveBeenCalled();
   });
 
+  it('cancels an old alarm when notification permission is denied', async () => {
+    await setDailyReminder('20:30', false);
+    ln.checkPermissions.mockResolvedValue(permission('denied'));
+    ln.requestPermissions.mockResolvedValue(permission('denied'));
+
+    await expect(setDailyReminder('21:00', true)).resolves.toBe('permission-needed');
+
+    expect(ln.cancel).toHaveBeenCalledTimes(2);
+    expect(ln.schedule).toHaveBeenCalledTimes(1);
+  });
+
   it('cancels the one alarm and reports disabled when there is no time, without touching permission', async () => {
     await expect(setDailyReminder(undefined, true)).resolves.toBe('disabled');
     expect(ln.cancel).toHaveBeenCalledWith({ notifications: [{ id: 1 }] });
@@ -132,6 +143,18 @@ describe('reconcileDailyReminder', () => {
     ln.checkPermissions.mockResolvedValue(permission('prompt'));
     await reconcileDailyReminder(repoWith('21:15') as never);
     expect(ln.requestPermissions).not.toHaveBeenCalled();
+    expect(ln.schedule).not.toHaveBeenCalled();
+  });
+
+  it('cancels a stale alarm when permission was revoked', async () => {
+    await setDailyReminder('20:30', false);
+    ln.cancel.mockClear();
+    ln.schedule.mockClear();
+    ln.checkPermissions.mockResolvedValue(permission('denied'));
+
+    await reconcileDailyReminder(repoWith('21:15') as never);
+
+    expect(ln.cancel).toHaveBeenCalledWith({ notifications: [{ id: 1 }] });
     expect(ln.schedule).not.toHaveBeenCalled();
   });
 

@@ -4,10 +4,12 @@ import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.net.Uri;
+import android.content.ClipData;
 import android.os.Bundle;
 import android.text.TextUtils;
 
 import androidx.activity.result.ActivityResult;
+import androidx.core.content.FileProvider;
 
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -16,6 +18,9 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
@@ -46,6 +51,58 @@ public final class RafiqDocumentsPlugin extends Plugin {
             .putExtra(Intent.EXTRA_TITLE, safeFilename(filename))
             .putExtra(Intent.EXTRA_LOCAL_ONLY, true);
         launchPicker(call, intent, "saveBackupResult");
+    }
+
+    @Override
+    public void load() {
+        // A shared copy only needs to outlive the share sheet, so anything left from an earlier run is stale.
+        clearSharedBackups();
+    }
+
+    @PluginMethod
+    public void shareBackup(PluginCall call) {
+        String text = call.getString("text");
+        if (TextUtils.isEmpty(text)) {
+            call.reject("Backup contents are missing");
+            return;
+        }
+        try {
+            clearSharedBackups();
+            File directory = sharedBackupsDirectory();
+            if (!directory.isDirectory() && !directory.mkdirs() && !directory.isDirectory()) {
+                throw new IOException("Could not create " + directory);
+            }
+            File file = new File(directory, safeFilename(call.getString("filename")));
+            try (OutputStream output = new FileOutputStream(file, false)) {
+                output.write(text.getBytes(StandardCharsets.UTF_8));
+            }
+            Uri uri = FileProvider.getUriForFile(getContext(), getContext().getPackageName() + ".fileprovider", file);
+            Intent send = new Intent(Intent.ACTION_SEND)
+                .setType(JSON_MIME)
+                .putExtra(Intent.EXTRA_STREAM, uri)
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            send.setClipData(ClipData.newRawUri(file.getName(), uri));
+            Intent chooser = Intent.createChooser(send, null);
+            chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            getActivity().startActivity(chooser);
+            JSObject result = new JSObject();
+            result.put("opened", true);
+            call.resolve(result);
+        } catch (IOException | RuntimeException error) {
+            call.reject("Could not open the share sheet", error);
+        }
+    }
+
+    private File sharedBackupsDirectory() {
+        return new File(getContext().getCacheDir(), "shared-backups");
+    }
+
+    private void clearSharedBackups() {
+        File[] old = sharedBackupsDirectory().listFiles();
+        if (old == null) return;
+        for (File file : old) {
+            if (!file.delete()) file.deleteOnExit();
+        }
     }
 
     @PluginMethod

@@ -12,10 +12,11 @@ const icon = {
   'aria-hidden': true,
 };
 
-const ROWS: { label: string; address: string; glyph: ReactNode }[] = [
+const ROWS: { label: string; address: string; href: string; glyph: ReactNode }[] = [
   {
     label: 'جيت هب',
     address: 'github.com/0omarahmed73',
+    href: 'https://github.com/0omarahmed73',
     glyph: (
       <svg {...icon}>
         <circle cx="6" cy="6" r="2.5" />
@@ -28,6 +29,7 @@ const ROWS: { label: string; address: string; glyph: ReactNode }[] = [
   {
     label: 'لينكد إن',
     address: 'linkedin.com/in/0omarahmed73',
+    href: 'https://linkedin.com/in/0omarahmed73',
     glyph: (
       <svg {...icon}>
         <rect x="3" y="7" width="18" height="13" rx="2.5" />
@@ -38,6 +40,7 @@ const ROWS: { label: string; address: string; glyph: ReactNode }[] = [
   {
     label: 'الموقع الشخصي',
     address: 'omarasaeed.dev',
+    href: 'https://omarasaeed.dev',
     glyph: (
       <svg {...icon}>
         <circle cx="12" cy="12" r="9" />
@@ -47,7 +50,7 @@ const ROWS: { label: string; address: string; glyph: ReactNode }[] = [
   },
 ];
 
-/** Static attribution. Plain text only: no links, images or requests, and nothing here is stored or exported. */
+/** Static attribution with safe outbound links; nothing here is stored or exported. */
 export function DeveloperInfo({ className }: { className: string }) {
   return (
     <section className={className} aria-labelledby="developer-title">
@@ -81,9 +84,14 @@ export function DeveloperInfo({ className }: { className: string }) {
             </span>
             <span className="flex min-w-0 flex-col">
               <span className="text-xs font-semibold text-muted">{row.label}</span>
-              <span className="select-text break-all text-sm">
+              <a
+                href={row.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="select-text break-all text-sm text-ink underline decoration-transparent underline-offset-2 hover:decoration-current focus-visible:rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal"
+              >
                 <bdi dir="ltr">{row.address}</bdi>
-              </span>
+              </a>
             </span>
           </li>
         ))}

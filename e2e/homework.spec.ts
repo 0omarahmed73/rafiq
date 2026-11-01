@@ -62,7 +62,7 @@ for (const scheme of ['light', 'dark'] as const) {
     await expect(page.getByRole('heading', { name: 'واجب جديد' })).toBeVisible();
     await page.getByLabel('ما الواجب؟').fill(LONG);
     await page.getByLabel('ملاحظات').fill(LONG);
-    await page.getByLabel('إجابتي').fill(LONG);
+    await page.getByRole('textbox', { name: 'إجابتي' }).fill(LONG);
     await expectNoSidewaysScroll(page, 'homework page');
     await page.getByRole('button', { name: 'حفظ', exact: true }).click();
     await expect(page.getByText('حفظتُ الواجب.')).toBeVisible();
@@ -82,15 +82,19 @@ for (const scheme of ['light', 'dark'] as const) {
 test('a homework with a photo and an answer survives a reload and is in the exported backup', async ({ page }) => {
   await acceptDisclaimer(page);
   await newHomework(page, 'أكتب يوميات الأسبوع');
-  await page.getByLabel('إجابتي').fill('بدأتُ اليوم بصفحة واحدة');
+  await page.getByRole('textbox', { name: 'إجابتي' }).fill('بدأتُ اليوم بصفحة واحدة');
   await page.getByLabel('اختيار صور الواجب').setInputFiles({ name: 'p.jpg', mimeType: 'image/jpeg', buffer: await makeJpeg(page, 600, 400) });
   await expect(page.getByRole('img', { name: 'صورة الواجب ١' })).toBeVisible();
+  await expect(page.getByLabel('التقاط صورة للإجابة')).toHaveAttribute('capture', 'environment');
+  await page.getByLabel('اختيار صور الإجابة').setInputFiles({ name: 'answer.jpg', mimeType: 'image/jpeg', buffer: await makeJpeg(page, 400, 600) });
+  await expect(page.getByRole('img', { name: 'صورة الإجابة ١' })).toBeVisible();
   await page.getByRole('button', { name: 'حفظ', exact: true }).click();
   await expect(page.getByText('حفظتُ الواجب.')).toBeVisible();
 
   await page.reload();
-  await expect(page.getByLabel('إجابتي')).toHaveValue('بدأتُ اليوم بصفحة واحدة');
+  await expect(page.getByRole('textbox', { name: 'إجابتي' })).toHaveValue('بدأتُ اليوم بصفحة واحدة');
   await expect(page.getByRole('img', { name: 'صورة الواجب ١' })).toBeVisible();
+  await expect(page.getByRole('img', { name: 'صورة الإجابة ١' })).toBeVisible();
 
   await page.goto('/settings');
   const [download] = await Promise.all([
@@ -100,7 +104,8 @@ test('a homework with a photo and an answer survives a reload and is in the expo
   const text = await (await import('node:fs/promises')).readFile((await download.path())!, 'utf-8');
   const backup = JSON.parse(text);
   expect(backup.data.homework.map((h: { text: string }) => h.text)).toEqual(['أكتب يوميات الأسبوع']);
-  expect(backup.data.homeworkImages).toHaveLength(1);
+  expect(backup.data.homeworkImages).toHaveLength(2);
+  expect(backup.data.homeworkImages.map((image: { kind: string }) => image.kind).sort()).toEqual(['answer', 'prompt']);
   expect(backup.data.homeworkImages[0].dataUrl.startsWith('data:image/jpeg;base64,')).toBe(true);
 });
 

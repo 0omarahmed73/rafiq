@@ -30,6 +30,17 @@ export class RafiqDB extends Dexie {
           await tx.table('sessions').put({ ...session, homework: [] });
         }
       });
+    this.version(4)
+      .stores({
+        homeworkImages: 'id, homeworkId, kind',
+        syncTombstones: 'id, [table+recordId], updatedAt',
+      })
+      .upgrade(async (tx) => {
+        for (const image of (await tx.table('homeworkImages').toArray()) as Array<Record<string, unknown>>) {
+          if (image.kind === 'prompt' || image.kind === 'answer') continue;
+          await tx.table('homeworkImages').put({ ...image, kind: 'prompt' });
+        }
+      });
   }
 }
 

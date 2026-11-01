@@ -1,6 +1,8 @@
 import { dayKey } from '../lib/dates';
+import { MAX_PHOTOS } from '../lib/image';
 import { newId, type DayRange, type Draft, type NewRecord, type Repo } from './repo';
 import type {
+  AgendaPoint,
   AllData,
   Checkin,
   Followup,
@@ -10,8 +12,10 @@ import type {
   PracticeRecord,
   Settings,
   SoothingItem,
+  SyncTombstone,
   StepProgress,
   TableName,
+  SyncableTableName,
 } from './schema';
 
 /** The minimal storage a Repo needs; Dexie and an in-memory Map both implement it. */
@@ -31,7 +35,7 @@ export interface Store {
   transaction<T>(fn: () => Promise<T>): Promise<T>;
 }
 
-export const TABLES: TableName[] = [
+export const DATA_TABLES: SyncableTableName[] = [
   'checkins',
   'practices',
   'followups',
@@ -46,6 +50,8 @@ export const TABLES: TableName[] = [
   'homework',
   'homeworkImages',
 ];
+
+export const TABLES: TableName[] = [...DATA_TABLES, 'syncTombstones'];
 
 /** Primary key field of each table. */
 export const KEY_FIELD: Record<TableName, 'id' | 'stepId'> = {
@@ -62,15 +68,94 @@ export const KEY_FIELD: Record<TableName, 'id' | 'stepId'> = {
   yearPlan: 'id',
   homework: 'id',
   homeworkImages: 'id',
+  syncTombstones: 'id',
 };
 
 const nowIso = () => new Date().toISOString();
 const inRange = (day: string, r: DayRange) => day >= r.from && day <= r.to;
+const tombstoneId = (table: SyncableTableName, recordId: string) => `${table}:${encodeURIComponent(recordId)}`;
+
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([key, item]) => `${JSON.stringify(key)}:${stableStringify(item)}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value) ?? 'null';
+}
+
+function choose<T extends { updatedAt: string }>(a: T | undefined, b: T | undefined): T | undefined {
+  if (!a) return b;
+  if (!b) return a;
+  if (a.updatedAt !== b.updatedAt) return a.updatedAt > b.updatedAt ? a : b;
+  return stableStringify(a) >= stableStringify(b) ? a : b;
+}
+
+function recordKey(table: SyncableTableName, row: Record<string, unknown>): string {
+  return String(row[KEY_FIELD[table]]);
+}
+
+function tombstoneFor(table: SyncableTableName, recordId: string, deletedAt = nowIso()): SyncTombstone {
+  return { id: tombstoneId(table, recordId), table, recordId, deletedAt, updatedAt: deletedAt };
+}
+
+async function markDeleted(store: Store, table: SyncableTableName, recordId: string, recordUpdatedAt: string): Promise<void> {
+  const id = tombstoneId(table, recordId);
+  const previous = await store.get<SyncTombstone>('syncTombstones', id);
+  const deletedAt = [nowIso(), recordUpdatedAt, previous?.updatedAt ?? ''].sort().at(-1)!;
+  await store.put('syncTombstones', tombstoneFor(table, recordId, deletedAt));
+}
+
+/** Merge two snapshots deterministically. A delete wins an equal-time update. */
+export function mergeSnapshots(local: AllData, incoming: AllData): AllData {
+  const result = Object.fromEntries(DATA_TABLES.map((table) => [table, []])) as unknown as AllData;
+  const tombstones = new Map<string, SyncTombstone>();
+  for (const marker of [...(local.syncTombstones ?? []), ...(incoming.syncTombstones ?? [])]) {
+    const id = tombstoneId(marker.table, marker.recordId);
+    const normalized = { ...marker, id };
+    const key = `${marker.table}\u0000${marker.recordId}`;
+    tombstones.set(key, choose(tombstones.get(key), normalized)!);
+  }
+
+  for (const table of DATA_TABLES) {
+    const localRows = local[table] as unknown as Record<string, unknown>[];
+    const incomingRows = incoming[table] as unknown as Record<string, unknown>[];
+    const candidates = new Map<string, Record<string, unknown>>();
+    for (const row of [...(localRows ?? []), ...(incomingRows ?? [])]) {
+      const key = recordKey(table, row);
+      const current = candidates.get(key) as (Record<string, unknown> & { updatedAt: string }) | undefined;
+      candidates.set(key, choose(current, row as Record<string, unknown> & { updatedAt: string })!);
+    }
+
+    for (const [key, row] of candidates) {
+      const markerKey = `${table}\u0000${key}`;
+      const marker = tombstones.get(markerKey);
+      if (marker && marker.updatedAt >= String(row.updatedAt)) continue;
+      (result[table] as unknown as Record<string, unknown>[]).push(row);
+      if (marker) tombstones.delete(markerKey);
+    }
+    (result[table] as unknown as Record<string, unknown>[]).sort((a, b) => {
+      const ak = recordKey(table, a);
+      const bk = recordKey(table, b);
+      return ak < bk ? -1 : ak > bk ? 1 : 0;
+    });
+  }
+  result.syncTombstones = [...tombstones.values()].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  return result;
+}
 
 export function createRepo(store: Store): Repo {
   async function write<T extends { updatedAt: string }>(table: TableName, row: Draft<T>): Promise<T> {
     const rec = { ...row, updatedAt: nowIso() } as T;
     await store.put(table, rec);
+    if (table !== 'syncTombstones') {
+      const syncTable = table as SyncableTableName;
+      const id = String((rec as unknown as Record<string, unknown>)[KEY_FIELD[table]]);
+      const marker = await store.get<SyncTombstone>('syncTombstones', tombstoneId(syncTable, id));
+      if (marker && rec.updatedAt > marker.updatedAt) await store.remove('syncTombstones', marker.id);
+    }
     return rec;
   }
   async function create<T extends { id: string; updatedAt: string }>(
@@ -161,7 +246,12 @@ export function createRepo(store: Store): Repo {
     },
 
     async deletePractice(id) {
-      await store.remove('practices', id);
+      await store.transaction(async () => {
+        const found = await store.get<PracticeRecord>('practices', id);
+        if (!found) return;
+        await store.remove('practices', id);
+        await markDeleted(store, 'practices', id, found.updatedAt);
+      });
     },
     async saveHomework(h) {
       await write<Homework>('homework', h);
@@ -179,11 +269,25 @@ export function createRepo(store: Store): Repo {
     },
     deleteHomework: (id) =>
       store.transaction(async () => {
-        for (const key of await store.keysWhere('homeworkImages', 'homeworkId', id)) await store.remove('homeworkImages', key);
+        const homework = await store.get<Homework>('homework', id);
+        if (homework) await markDeleted(store, 'homework', id, homework.updatedAt);
+        for (const key of await store.keysWhere('homeworkImages', 'homeworkId', id)) {
+          const image = await store.get<HomeworkImage>('homeworkImages', key);
+          if (image) await markDeleted(store, 'homeworkImages', String(key), image.updatedAt);
+          await store.remove('homeworkImages', key);
+        }
         await store.remove('homework', id);
       }),
     async saveHomeworkImage(i) {
-      await write<HomeworkImage>('homeworkImages', i);
+      await store.transaction(async () => {
+        const existing = await store.get<HomeworkImage>('homeworkImages', i.id);
+        if (!existing || existing.homeworkId !== i.homeworkId) {
+          if ((await store.countWhere('homeworkImages', 'homeworkId', i.homeworkId)) >= MAX_PHOTOS) {
+            throw new Error('Homework photo limit reached');
+          }
+        }
+        await write<HomeworkImage>('homeworkImages', { ...i, kind: i.kind ?? 'prompt' });
+      });
     },
     async listHomeworkImages(homeworkId) {
       const rows = await store.where<HomeworkImage>('homeworkImages', 'homeworkId', homeworkId);
@@ -198,10 +302,20 @@ export function createRepo(store: Store): Repo {
       return counts;
     },
     async deleteHomeworkImage(id) {
-      await store.remove('homeworkImages', id);
+      await store.transaction(async () => {
+        const image = await store.get<HomeworkImage>('homeworkImages', id);
+        if (!image) return;
+        await store.remove('homeworkImages', id);
+        await markDeleted(store, 'homeworkImages', id, image.updatedAt);
+      });
     },
     async deleteAgendaPoint(id) {
-      await store.remove('agendaPoints', id);
+      await store.transaction(async () => {
+        const point = await store.get<AgendaPoint>('agendaPoints', id);
+        if (!point) return;
+        await store.remove('agendaPoints', id);
+        await markDeleted(store, 'agendaPoints', id, point.updatedAt);
+      });
     },
 
     async exportAll() {
@@ -218,11 +332,12 @@ export function createRepo(store: Store): Repo {
       }),
     mergeAll: (d) =>
       store.transaction(async () => {
-        for (const t of TABLES) {
-          for (const row of (d[t] ?? []) as unknown as Record<string, unknown>[]) {
-            const existing = await store.get<{ updatedAt: string }>(t, row[KEY_FIELD[t]] as string | number);
-            if (!existing || (row.updatedAt as string) > existing.updatedAt) await store.put(t, row);
-          }
+        const local = {} as AllData;
+        for (const table of TABLES) (local as unknown as Record<string, unknown>)[table] = await list(table);
+        const merged = mergeSnapshots(local, d);
+        for (const table of TABLES) {
+          await store.clear(table);
+          for (const row of merged[table] ?? []) await store.put(table, row);
         }
       }),
   };

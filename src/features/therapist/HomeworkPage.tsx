@@ -13,6 +13,7 @@ const secondary = 'min-h-12 flex-1 rounded-full border-[1.5px] border-teal bg-ca
 interface Stored extends Photo {
   persisted: boolean;
   createdAt: string;
+  kind: 'prompt' | 'answer';
 }
 
 export function HomeworkPage() {
@@ -39,7 +40,12 @@ export function HomeworkPage() {
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [confirming, setConfirming] = useState(false);
-  const fileInput = useRef<HTMLInputElement>(null);
+  const addingPhotos = useRef(false);
+  const didUnmount = useRef(false);
+  const promptFileInput = useRef<HTMLInputElement>(null);
+  const promptCameraInput = useRef<HTMLInputElement>(null);
+  const answerFileInput = useRef<HTMLInputElement>(null);
+  const answerCameraInput = useRef<HTMLInputElement>(null);
   // After the first save the address changes to the homework's own id; that must not reload (and overwrite) the form.
   const skipLoad = useRef<string | null>(null);
   // True while there is typed text or a photo that is not stored yet; leaving the page then saves it.
@@ -61,7 +67,7 @@ export function HomeworkPage() {
         setNotes(found.notes ?? '');
         setAnswer(found.answer ?? '');
         setDone(found.done);
-        setPhotos(images.map((i) => ({ id: i.id, dataUrl: i.dataUrl, createdAt: i.createdAt, persisted: true })));
+        setPhotos(images.map((i) => ({ id: i.id, dataUrl: i.dataUrl, createdAt: i.createdAt, kind: i.kind ?? 'prompt', persisted: true })));
       }
       setLoaded(true);
     });
@@ -71,32 +77,41 @@ export function HomeworkPage() {
   }, [repo, param, isNew]);
 
   useEffect(
-    () => () => {
-      const v = latest.current;
-      if (!dirty.current || !v.text.trim()) return;
-      void (async () => {
-        try {
-          await repo.saveHomework({
-            id: v.id,
-            sessionId: v.sessionId,
-            text: v.text.trim(),
-            ...(v.notes.trim() ? { notes: v.notes.trim() } : {}),
-            ...(v.answer.trim() ? { answer: v.answer.trim() } : {}),
-            done: v.done,
-            createdAt: v.createdAt,
-          });
-          for (const photo of v.photos.filter((p) => !p.persisted)) {
-            await repo.saveHomeworkImage({ id: photo.id, homeworkId: v.id, dataUrl: photo.dataUrl, createdAt: photo.createdAt });
+    () => {
+      didUnmount.current = false;
+      return () => {
+        didUnmount.current = true;
+        const v = latest.current;
+        if (!dirty.current || !v.text.trim()) return;
+        void (async () => {
+          try {
+            await repo.saveHomework({
+              id: v.id,
+              sessionId: v.sessionId,
+              text: v.text.trim(),
+              ...(v.notes.trim() ? { notes: v.notes.trim() } : {}),
+              ...(v.answer.trim() ? { answer: v.answer.trim() } : {}),
+              done: v.done,
+              createdAt: v.createdAt,
+            });
+            for (const photo of v.photos.filter((p) => !p.persisted)) {
+              await repo.saveHomeworkImage({ id: photo.id, homeworkId: v.id, kind: photo.kind, dataUrl: photo.dataUrl, createdAt: photo.createdAt });
+            }
+          } catch {
+            // Leaving must never throw; the person can open the homework again and save.
           }
-        } catch {
-          // Leaving must never throw; the person can open the homework again and save.
-        }
-      })();
+        })();
+      };
     },
     [repo],
   );
 
   async function persist(doneValue: boolean): Promise<boolean> {
+    if (addingPhotos.current) {
+      setNotice('');
+      setError('أنتظر انتهاء تجهيز الصور قبل الحفظ.');
+      return false;
+    }
     const title = text.trim();
     if (!title) {
       setNotice('');
@@ -118,7 +133,7 @@ export function HomeworkPage() {
       // The row exists from here on, even if a photo below fails: delete and the tick must work, and a retry reuses the ids.
       setPersisted(true);
       for (const photo of photos.filter((p) => !p.persisted)) {
-        await repo.saveHomeworkImage({ id: photo.id, homeworkId: id, dataUrl: photo.dataUrl, createdAt: photo.createdAt });
+        await repo.saveHomeworkImage({ id: photo.id, homeworkId: id, kind: photo.kind, dataUrl: photo.dataUrl, createdAt: photo.createdAt });
         setPhotos((list) => list.map((p) => (p.id === photo.id ? { ...p, persisted: true } : p)));
       }
       dirty.current = false;
@@ -147,38 +162,63 @@ export function HomeworkPage() {
     if (!(await persist(value))) setDone(!value);
   }
 
-  async function addPhotos(files: FileList | null) {
+  async function addPhotos(files: FileList | null, kind: Stored['kind']) {
+    if (addingPhotos.current) return;
+    addingPhotos.current = true;
     setError('');
     setNotice('');
     let count = photos.length;
-    for (const file of Array.from(files ?? [])) {
-      if (count >= MAX_PHOTOS) {
-        setError('وصلتُ إلى الحد الأقصى: ٦ صور.');
-        break;
-      }
-      try {
-        const dataUrl = await shrinkImage(file);
-        const photo: Stored = { id: newId(), dataUrl, createdAt: new Date().toISOString(), persisted: false };
-        if (persisted) {
-          await repo.saveHomeworkImage({ id: photo.id, homeworkId: id, dataUrl, createdAt: photo.createdAt });
-          photo.persisted = true;
-        } else {
-          dirty.current = true;
+    setBusy(true);
+    try {
+      for (const file of Array.from(files ?? [])) {
+        if (count >= MAX_PHOTOS) {
+          if (!didUnmount.current) setError('وصلتُ إلى الحد الأقصى: ٦ صور.');
+          break;
         }
-        count += 1;
-        setPhotos((list) => [...list, photo]);
-      } catch (e) {
-        setError(
-          e instanceof ImageError
-            ? e.code === 'not-image'
-              ? 'الملف ليس صورة.'
-              : 'لا أستطيع قراءة هذه الصورة.'
-            : 'تعذّر حفظ الصورة، يمكنني المحاولة مرة أخرى.',
-        );
-        break;
+        try {
+          const dataUrl = await shrinkImage(file);
+          const photo: Stored = { id: newId(), dataUrl, createdAt: new Date().toISOString(), kind, persisted: false };
+          if (persisted) {
+            await repo.saveHomeworkImage({ id: photo.id, homeworkId: id, kind, dataUrl, createdAt: photo.createdAt });
+            photo.persisted = true;
+          } else if (didUnmount.current && latest.current.text.trim()) {
+            const v = latest.current;
+            await repo.saveHomework({
+              id: v.id,
+              sessionId: v.sessionId,
+              text: v.text.trim(),
+              ...(v.notes.trim() ? { notes: v.notes.trim() } : {}),
+              ...(v.answer.trim() ? { answer: v.answer.trim() } : {}),
+              done: v.done,
+              createdAt: v.createdAt,
+            });
+            await repo.saveHomeworkImage({ id: photo.id, homeworkId: v.id, kind, dataUrl, createdAt: photo.createdAt });
+            photo.persisted = true;
+          } else {
+            dirty.current = true;
+          }
+          count += 1;
+          if (!didUnmount.current) setPhotos((list) => [...list, photo]);
+        } catch (e) {
+          if (!didUnmount.current) {
+            setError(
+              e instanceof ImageError
+                ? e.code === 'not-image'
+                  ? 'الملف ليس صورة.'
+                  : 'لا أستطيع قراءة هذه الصورة.'
+                : 'تعذّر حفظ الصورة، يمكنني المحاولة مرة أخرى.',
+            );
+          }
+          break;
+        }
+      }
+    } finally {
+      addingPhotos.current = false;
+      if (!didUnmount.current) setBusy(false);
+      for (const input of [promptFileInput, promptCameraInput, answerFileInput, answerCameraInput]) {
+        if (input.current) input.current.value = '';
       }
     }
-    if (fileInput.current) fileInput.current.value = '';
   }
 
   async function removePhoto(photo: Photo) {
@@ -242,18 +282,22 @@ export function HomeworkPage() {
       </div>
 
       <section aria-labelledby="hw-photos" className="flex flex-col gap-2">
-        <h2 id="hw-photos" className={label}>صور</h2>
-        {photos.length > 0 && <PhotoGrid photos={photos} disabled={busy} onOpen={setViewer} onRemove={(p) => void removePhoto(p)} />}
+        <h2 id="hw-photos" className={label}>صور الواجب</h2>
+        {photos.some((p) => p.kind === 'prompt') && <PhotoGrid photos={photos.filter((p) => p.kind === 'prompt')} disabled={busy} onOpen={setViewer} onRemove={(p) => void removePhoto(p)} />}
         <input
-          ref={fileInput}
+          ref={promptFileInput}
           type="file"
           accept="image/*"
           multiple
           aria-label="اختيار صور الواجب"
           className="sr-only"
-          onChange={(e) => void addPhotos(e.target.files)}
+          onChange={(e) => void addPhotos(e.target.files, 'prompt')}
         />
-        <button type="button" disabled={busy} onClick={() => fileInput.current?.click()} className={`${secondary} flex-none disabled:opacity-50`}>أضيف صورة</button>
+        <input ref={promptCameraInput} type="file" accept="image/*" capture="environment" aria-label="التقاط صورة للواجب" className="sr-only" onChange={(e) => void addPhotos(e.target.files, 'prompt')} />
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <button type="button" disabled={busy || photos.length >= MAX_PHOTOS} onClick={() => promptFileInput.current?.click()} className={`${secondary} flex-none disabled:opacity-50`}>أضيف صورة</button>
+          <button type="button" disabled={busy || photos.length >= MAX_PHOTOS} onClick={() => promptCameraInput.current?.click()} className={`${secondary} flex-none disabled:opacity-50`}>ألتقط صورة</button>
+        </div>
         {!persisted && photos.length > 0 && <p className="m-0 text-xs text-muted">تُحفظ الصور مع الواجب عند الحفظ أو عند الخروج.</p>}
       </section>
 
@@ -264,6 +308,18 @@ export function HomeworkPage() {
             setAnswer(e.target.value);
           }} className={`${field} py-3`} />
       </div>
+
+      <section aria-labelledby="hw-answer-photos" className="flex flex-col gap-2">
+        <h2 id="hw-answer-photos" className={label}>صور الإجابة الخاصة</h2>
+        {photos.some((p) => p.kind === 'answer') && <PhotoGrid photos={photos.filter((p) => p.kind === 'answer')} disabled={busy} itemLabel="صورة الإجابة" onOpen={setViewer} onRemove={(p) => void removePhoto(p)} />}
+        <input ref={answerFileInput} type="file" accept="image/*" multiple aria-label="اختيار صور الإجابة" className="sr-only" onChange={(e) => void addPhotos(e.target.files, 'answer')} />
+        <input ref={answerCameraInput} type="file" accept="image/*" capture="environment" aria-label="التقاط صورة للإجابة" className="sr-only" onChange={(e) => void addPhotos(e.target.files, 'answer')} />
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <button type="button" disabled={busy || photos.length >= MAX_PHOTOS} onClick={() => answerFileInput.current?.click()} className={`${secondary} flex-none disabled:opacity-50`}>أختار صورة للإجابة</button>
+          <button type="button" disabled={busy || photos.length >= MAX_PHOTOS} onClick={() => answerCameraInput.current?.click()} className={`${secondary} flex-none disabled:opacity-50`}>ألتقط صورة للإجابة</button>
+        </div>
+        <p className="m-0 text-xs leading-6 text-muted">صور الإجابة خاصة ولا تظهر في ملخّص المعالج.</p>
+      </section>
 
       <label className="flex min-h-12 cursor-pointer items-center gap-3 text-[15px] font-medium">
         <input type="checkbox" checked={done} disabled={busy} onChange={(e) => void toggleDone(e.target.checked)} className="plan-check !mt-0" />

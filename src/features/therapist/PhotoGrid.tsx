@@ -13,9 +13,11 @@ export function PhotoGrid({
   onOpen,
   onRemove,
   disabled = false,
+  itemLabel = 'صورة الواجب',
 }: {
   photos: Photo[];
   disabled?: boolean;
+  itemLabel?: string;
   onOpen: (photo: Photo) => void;
   onRemove: (photo: Photo) => void;
 }) {
@@ -26,7 +28,7 @@ export function PhotoGrid({
         return (
           <li key={photo.id} className="relative aspect-square min-w-0 overflow-hidden rounded-2xl border border-line bg-card">
             <button type="button" aria-label={`فتح الصورة ${n}`} onClick={() => onOpen(photo)} className="block h-full w-full">
-              <img src={photo.dataUrl} alt={`صورة الواجب ${n}`} className="h-full w-full object-cover" />
+              <img src={photo.dataUrl} alt={`${itemLabel} ${n}`} className="h-full w-full object-cover" />
             </button>
             <button
               type="button"

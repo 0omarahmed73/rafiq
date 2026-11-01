@@ -83,7 +83,7 @@ describe('exportBackup', () => {
     expect(file.version).toBe(1);
     expect(file.exportedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     expect(Object.keys(file.data).sort()).toEqual(
-      ['agendaPoints', 'checkins', 'followups', 'homework', 'homeworkImages', 'letters', 'practices', 'sessions', 'settings', 'soothingList', 'stepProgress', 'weeklyReviews', 'yearPlan'].sort(),
+      ['agendaPoints', 'checkins', 'followups', 'homework', 'homeworkImages', 'letters', 'practices', 'sessions', 'settings', 'soothingList', 'stepProgress', 'syncTombstones', 'weeklyReviews', 'yearPlan'].sort(),
     );
   });
 });
@@ -104,6 +104,18 @@ describe('importBackup', () => {
     await importBackup(target, JSON.stringify(file), 'replace');
     expect(await target.getHomework('h1')).toMatchObject({ answer: 'إجابتي', notes: 'ملاحظة', done: true, sessionId: 's1' });
     expect((await target.listHomeworkImages('h1')).map((i) => i.dataUrl)).toEqual(['data:image/jpeg;base64,/9j/AAAA']);
+  });
+
+  it('reads old homework backups without photo kind, sync markers, or country choice', async () => {
+    const old = structuredClone(await exportBackup(await populated()));
+    delete (old.data.homeworkImages[0] as unknown as { kind?: string }).kind;
+    delete (old.data as Partial<BackupFile['data']>).syncTombstones;
+    delete (old.data.settings[0] as unknown as { currentCountryCode?: string }).currentCountryCode;
+    const target = createMemoryRepo();
+    await importBackup(target, old, 'replace');
+    expect((await target.listHomeworkImages('h1'))[0].kind).toBe('prompt');
+    expect((await target.getSettings()).currentCountryCode).toBeUndefined();
+    expect((await target.exportAll()).syncTombstones).toEqual([]);
   });
 
   it('reads an old backup that has no homework tables as empty tables', async () => {
@@ -185,6 +197,10 @@ describe('importBackup', () => {
       ['a homework row without a title', mutate((f) => { (f.data.homework[0] as unknown as Record<string, unknown>).text = 5; })],
       ['a photo that points to a web address', mutate((f) => { f.data.homeworkImages[0].dataUrl = 'https://example.invalid/x.png'; })],
       ['a photo that is not text', mutate((f) => { (f.data.homeworkImages[0] as unknown as Record<string, unknown>).dataUrl = 5; })],
+      ['a photo for a missing homework item', mutate((f) => { f.data.homeworkImages[0].homeworkId = 'missing'; })],
+      ['more than six photos for a homework item', mutate((f) => {
+        f.data.homeworkImages = Array.from({ length: 7 }, (_, index) => ({ ...f.data.homeworkImages[0], id: `image-${index}` }));
+      })],
       ['null', async () => null],
       ['an array instead of an object', async () => []],
       ['a missing version', mutate((f) => delete (f as Partial<BackupFile>).version)],

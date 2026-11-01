@@ -101,6 +101,54 @@ describe('HomeworkPage: a new homework', () => {
     expect((await repo.listHomeworkImages(hw.id)).map((i) => i.dataUrl)).toEqual(['data:image/jpeg;base64,SHRUNK']);
   });
 
+  it('stores answer photos separately and exposes camera capture only through an explicit button', async () => {
+    const { repo, user } = setup('/therapist/homework/new?session=s7');
+    await user.type(await screen.findByLabelText('ما الواجب؟'), 'واجب بإجابة مصوّرة');
+    const camera = screen.getByLabelText('التقاط صورة للإجابة') as HTMLInputElement;
+    expect(camera).toHaveAttribute('capture', 'environment');
+    await user.upload(screen.getByLabelText('اختيار صور الإجابة'), photo('answer.jpg'));
+    expect(await screen.findByRole('img', { name: 'صورة الإجابة ١' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'حفظ' }));
+    await screen.findByText('حفظتُ الواجب.');
+    const [homework] = await repo.listHomework();
+    expect(await repo.listHomeworkImages(homework.id)).toMatchObject([
+      { kind: 'answer', dataUrl: 'data:image/jpeg;base64,SHRUNK' },
+    ]);
+    expect(screen.getByText('صور الإجابة خاصة ولا تظهر في ملخّص المعالج.')).toBeInTheDocument();
+  });
+
+  it('keeps save disabled until an image finishes decoding', async () => {
+    const { user } = setup('/therapist/homework/new?session=s7');
+    let finish!: (dataUrl: string) => void;
+    shrink.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    await user.type(await screen.findByLabelText('ما الواجب؟'), 'واجب بصورة');
+    await user.upload(picker(), photo());
+    await user.upload(picker(), photo('overlap.jpg'));
+    const save = screen.getByRole('button', { name: 'حفظ' });
+    expect(shrink).toHaveBeenCalledTimes(1);
+    expect(save).toBeDisabled();
+    expect(screen.queryByText('حفظتُ الواجب.')).not.toBeInTheDocument();
+    await user.click(save);
+    expect(screen.queryByText('حفظتُ الواجب.')).not.toBeInTheDocument();
+    finish('data:image/jpeg;base64,SHRUNK');
+    expect(await screen.findByRole('img', { name: 'صورة الواجب ١' })).toBeInTheDocument();
+    expect(save).toBeEnabled();
+  });
+
+  it('persists a photo that finishes decoding after I leave the page', async () => {
+    const { repo, user } = setup('/therapist/homework/new?session=s7');
+    let finish!: (dataUrl: string) => void;
+    shrink.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    await user.type(await screen.findByLabelText('ما الواجب؟'), 'واجب لم أفقده');
+    await user.upload(picker(), photo());
+    await user.click(screen.getByRole('link', { name: /ملاحظات الجلسة/ }));
+    await screen.findByTestId('where');
+    finish('data:image/jpeg;base64,SHRUNK');
+    await waitFor(async () => expect(await repo.listHomework()).toHaveLength(1));
+    const [homework] = await repo.listHomework();
+    await waitFor(async () => expect(await repo.listHomeworkImages(homework.id)).toHaveLength(1));
+  });
+
   it('keeps typed text and offers a retry when saving fails', async () => {
     const { repo, user } = setup('/therapist/homework/new?session=s7');
     const real = repo.saveHomework.bind(repo);

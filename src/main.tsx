@@ -13,8 +13,9 @@ import { releaseNativeSplash } from './platform/launch';
 import { installReminderLifecycle, reconcileDailyReminder } from './platform/notifications';
 import { routes } from './routes';
 
+const splashStartedAt = performance.now();
+
 async function boot() {
-  void releaseNativeSplash();
   const { repo, persistent } = await openDb();
   const settings = await repo.getSettings();
   applyTheme(settings.theme);
@@ -28,6 +29,7 @@ async function boot() {
       <App router={router} repo={repo} persistent={persistent} />
     </StrictMode>,
   );
+  void releaseNativeSplash(splashStartedAt);
   // Let the first screen paint underneath before the splash fades.
   requestAnimationFrame(() => requestAnimationFrame(() => hideSplash(document, { native: isAndroidPlatform() })));
 }

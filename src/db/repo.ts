@@ -53,7 +53,7 @@ export interface Repo {
   listHomeworkBySession(sessionId: string): Promise<Homework[]>;
   /** Also deletes the homework's photos, atomically. */
   deleteHomework(id: string): Promise<void>;
-  saveHomeworkImage(i: Draft<HomeworkImage>): Promise<void>;
+  saveHomeworkImage(i: Draft<Omit<HomeworkImage, 'kind'> & { kind?: HomeworkImage['kind'] }>): Promise<void>;
   /** Oldest first. */
   listHomeworkImages(homeworkId: string): Promise<HomeworkImage[]>;
   deleteHomeworkImage(id: string): Promise<void>;

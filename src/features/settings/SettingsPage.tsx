@@ -6,12 +6,19 @@ import type { Settings } from '../../db/schema';
 import { applyTheme } from '../../lib/theme';
 import { dayKey } from '../../lib/dates';
 import { downloadText } from '../../lib/download';
-import { isAndroidPlatform, readBackupDocument, saveBackupDocument } from '../../platform/documents';
+import {
+  canShareBackup,
+  isAndroidPlatform,
+  readBackupDocument,
+  saveBackupDocument,
+  shareBackupDocument,
+} from '../../platform/documents';
 import { AccentPicker } from './AccentPicker';
 import { getReminderPermission, reconcileDailyReminder, setDailyReminder } from '../../platform/notifications';
 import { DeveloperInfo } from './DeveloperInfo';
 import { ReminderTimePicker } from './ReminderTimePicker';
 import { ProfileCard } from './ProfileCard';
+import { CurrentCountryPicker } from './CurrentCountryPicker';
 
 type Mode = 'replace' | 'merge';
 
@@ -41,6 +48,7 @@ export function SettingsPage({
 }) {
   const repo = useRepo();
   const isAndroid = isAndroidPlatform();
+  const canShare = canShareBackup();
   const [reminder, setReminder] = useState('');
   const [theme, setTheme] = useState<Settings['theme']>('system');
   const [savingTheme, setSavingTheme] = useState(false);
@@ -90,6 +98,18 @@ export function SettingsPage({
       setMessage({ kind: 'ok', text: 'تم حفظ النسخة الاحتياطية.' });
     } catch {
       setMessage({ kind: 'error', text: isAndroid ? 'تعذّر حفظ النسخة الاحتياطية.' : 'تعذّر تصدير النسخة الاحتياطية.' });
+    }
+  }
+
+  async function shareNow() {
+    setMessage(null);
+    try {
+      const file = await exportBackup(repo);
+      const result = await shareBackupDocument(`rafiq-backup-${dayKey(new Date())}.json`, JSON.stringify(file));
+      // Opening the sheet does not prove delivery, so it never counts as a saved backup.
+      if (result === 'opened') setMessage({ kind: 'ok', text: 'فتحتُ قائمة المشاركة.' });
+    } catch {
+      setMessage({ kind: 'error', text: 'تعذّرت المشاركة، يمكنني المحاولة مرة أخرى.' });
     }
   }
 
@@ -204,6 +224,8 @@ export function SettingsPage({
         <AccentPicker />
       </section>
 
+      <CurrentCountryPicker />
+
       <section className={card} aria-labelledby="backup-title">
         <h2 id="backup-title" className="text-base font-bold">
           النسخ الاحتياطي
@@ -216,6 +238,17 @@ export function SettingsPage({
         <button type="button" onClick={exportNow} className={primary}>
           تصدير نسخة احتياطية
         </button>
+
+        {canShare && (
+          <>
+            <button type="button" onClick={() => void shareNow()} className={secondary}>
+              مشاركة نسخة احتياطية
+            </button>
+            <p className="m-0 text-[13px] leading-relaxed text-muted">
+              النسخة المشاركة تحتوي على كل بياناتي وصوري وليست مشفّرة. أشاركها مع تطبيق أثق به فقط.
+            </p>
+          </>
+        )}
 
         {isAndroid ? (
           <button type="button" onClick={() => void chooseNativeFile()} className={secondary}>

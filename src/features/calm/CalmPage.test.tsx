@@ -1,12 +1,17 @@
 import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { RepoProvider } from '../../db/RepoContext';
+import { createMemoryRepo } from '../../db/memoryRepo';
+import type { Repo } from '../../db/repo';
 import { CalmPage } from './CalmPage';
 
-function renderCalm() {
+function renderCalm(repo: Repo = createMemoryRepo()) {
   return render(
-    <MemoryRouter>
-      <CalmPage />
-    </MemoryRouter>,
+    <RepoProvider repo={repo}>
+      <MemoryRouter>
+        <CalmPage />
+      </MemoryRouter>
+    </RepoProvider>,
   );
 }
 
@@ -33,11 +38,30 @@ describe('CalmPage', () => {
     ).toBeInTheDocument();
   });
 
-  it('contains no phone number or other long digit sequence', () => {
-    const { container } = renderCalm();
-    const text = container.textContent ?? '';
-    expect(text).not.toMatch(/\d{3,}/);
-    expect(text).not.toMatch(/[٠-٩]{3,}/);
+  it('shows the source-linked Egypt crisis and emergency numbers when no country is saved', async () => {
+    renderCalm();
+
+    expect(await screen.findByRole('link', { name: /اتصال: الخط الساخن للصحة النفسية والدعم النفسي ١٦٣٢٨/ })).toHaveAttribute('href', 'tel:16328');
+    expect(screen.getByRole('link', { name: /اتصال: الإسعاف ١٢٣/ })).toHaveAttribute('href', 'tel:123');
+    expect(screen.getByRole('link', { name: /اتصال: الشرطة ١٢٢/ })).toHaveAttribute('href', 'tel:122');
+    expect(screen.getByText(/خيار احتياطي محفوظ على جهازي ويعمل دون إنترنت/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /المصدر: وزارة الداخلية المصرية/ })).toHaveAttribute(
+      'href',
+      'https://www.moi.gov.eg/home/EmergancyNumber',
+    );
+  });
+
+  it('does not show Egyptian numbers as if they worked in another selected country', async () => {
+    const repo = createMemoryRepo();
+    await repo.saveSettings({ id: 'settings', theme: 'system', currentCountryCode: 'US' });
+    renderCalm(repo);
+
+    expect(await screen.findByText(/لا أعرض أرقام مصر على أنها تعمل خارجها/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'دليل دولي للعثور على خط مساعدة في بلدي' })).toHaveAttribute(
+      'href',
+      'https://www.iasp.info/crisis-centres-helplines/',
+    );
+    expect(screen.queryByRole('link', { name: /اتصال:/ })).not.toBeInTheDocument();
   });
 
   it('can always lead back home', () => {
