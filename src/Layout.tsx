@@ -1,4 +1,4 @@
-import { Outlet } from 'react-router-dom';
+import { Outlet, ScrollRestoration } from 'react-router-dom';
 import { TabBar } from './components/TabBar';
 import { DisclaimerGate } from './features/settings/DisclaimerGate';
 
@@ -10,6 +10,7 @@ export function Layout() {
           <Outlet />
         </main>
         <TabBar />
+        <ScrollRestoration />
       </div>
     </DisclaimerGate>
   );

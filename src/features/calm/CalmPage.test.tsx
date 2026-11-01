@@ -1,5 +1,6 @@
 import { render, screen, within } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import userEvent from '@testing-library/user-event';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { RepoProvider } from '../../db/RepoContext';
 import { createMemoryRepo } from '../../db/memoryRepo';
 import type { Repo } from '../../db/repo';
@@ -64,8 +65,23 @@ describe('CalmPage', () => {
     expect(screen.queryByRole('link', { name: /اتصال:/ })).not.toBeInTheDocument();
   });
 
-  it('can always lead back home', () => {
+  it('falls back to Home when it was opened directly', () => {
     renderCalm();
-    expect(screen.getByRole('link', { name: /الرئيسية/ })).toHaveAttribute('href', '/');
+    expect(screen.getByRole('link', { name: /الرجوع/ })).toHaveAttribute('href', '/');
+  });
+
+  it('goes back to the page it was opened from, not always to Home', async () => {
+    render(
+      <RepoProvider repo={createMemoryRepo()}>
+        <MemoryRouter initialEntries={['/library/symptoms/anger', '/calm']} initialIndex={1}>
+          <Routes>
+            <Route path="/library/symptoms/anger" element={<div>صفحة العَرَض</div>} />
+            <Route path="/calm" element={<CalmPage />} />
+          </Routes>
+        </MemoryRouter>
+      </RepoProvider>,
+    );
+    await userEvent.setup().click(screen.getByRole('link', { name: /الرجوع/ }));
+    expect(await screen.findByText('صفحة العَرَض')).toBeInTheDocument();
   });
 });

@@ -1,13 +1,13 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
+import { BackLink as SharedBackLink } from '../../components/BackLink';
 import { Collapsible } from '../../components/Collapsible';
 import { sourceById, type ReviewStatus } from '../../content/library';
 import { toArabicDigits } from '../../lib/digits';
 
+/** Goes back to where the reader came from; `to` is only the fallback. */
 export const BackLink = ({ to, children }: { to: string; children: ReactNode }) => (
-  <Link to={to} className="flex min-h-11 items-center text-[15px] font-semibold text-teal">
-    ‹ {children}
-  </Link>
+  <SharedBackLink fallback={to}>{children}</SharedBackLink>
 );
 
 /** Shown on every text until the therapist has approved it. */

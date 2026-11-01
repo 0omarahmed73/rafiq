@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { BackLink } from '../../components/BackLink';
 import { useRepo } from '../../db/RepoContext';
 import { countryLabel } from '../../content/countries';
 import { EGYPT_SUPPORT, SUPPORT_DIRECTORY, supportForCountry } from '../../content/supportContacts';
@@ -37,9 +37,7 @@ export function CalmPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <Link to="/" className="flex min-h-11 items-center text-[15px] font-semibold text-teal">
-        ‹ الرئيسية
-      </Link>
+      <BackLink fallback="/">الرجوع</BackLink>
       <h1 className="text-[28px] font-bold leading-snug">أحتاج تهدئة</h1>
       <p className="text-[15px] leading-8 text-muted">
         أتمهّل. لا شيء مطلوب مني الآن سوى أن أتنفّس وأنتبه لما حولي.

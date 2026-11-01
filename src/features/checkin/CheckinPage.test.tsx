@@ -22,7 +22,7 @@ function setup() {
 describe('CheckinPage navigation', () => {
   it('has a back link to Home at the top, before the heading', async () => {
     setup();
-    const back = await screen.findByRole('link', { name: /الرئيسية/ });
+    const back = await screen.findByRole('link', { name: /الرجوع/ });
     expect(back).toHaveAttribute('href', '/');
     const heading = screen.getByRole('heading', { name: 'ما الذي أشعر به الآن؟' });
     expect(back.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();

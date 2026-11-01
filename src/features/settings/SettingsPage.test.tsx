@@ -51,7 +51,7 @@ const upload = (user: ReturnType<typeof userEvent.setup>, text: string) =>
 describe('SettingsPage navigation', () => {
   it('has a back link to Home before the heading', async () => {
     setup();
-    const back = await screen.findByRole('link', { name: /الرئيسية/ });
+    const back = await screen.findByRole('link', { name: /الرجوع/ });
     expect(back).toHaveAttribute('href', '/');
     const heading = screen.getByRole('heading', { level: 1, name: 'الإعدادات' });
     expect(back.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();

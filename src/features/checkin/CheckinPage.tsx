@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
+import { BackLink } from '../../components/BackLink';
 import { Chip } from '../../components/Chip';
 import { IntensitySlider } from '../../components/IntensitySlider';
 import { emotionGroups } from '../../content';
@@ -34,9 +35,7 @@ export function CheckinPage() {
 
   return (
     <div className="flex flex-col gap-5 pb-4">
-      <Link to="/" className="flex min-h-11 items-center text-[15px] font-semibold text-teal">
-        ‹ الرئيسية
-      </Link>
+      <BackLink fallback="/">الرجوع</BackLink>
       <h1 className="text-2xl font-bold">ما الذي أشعر به الآن؟</h1>
       <p className="text-sm leading-7 text-muted">أختار كلمة أو أكثر. لا توجد مشاعر خاطئة.</p>
 
