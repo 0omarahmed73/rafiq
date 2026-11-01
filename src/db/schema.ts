@@ -100,6 +100,14 @@ export interface HomeworkImage extends Stamped {
   createdAt: string;
 }
 
+/** A free note written during the week. «تجديد» stamps every current note with `archivedAt` and moves it to the archive. */
+export interface Note extends Stamped {
+  id: string;
+  text: string;
+  createdAt: string;
+  archivedAt?: string;
+}
+
 export type SyncableTableName = Exclude<TableName, 'syncTombstones'>;
 
 /** A synced delete marker; it remains until an explicitly newer row revives the same id. */
@@ -178,6 +186,7 @@ export interface AllData {
   yearPlan: YearPlanEntry[];
   homework: Homework[];
   homeworkImages: HomeworkImage[];
+  notes: Note[];
   syncTombstones: SyncTombstone[];
 }
 

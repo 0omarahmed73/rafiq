@@ -41,6 +41,7 @@ export class RafiqDB extends Dexie {
           await tx.table('homeworkImages').put({ ...image, kind: 'prompt' });
         }
       });
+    this.version(5).stores({ notes: 'id, createdAt' });
   }
 }
 

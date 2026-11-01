@@ -151,11 +151,13 @@ const HomeworkImage = z.object({
   ...stamp,
 });
 
+const Note = z.object({ id, text: str, createdAt: id, archivedAt: str.optional(), ...stamp });
+
 const SyncTombstone = z.object({
   id,
   table: z.enum([
     'checkins', 'practices', 'followups', 'letters', 'weeklyReviews', 'sessions', 'stepProgress', 'soothingList',
-    'settings', 'agendaPoints', 'yearPlan', 'homework', 'homeworkImages',
+    'settings', 'agendaPoints', 'yearPlan', 'homework', 'homeworkImages', 'notes',
   ]),
   recordId: id,
   deletedAt: str,
@@ -179,6 +181,7 @@ const Backup = z.object({
     yearPlan: z.array(YearPlanEntry).default([]),
     homework: z.array(Homework).default([]),
     homeworkImages: z.array(HomeworkImage).default([]),
+    notes: z.array(Note).default([]),
     syncTombstones: z.array(SyncTombstone).default([]),
   }),
 });

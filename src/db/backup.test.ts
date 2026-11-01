@@ -57,6 +57,8 @@ async function populated(): Promise<Repo> {
   await repo.addSoothing('الرسم', 'step1');
   await repo.saveSettings({ id: 'settings', theme: 'dark', accent: 'rose' });
   await repo.saveAgendaPoint({ id: 'a1', text: 'نقطة', day: '2026-10-30', done: false });
+  await repo.saveNote({ id: 'n1', text: 'ملاحظة الأسبوع', createdAt: '2026-10-28T10:00:00.000Z' });
+  await repo.saveNote({ id: 'n2', text: 'ملاحظة قديمة', createdAt: '2026-10-20T10:00:00.000Z', archivedAt: '2026-10-27T08:00:00.000Z' });
   await repo.saveHomework({
     id: 'h1',
     sessionId: 's1',
@@ -83,7 +85,7 @@ describe('exportBackup', () => {
     expect(file.version).toBe(1);
     expect(file.exportedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     expect(Object.keys(file.data).sort()).toEqual(
-      ['agendaPoints', 'checkins', 'followups', 'homework', 'homeworkImages', 'letters', 'practices', 'sessions', 'settings', 'soothingList', 'stepProgress', 'syncTombstones', 'weeklyReviews', 'yearPlan'].sort(),
+      ['agendaPoints', 'checkins', 'followups', 'homework', 'homeworkImages', 'letters', 'notes', 'practices', 'sessions', 'settings', 'soothingList', 'stepProgress', 'syncTombstones', 'weeklyReviews', 'yearPlan'].sort(),
     );
   });
 });
@@ -104,6 +106,24 @@ describe('importBackup', () => {
     await importBackup(target, JSON.stringify(file), 'replace');
     expect(await target.getHomework('h1')).toMatchObject({ answer: 'إجابتي', notes: 'ملاحظة', done: true, sessionId: 's1' });
     expect((await target.listHomeworkImages('h1')).map((i) => i.dataUrl)).toEqual(['data:image/jpeg;base64,/9j/AAAA']);
+  });
+
+  it('round-trips current and archived notes', async () => {
+    const file = await exportBackup(await populated());
+    const target = createMemoryRepo();
+    await importBackup(target, JSON.stringify(file), 'replace');
+    expect((await target.listNotes()).map((n) => [n.id, n.archivedAt])).toEqual([['n1', undefined], ['n2', '2026-10-27T08:00:00.000Z']]);
+  });
+
+  it('reads an old backup with no notes as an empty list and rejects a malformed note', async () => {
+    const file = await exportBackup(await populated());
+    const { notes: _n, ...older } = file.data;
+    const repo = createMemoryRepo();
+    await importBackup(repo, { ...file, data: older }, 'replace');
+    expect(await repo.listNotes()).toEqual([]);
+    const bad = structuredClone(file);
+    (bad.data.notes[0] as unknown as Record<string, unknown>).text = 5;
+    await expect(importBackup(createMemoryRepo(), bad, 'replace')).rejects.toThrow('الملف غير صالح');
   });
 
   it('reads old homework backups without photo kind, sync markers, or country choice', async () => {

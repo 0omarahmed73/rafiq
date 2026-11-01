@@ -198,3 +198,25 @@ An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing j
 Settings → Backup now has «مشاركة نسخة احتياطية» (Android, or web where file sharing works). It builds the same JSON as export, writes it to `cacheDir/shared-backups/` and opens Android's share sheet through the existing FileProvider (`RafiqDocumentsPlugin.shareBackup`). Old shared copies are deleted on the next share and on app start. It says only «فتحتُ قائمة المشاركة.», never claims delivery, and does not update `lastBackupAt`. The other device imports with the normal import (merge).
 
 Verified: adapter + Settings unit tests, `ShareBackupTest` (3 tests, emulator 5580). Full unit suite: 720 pass, 4 fail (`DeviceSyncPage` — the sync session's WIP). Full native suite: 18 pass, 1 skipped, 1 fail (`OfflineShellTest.backupRulesExcludeAllAppData` — the sync session added CAMERA and ACCESS_NETWORK_STATE permissions that the test's allow-list doesn't have). Not yet installed on the phone. When running connected tests set `ANDROID_SERIAL=emulator-5580`, since the test run uninstalls the app and would wipe a phone.
+
+## Borderline (BPD) direction — approved 2026-11-01
+
+Owner wants Rafiq dedicated to people with borderline personality disorder. Split into three plans; owner approved Plan A and asked to start it.
+
+- **Plan A (building now):** homework answers in the therapist summary, and weekly notes.
+- **Plan B (not started):** a BPD library (a gentle history of the illness, the symptoms, a glossary of strong self-affirming phrases). **Must come from deep web research with trusted cited sources** (NHS, NICE, NIMH, APA, WHO ICD-11, Linehan's DBT, Bateman and Fonagy's MBT, Cochrane), shown with sources in the app, every text marked «مسودة للمراجعة» until the owner's therapist approves it. Claude drafts, the therapist reviews. The app describes and supports; it never tells a person they have BPD, and wording must never romanticize self-harm.
+- **Plan C (not started):** wider BPD companion features (skills, crisis plan); depends on B.
+
+### Plan A design (approved)
+1. **Homework answers in the summary.** New switch «إجابات الواجبات» (default on) in `SummarySwitches`. For homework whose date falls inside the chosen period, the printed summary lists the title, done or not, and the written answer (`لم أكتب إجابة` when empty). Answer **photos stay private** (the homework page already promises this); prompt photos are not included either.
+2. **«ملاحظاتي».** New page under «لمعالجي» next to «واجباتي»: add a note any time (date and time shown), edit, delete. **«تجديد»** asks for confirmation, then archives all current notes (`archivedAt` set); nothing is deleted and the current list starts empty. An archive view groups old notes by renewal, readable and deletable.
+3. **Notes in the summary.** New switch «ملاحظاتي»: notes (current and archived) created inside the chosen period are printed. Notes are private unless the switch is on.
+4. **Data.** New `Note { id, text, createdAt, archivedAt? }` + Dexie v5 (`notes: 'id, createdAt'`), `Repo.saveNote / listNotes / deleteNote / archiveNotes`, backup schema with `notes` defaulting to `[]` (older backups still import), delete markers like the other tables.
+
+### Plan A status (built 2026-11-01, not committed)
+Done test-first: `Note` + `Repo.saveNote/listNotes/deleteNote/archiveNotes` (Dexie v5, backup, tombstones); summary switches `homework` («إجابات الواجبات») and `notes` («ملاحظاتي») in `buildSummary`, `SummaryPrint`, `SummaryPage`; new page `src/features/therapist/NotesPage.tsx` at `/therapist/notes` with a link from «لمعالجي». Rulings: homework counts as "in the period" by its creation day; notes by their creation day; in the archive, notes inside one renewal group are newest first. Evidence: 740 unit tests, TypeScript clean, 13 browser e2e (new `e2e/notes.spec.ts`); phone-size screenshots of the notes page and the summary checked. Not checked: Android build with the new code, the printed PDF on a real phone, dark mode of the new page. README and its screenshots do not mention notes yet.
+
+### Plan A follow-ups (2026-11-01, not committed)
+- Home now has a «ملاحظاتي» card (`src/features/home/HomeNotes.tsx`): quick note box, «إضافة ملاحظة», and a link «كل ملاحظاتي (N)» counting current notes only.
+- The notes archive is collapsed by default: each renewal is a button (date, count, one-line preview) that opens with a height and fade animation (300 ms, off under reduced motion; verified by sampling the height in Chrome). `aria-expanded` and a labelled region for assistive tech.
+- Evidence: 745 unit tests, TypeScript clean, 13 browser e2e.

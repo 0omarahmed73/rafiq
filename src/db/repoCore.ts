@@ -9,6 +9,7 @@ import type {
   Homework,
   HomeworkImage,
   Letter,
+  Note,
   PracticeRecord,
   Settings,
   SoothingItem,
@@ -49,6 +50,7 @@ export const DATA_TABLES: SyncableTableName[] = [
   'yearPlan',
   'homework',
   'homeworkImages',
+  'notes',
 ];
 
 export const TABLES: TableName[] = [...DATA_TABLES, 'syncTombstones'];
@@ -68,6 +70,7 @@ export const KEY_FIELD: Record<TableName, 'id' | 'stepId'> = {
   yearPlan: 'id',
   homework: 'id',
   homeworkImages: 'id',
+  notes: 'id',
   syncTombstones: 'id',
 };
 
@@ -309,6 +312,28 @@ export function createRepo(store: Store): Repo {
         await markDeleted(store, 'homeworkImages', id, image.updatedAt);
       });
     },
+    async saveNote(n) {
+      await write<Note>('notes', n);
+    },
+    async listNotes() {
+      const rows = await list<Note>('notes');
+      return rows.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    },
+    async deleteNote(id) {
+      await store.transaction(async () => {
+        const note = await store.get<Note>('notes', id);
+        if (!note) return;
+        await store.remove('notes', id);
+        await markDeleted(store, 'notes', id, note.updatedAt);
+      });
+    },
+    archiveNotes: () =>
+      store.transaction(async () => {
+        const archivedAt = nowIso();
+        const current = (await list<Note>('notes')).filter((n) => !n.archivedAt);
+        for (const note of current) await write<Note>('notes', { ...note, archivedAt });
+        return current.length;
+      }),
     async deleteAgendaPoint(id) {
       await store.transaction(async () => {
         const point = await store.get<AgendaPoint>('agendaPoints', id);

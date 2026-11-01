@@ -235,6 +235,10 @@ export function TherapistPage() {
         واجباتي <span aria-hidden="true">‹</span>
       </Link>
 
+      <Link to="/therapist/notes" className="flex min-h-12 items-center justify-between px-1 text-[15px] font-semibold text-teal">
+        ملاحظاتي <span aria-hidden="true">‹</span>
+      </Link>
+
       <Link to="/therapist/summary" className="flex min-h-12 items-center justify-between px-1 text-[15px] font-semibold text-teal">
         إنشاء ملخّص لأعطيه لمعالجي <span aria-hidden="true">‹</span>
       </Link>

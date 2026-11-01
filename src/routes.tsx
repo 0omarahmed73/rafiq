@@ -10,6 +10,7 @@ import { StepPage } from './features/step/StepPage';
 import { SummaryPage } from './features/summary/SummaryPage';
 import { HomeworkListPage } from './features/therapist/HomeworkListPage';
 import { HomeworkPage } from './features/therapist/HomeworkPage';
+import { NotesPage } from './features/therapist/NotesPage';
 import { SessionNotePage } from './features/therapist/SessionNotePage';
 import { TherapistPage } from './features/therapist/TherapistPage';
 import { YearPlanPage } from './features/yearplan/YearPlanPage';
@@ -34,6 +35,7 @@ export const routes: RouteObject[] = [
       { path: 'therapist/note', element: <SessionNotePage /> },
       { path: 'therapist/note/:id', element: <SessionNotePage /> },
       { path: 'therapist/homework', element: <HomeworkListPage /> },
+      { path: 'therapist/notes', element: <NotesPage /> },
       { path: 'therapist/homework/:id', element: <HomeworkPage /> },
       { path: 'step/:id', element: <StepPage /> },
       { path: 'practice/:practiceId', element: <PracticePage /> },

@@ -170,4 +170,9 @@ describe('TherapistPage', () => {
     setup(createMemoryRepo());
     expect(await screen.findByRole('link', { name: /واجباتي/ })).toHaveAttribute('href', '/therapist/homework');
   });
+
+  it('has a link to ملاحظاتي', async () => {
+    setup(createMemoryRepo());
+    expect(await screen.findByRole('link', { name: /ملاحظاتي/ })).toHaveAttribute('href', '/therapist/notes');
+  });
 });

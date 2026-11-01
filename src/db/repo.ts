@@ -7,6 +7,7 @@ import type {
   Homework,
   HomeworkImage,
   Letter,
+  Note,
   PracticeRecord,
   Session,
   Settings,
@@ -59,6 +60,15 @@ export interface Repo {
   deleteHomeworkImage(id: string): Promise<void>;
   /** Number of photos per homework id (homework without photos is absent). */
   countHomeworkImages(): Promise<Record<string, number>>;
+
+  /** Upsert by `id`. */
+  saveNote(n: Draft<Note>): Promise<void>;
+  /** Newest first, current and archived. */
+  listNotes(): Promise<Note[]>;
+  /** Removing an id that is not there does nothing. */
+  deleteNote(id: string): Promise<void>;
+  /** Stamps every current note with the same `archivedAt` and returns how many it moved. */
+  archiveNotes(): Promise<number>;
 
   addFollowup(f: NewRecord<Followup>): Promise<Followup>;
   listFollowups(): Promise<Followup[]>;

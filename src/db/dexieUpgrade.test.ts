@@ -71,4 +71,21 @@ describe('Dexie upgrades', () => {
     expect(await upgraded.table('syncTombstones').count()).toBe(0);
     upgraded.close();
   });
+
+  it('adds notes in version 5 without touching existing rows', async () => {
+    const name = `rafiq-notes-upgrade-${Math.random().toString(36).slice(2)}`;
+    const old = new Dexie(name);
+    old.version(1).stores(V1);
+    old.version(2).stores({ yearPlan: 'id' });
+    old.version(3).stores({ homework: 'id, sessionId, createdAt', homeworkImages: 'id, homeworkId' });
+    old.version(4).stores({ homeworkImages: 'id, homeworkId, kind', syncTombstones: 'id, [table+recordId], updatedAt' });
+    await old.table('soothingList').put({ id: 's', text: 'شاي', source: 'user', updatedAt: '2026-10-27T09:00:00.000Z' });
+    old.close();
+
+    const upgraded = new RafiqDB(name);
+    await upgraded.open();
+    expect(await upgraded.table('notes').count()).toBe(0);
+    expect(await upgraded.table('soothingList').count()).toBe(1);
+    upgraded.close();
+  });
 });

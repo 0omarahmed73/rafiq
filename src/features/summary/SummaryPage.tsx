@@ -14,6 +14,8 @@ const OPTIONS: { key: keyof SummarySwitches; label: string }[] = [
   { key: 'weeklyReviews', label: 'مراجعات الأسبوع' },
   { key: 'practices', label: 'الممارسات الموجّهة' },
   { key: 'tagged', label: 'ما وسمتُه «للنقاش في الجلسة»' },
+  { key: 'homework', label: 'إجابات الواجبات' },
+  { key: 'notes', label: 'ملاحظاتي' },
 ];
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -35,6 +37,8 @@ export function SummaryPage({ today = new Date() }: { today?: Date }) {
     weeklyReviews: true,
     practices: true,
     tagged: true,
+    homework: true,
+    notes: true,
   });
   const [model, setModel] = useState<SummaryModel | null>(null);
   const [profile, setProfile] = useState<{ displayName?: string; therapistName?: string }>();

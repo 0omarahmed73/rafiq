@@ -33,7 +33,7 @@ describe('SummaryPage', () => {
     expect(screen.getByLabelText('إلى')).toHaveValue('2026-10-31');
   });
 
-  it('has the five include-switches, all on by default', async () => {
+  it('has the seven include-switches, all on by default', async () => {
     setup();
     for (const name of [
       'تسجيلات المشاعر',
@@ -41,9 +41,27 @@ describe('SummaryPage', () => {
       'مراجعات الأسبوع',
       'الممارسات الموجّهة',
       'ما وسمتُه «للنقاش في الجلسة»',
+      'إجابات الواجبات',
+      'ملاحظاتي',
     ]) {
       expect(await screen.findByRole('checkbox', { name })).toBeChecked();
     }
+  });
+
+  it('shows homework answers and notes of the period in the preview, and drops each with its own switch', async () => {
+    const repo = createMemoryRepo();
+    await repo.saveHomework({ id: 'h1', sessionId: 's1', text: 'واجب ظاهر', answer: 'إجابة ظاهرة', done: true, createdAt: new Date(2026, 9, 12, 9).toISOString() });
+    await repo.saveNote({ id: 'n1', text: 'ملاحظة ظاهرة للأسبوع', createdAt: new Date(2026, 9, 14, 9).toISOString() });
+    const { user } = setup(repo);
+    expect(await screen.findByText('إجابة ظاهرة')).toBeInTheDocument();
+    expect(screen.getByText('ملاحظة ظاهرة للأسبوع')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('checkbox', { name: 'إجابات الواجبات' }));
+    expect(screen.queryByText('إجابة ظاهرة')).not.toBeInTheDocument();
+    expect(screen.getByText('ملاحظة ظاهرة للأسبوع')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('checkbox', { name: 'ملاحظاتي' }));
+    expect(screen.queryByText('ملاحظة ظاهرة للأسبوع')).not.toBeInTheDocument();
   });
 
   it('shows check-ins in the preview and removes them when that switch is turned off', async () => {
@@ -150,7 +168,7 @@ describe('SummaryPage native printing', () => {
 
   it('prints an all-switches-off report with the nothing-chosen message', async () => {
     const { user } = setup(await seeded());
-    for (const name of ['تسجيلات المشاعر', 'منحنى الشدّة', 'مراجعات الأسبوع', 'الممارسات الموجّهة', 'ما وسمتُه «للنقاش في الجلسة»']) {
+    for (const name of ['تسجيلات المشاعر', 'منحنى الشدّة', 'مراجعات الأسبوع', 'الممارسات الموجّهة', 'ما وسمتُه «للنقاش في الجلسة»', 'إجابات الواجبات', 'ملاحظاتي']) {
       await user.click(await screen.findByRole('checkbox', { name }));
     }
     await user.click(screen.getByRole('button', { name: 'حفظ كملف PDF' }));

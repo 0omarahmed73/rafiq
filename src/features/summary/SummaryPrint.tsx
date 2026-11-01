@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { emotionLabel } from '../../content';
 import { practiceById } from '../../content/practices';
-import type { Checkin, PracticeRecord } from '../../db/schema';
+import type { Checkin, Homework, Note, PracticeRecord } from '../../db/schema';
 import { dayKey, formatArabicDate, formatArabicFullDate, formatArabicTime } from '../../lib/dates';
 import { toArabicDigits } from '../../lib/digits';
 import { IntensityCurve } from '../tracker/IntensityCurve';
@@ -64,6 +64,27 @@ function PracticeBlock({ p }: { p: PracticeRecord }) {
   );
 }
 
+function HomeworkBlock({ h }: { h: Homework }) {
+  return (
+    <li className="flex break-inside-avoid flex-col gap-1 border-b border-line pb-3 last:border-b-0 text-sm leading-7">
+      <span className="flex flex-wrap items-baseline justify-between gap-x-4">
+        <span className="font-bold">{`${h.text} · ${formatArabicDate(dayKey(new Date(h.createdAt)))}`}</span>
+        <span className="text-muted">{h.done ? 'أنجزتُه' : 'لم أنجزه'}</span>
+      </span>
+      {h.answer ? <span className="whitespace-pre-line">{h.answer}</span> : <span className="text-muted">لم أكتب إجابة</span>}
+    </li>
+  );
+}
+
+function NoteBlock({ n }: { n: Note }) {
+  return (
+    <li className="flex break-inside-avoid flex-col gap-0.5 border-b border-line pb-2 last:border-b-0 text-sm leading-7">
+      <span className="font-bold">{`${formatArabicDate(dayKey(new Date(n.createdAt)))} · ${formatArabicTime(n.createdAt)}`}</span>
+      <span className="whitespace-pre-line">{n.text}</span>
+    </li>
+  );
+}
+
 /** The page the therapist receives. Only what the user switched on, and only what they flagged or shared. */
 export function SummaryPrint({
   model,
@@ -86,6 +107,8 @@ export function SummaryPrint({
       (showCurve ? 1 : 0) +
       model.weeklyReviews.length +
       model.practices.length +
+      model.homework.length +
+      model.notes.length +
       model.tagged.length >
     0;
 
@@ -170,6 +193,26 @@ export function SummaryPrint({
           <ul className="m-0 flex list-none flex-col gap-3 p-0">
             {model.practices.map((p) => (
               <PracticeBlock key={p.id} p={p} />
+            ))}
+          </ul>
+        </Section>
+      )}
+
+      {model.homework.length > 0 && (
+        <Section title="إجابات الواجبات">
+          <ul className="m-0 flex list-none flex-col gap-3 p-0">
+            {model.homework.map((h) => (
+              <HomeworkBlock key={h.id} h={h} />
+            ))}
+          </ul>
+        </Section>
+      )}
+
+      {model.notes.length > 0 && (
+        <Section title="ملاحظاتي">
+          <ul className="m-0 flex list-none flex-col gap-2 p-0">
+            {model.notes.map((n) => (
+              <NoteBlock key={n.id} n={n} />
             ))}
           </ul>
         </Section>

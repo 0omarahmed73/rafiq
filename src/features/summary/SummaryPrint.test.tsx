@@ -10,9 +10,11 @@ const emptyModel: SummaryModel = {
   weeklyReviews: [],
   practices: [],
   tagged: [],
+  homework: [],
+  notes: [],
 };
-const all: SummarySwitches = { checkins: true, curve: true, weeklyReviews: true, practices: true, tagged: true };
-const none: SummarySwitches = { checkins: false, curve: false, weeklyReviews: false, practices: false, tagged: false };
+const all: SummarySwitches = { checkins: true, curve: true, weeklyReviews: true, practices: true, tagged: true, homework: true, notes: true };
+const none: SummarySwitches = { checkins: false, curve: false, weeklyReviews: false, practices: false, tagged: false, homework: false, notes: false };
 
 function text(model: SummaryModel, switches: SummarySwitches, extra: Partial<Parameters<typeof SummaryPrint>[0]> = {}) {
   const { container } = render(<SummaryPrint model={model} switches={switches} {...extra} />);
@@ -148,5 +150,52 @@ describe('SummaryPrint', () => {
     );
     expect(t).toContain('حزن، قلق');
     expect(t).toContain('٧ / ١٠');
+  });
+
+  describe('homework answers', () => {
+    const hw = (over: Record<string, unknown>) => ({
+      id: 'h', sessionId: 's', text: 'واجب', done: false, createdAt: '2026-10-12T09:00:00.000Z', updatedAt: '', ...over,
+    });
+
+    it('prints each homework with its title, whether it was done, and the written answer', () => {
+      const t = text(
+        { ...emptyModel, homework: [hw({ id: 'a', text: 'تمرين التنفّس', answer: 'جرّبتُه مرتين', done: true }), hw({ id: 'b', text: 'أكتب أفكاري' })] },
+        { ...none, homework: true },
+      );
+      expect(t).toContain('إجابات الواجبات');
+      expect(t).toContain('تمرين التنفّس');
+      expect(t).toContain('جرّبتُه مرتين');
+      expect(t).toContain('أنجزتُه');
+      expect(t).toContain('أكتب أفكاري');
+      expect(t).toContain('لم أكتب إجابة');
+      expect(t).toContain('لم أنجزه');
+    });
+
+    it('leaves the section out when there is no homework', () => {
+      expect(text(emptyModel, { ...none, homework: true })).not.toContain('إجابات الواجبات');
+    });
+  });
+
+  describe('notes', () => {
+    it('prints notes with their date and time, oldest first, and marks nothing about archives', () => {
+      const t = text(
+        {
+          ...emptyModel,
+          notes: [
+            { id: 'a', text: 'ملاحظة أولى', createdAt: new Date(2026, 9, 5, 9, 30).toISOString(), updatedAt: '' },
+            { id: 'b', text: 'ملاحظة ثانية', createdAt: new Date(2026, 9, 12, 18, 0).toISOString(), archivedAt: '2026-10-13T08:00:00.000Z', updatedAt: '' },
+          ],
+        },
+        { ...none, notes: true },
+      );
+      expect(t).toContain('ملاحظاتي');
+      expect(t.indexOf('ملاحظة أولى')).toBeLessThan(t.indexOf('ملاحظة ثانية'));
+      expect(t).toContain('٠٩:٣٠');
+      expect(t).not.toContain('لا توجد بيانات');
+    });
+
+    it('keeps the whole page free of notes when the switch is off or there are none', () => {
+      expect(text(emptyModel, { ...none, notes: true })).not.toContain('ملاحظاتي');
+    });
   });
 });

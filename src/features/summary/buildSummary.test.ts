@@ -3,8 +3,8 @@ import type { Repo } from '../../db/repo';
 import { buildSummary, type SummarySwitches } from './buildSummary';
 
 const range = { from: '2026-10-01', to: '2026-10-31' };
-const all: SummarySwitches = { checkins: true, curve: true, weeklyReviews: true, practices: true, tagged: true };
-const none: SummarySwitches = { checkins: false, curve: false, weeklyReviews: false, practices: false, tagged: false };
+const all: SummarySwitches = { checkins: true, curve: true, weeklyReviews: true, practices: true, tagged: true, homework: true, notes: true };
+const none: SummarySwitches = { checkins: false, curve: false, weeklyReviews: false, practices: false, tagged: false, homework: false, notes: false };
 const only = (key: keyof SummarySwitches): SummarySwitches => ({ ...none, [key]: true });
 
 const checkin = (repo: Repo, day: string, over: Record<string, unknown> = {}) =>
@@ -124,21 +124,57 @@ describe('buildSummary', () => {
     expect(model.totals.daysLogged).toBe(0);
     expect(model.totals.topEmotion).toBeUndefined();
     expect(model.totals.currentStep).toBe(1);
-    expect([model.checkins, model.curve, model.weeklyReviews, model.practices, model.tagged].every((a) => a.length === 0)).toBe(true);
+    expect([model.checkins, model.curve, model.weeklyReviews, model.practices, model.tagged, model.homework, model.notes].every((a) => a.length === 0)).toBe(true);
   });
 
-  it('never includes homework titles, notes, answers or photos, whatever the switches', async () => {
+  it('never includes homework text or notes unless their own switch is on, and never any photo or session text', async () => {
     const repo = createMemoryRepo();
     await repo.saveSession({ id: 's1', date: '2026-10-20', therapistSaid: 'سرّ الجلسة', takeaway: 'سرّ آخر', homework: [], createdAt: '2026-10-20T09:00:00.000Z' });
     await repo.saveHomework({ id: 'h1', sessionId: 's1', text: 'عنوان واجب سري', notes: 'ملاحظة واجب سرية', answer: 'إجابة واجب سرية', done: true, createdAt: '2026-10-20T09:00:00.000Z' });
     await repo.saveHomeworkImage({ id: 'i1', homeworkId: 'h1', dataUrl: 'data:image/jpeg;base64,PRIVATEPHOTO', createdAt: '2026-10-20T09:00:00.000Z' });
     await repo.saveHomeworkImage({ id: 'i2', homeworkId: 'h1', kind: 'answer', dataUrl: 'data:image/jpeg;base64,PRIVATEANSWERPHOTO', createdAt: '2026-10-20T09:01:00.000Z' });
+    await repo.saveNote({ id: 'n1', text: 'ملاحظة أسبوعية سرية', createdAt: '2026-10-20T09:00:00.000Z' });
     await checkin(repo, '2026-10-20', { forNextSession: true });
+
+    const off = JSON.stringify(await buildSummary(repo, range, { ...all, homework: false, notes: false }));
+    for (const secret of ['عنوان واجب سري', 'ملاحظة واجب سرية', 'إجابة واجب سرية', 'ملاحظة أسبوعية سرية']) expect(off).not.toContain(secret);
+
     for (const switches of [all, none]) {
       const text = JSON.stringify(await buildSummary(repo, range, switches));
-      for (const secret of ['عنوان واجب سري', 'ملاحظة واجب سرية', 'إجابة واجب سرية', 'PRIVATEPHOTO', 'PRIVATEANSWERPHOTO', 'سرّ الجلسة']) {
-        expect(text).not.toContain(secret);
-      }
+      for (const secret of ['PRIVATEPHOTO', 'PRIVATEANSWERPHOTO', 'سرّ الجلسة', 'سرّ آخر']) expect(text).not.toContain(secret);
     }
+  });
+
+  describe('homework answers', () => {
+    const hw = (repo: Repo, id: string, over: Record<string, unknown> = {}) =>
+      repo.saveHomework({ id, sessionId: 's1', text: `واجب ${id}`, done: false, createdAt: '2026-10-10T09:00:00.000Z', ...over });
+
+    it('lists homework made in the period, oldest first, with its answer and done state', async () => {
+      const repo = createMemoryRepo();
+      await hw(repo, 'late', { createdAt: '2026-10-20T09:00:00.000Z', answer: 'أجبتُ', done: true });
+      await hw(repo, 'early');
+      const model = await buildSummary(repo, range, only('homework'));
+      expect(model.homework.map((h) => [h.id, h.answer, h.done])).toEqual([['early', undefined, false], ['late', 'أجبتُ', true]]);
+    });
+
+    it('leaves out homework from other periods and returns nothing when the switch is off', async () => {
+      const repo = createMemoryRepo();
+      await hw(repo, 'before', { createdAt: '2026-09-01T09:00:00.000Z' });
+      await hw(repo, 'inside');
+      expect((await buildSummary(repo, range, only('homework'))).homework.map((h) => h.id)).toEqual(['inside']);
+      expect((await buildSummary(repo, range, none)).homework).toEqual([]);
+    });
+  });
+
+  describe('notes', () => {
+    it('lists notes written in the period, current and archived, oldest first', async () => {
+      const repo = createMemoryRepo();
+      await repo.saveNote({ id: 'b', text: 'ب', createdAt: '2026-10-12T10:00:00.000Z' });
+      await repo.saveNote({ id: 'a', text: 'أ', createdAt: '2026-10-05T10:00:00.000Z', archivedAt: '2026-10-08T08:00:00.000Z' });
+      await repo.saveNote({ id: 'out', text: 'خارج', createdAt: '2026-09-05T10:00:00.000Z' });
+      const model = await buildSummary(repo, range, only('notes'));
+      expect(model.notes.map((n) => n.id)).toEqual(['a', 'b']);
+      expect((await buildSummary(repo, range, none)).notes).toEqual([]);
+    });
   });
 });

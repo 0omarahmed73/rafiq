@@ -7,6 +7,7 @@ import { toArabicDigits } from '../../lib/digits';
 import { QuickCheckin } from '../checkin/QuickCheckin';
 import { currentStepId } from '../step/stepStatus';
 import { YearPlanCard } from './YearPlanCard';
+import { HomeNotes } from './HomeNotes';
 import { HomeReminders } from './HomeReminders';
 import { WeeklyReviewCard } from './WeeklyReviewCard';
 
@@ -61,6 +62,8 @@ export function HomePage() {
         <span className="text-base font-bold text-teal-ink">محفزاتي</span>
         <span className="text-sm leading-7 text-muted">أعود إلى سجلاتي لفهم ذاتي، أو أضيف سجلًا جديدًا.</span>
       </Link>
+
+      <HomeNotes />
 
       <WeeklyReviewCard />
 

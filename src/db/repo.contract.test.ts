@@ -299,4 +299,40 @@ describe.each(factories)('Repo contract (%s)', (_name, makeStore) => {
       await expect(repo.deleteAgendaPoint('missing')).resolves.toBeUndefined();
     });
   });
+  describe('notes', () => {
+    const note = (over: Record<string, unknown> = {}) => ({
+      id: 'n1', text: 'ملاحظة', createdAt: '2026-11-02T10:00:00.000Z', ...over,
+    });
+
+    it('saves a note, edits it by id and lists newest first', async () => {
+      await repo.saveNote(note());
+      await repo.saveNote(note({ id: 'n2', text: 'أحدث', createdAt: '2026-11-03T10:00:00.000Z' }));
+      await repo.saveNote(note({ text: 'معدّلة' }));
+      const rows = await repo.listNotes();
+      expect(rows.map((n) => [n.id, n.text])).toEqual([['n2', 'أحدث'], ['n1', 'معدّلة']]);
+      expect(rows[0].updatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    });
+
+    it('deletes one note, ignores a missing id, and a newer rewrite revives it after a merge', async () => {
+      await repo.saveNote(note());
+      await repo.saveNote(note({ id: 'n2' }));
+      await repo.deleteNote('n1');
+      await expect(repo.deleteNote('missing')).resolves.toBeUndefined();
+      expect((await repo.listNotes()).map((n) => n.id)).toEqual(['n2']);
+      expect((await repo.exportAll()).syncTombstones.map((t) => [t.table, t.recordId])).toEqual([['notes', 'n1']]);
+    });
+
+    it('archives only the current notes, reports how many, and keeps old archives apart', async () => {
+      await repo.saveNote(note({ id: 'old', archivedAt: '2026-10-27T08:00:00.000Z' }));
+      await repo.saveNote(note({ id: 'a' }));
+      await repo.saveNote(note({ id: 'b', createdAt: '2026-11-03T10:00:00.000Z' }));
+      expect(await repo.archiveNotes()).toBe(2);
+      const rows = await repo.listNotes();
+      const archived = Object.fromEntries(rows.map((n) => [n.id, n.archivedAt]));
+      expect(archived.old).toBe('2026-10-27T08:00:00.000Z');
+      expect(archived.a).toBe(archived.b);
+      expect(archived.a).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+      expect(await repo.archiveNotes()).toBe(0);
+    });
+  });
 });
