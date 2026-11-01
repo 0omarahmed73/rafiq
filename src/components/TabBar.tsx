@@ -54,6 +54,13 @@ const tabs = [
       </>,
     ),
   },
+  {
+    to: '/library',
+    label: 'مكتبتي',
+    end: false,
+    // an open book
+    icon: icon(<path d="M12 7c-1.5-1.2-3.5-2-7-2v13c3.5 0 5.5.8 7 2 1.5-1.2 3.5-2 7-2V5c-3.5 0-5.5.8-7 2zM12 7v13" />),
+  },
 ] as const;
 
 export function TabBar() {

@@ -19,6 +19,16 @@ function setup() {
   return { repo, user: userEvent.setup() };
 }
 
+describe('CheckinPage navigation', () => {
+  it('has a back link to Home at the top, before the heading', async () => {
+    setup();
+    const back = await screen.findByRole('link', { name: /الرئيسية/ });
+    expect(back).toHaveAttribute('href', '/');
+    const heading = screen.getByRole('heading', { name: 'ما الذي أشعر به الآن؟' });
+    expect(back.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});
+
 describe('CheckinPage wording', () => {
   it('speaks in the first person', async () => {
     setup();

@@ -220,3 +220,22 @@ Done test-first: `Note` + `Repo.saveNote/listNotes/deleteNote/archiveNotes` (Dex
 - Home now has a «ملاحظاتي» card (`src/features/home/HomeNotes.tsx`): quick note box, «إضافة ملاحظة», and a link «كل ملاحظاتي (N)» counting current notes only.
 - The notes archive is collapsed by default: each renewal is a button (date, count, one-line preview) that opens with a height and fade animation (300 ms, off under reduced motion; verified by sampling the height in Chrome). `aria-expanded` and a labelled region for assistive tech.
 - Evidence: 745 unit tests, TypeScript clean, 13 browser e2e.
+
+### Plan B design (2026-11-01, awaiting owner review; nothing built)
+Research is in `research/borderline/RESEARCH.md` (source register S1–S16, usable claims C1–C14, safety rules, open gaps). Owner chose **core first: sections 1, 3 and 5** of the library; the history, glossary and treatment sections come after the therapist reviews the first batch.
+
+**Entry.** A fifth bottom tab «مكتبتي» (`/library`) listing three sections: «ما هو اضطراب الشخصية الحدّية؟» (`/library/about`), «الأعراض بكلمات رحيمة» (`/library/symptoms`, one page per symptom), «الأمل والتعافي» (`/library/hope`).
+
+**Content as data** (`src/content/library/`, typed and test-validated). `Source {id, title, url, kind}` from the register; each text has `sourceIds` (at least one, all must exist) and `status: 'draft' | 'approved'`. Symptom cards (the nine in C3, each in kind words): كيف أشعر به / ما الحاجة خلفه / جملة أقولها لنفسي (optional, never forced) / أداة تساعدني الآن (link to an existing tool: «أحتاج تهدئة», check-in, a practice). Hope page shows C9 together with C10 and C11; no suicide figures anywhere.
+
+**Screens.** Every page shows the badge «مسودة للمراجعة» while its status is `draft`, a collapsible «المصادر» list (same animated accordion pattern as the notes archive), the note «هذا ليس تشخيصًا»; symptom pages end with a link to «أحتاج تهدئة». No quiz, no score, no wording that says the reader has the condition.
+
+**Guards (tests).** A content test fails the build if a text has no source, an unknown source id, a bad status, or contains banned phrasing (e.g. addressing the reader as having the disorder, «حدّي» used as a noun for a person, promoting self-harm). Page tests check badge, sources and crisis link; one e2e walks the tab.
+
+**Process.** Claude drafts the Arabic after spec approval, all `draft`; the owner's therapist reviews; `status` becomes `approved` only by editing the content file after the therapist agrees. Out of scope: history, glossary, treatment sections, any self-assessment, any telemetry.
+
+### Plan B first version built (2026-11-01, not committed)
+Done test-first: `src/content/library/` (schema, 7 sources, `about`, nine `symptoms`, `hope`, all `status: 'draft'`), `src/components/Collapsible.tsx` (animated disclosure, reduced-motion safe), `src/features/library/` (`LibraryPage`, `ReadingPage`, `SymptomsPage`, `SymptomPage`, shared `parts.tsx`), a fifth tab «مكتبتي» and routes `/library`, `/library/about`, `/library/hope`, `/library/symptoms`, `/library/symptoms/:id`.
+Guards: `library.test.ts` fails the build for a text with no source or an unknown source, a bad status, an `approved` text without `reviewedBy`, placeholder text, telling the reader they have the disorder, «حدّي» as a noun for a person, praising the illness or self-harm, and suicide figures or methods. The harm symptom must link to `/calm` and is the only `safety` card; its page opens with a help banner.
+Evidence: 775 unit tests, TypeScript clean, 15 browser e2e (new `e2e/library.spec.ts`, light and dark, no sideways scroll at 375 px); light and dark phone screenshots checked.
+**Open before release:** the therapist must review all eleven drafts and the owner must change `status` to `approved` with `reviewedBy` only after that; DSM-5-TR wording, WHO and NICE pages and an Arabic clinical source are still unverified (see `research/borderline/RESEARCH.md` section 5). Not built: history, glossary and treatment sections. README documents the library and has new screenshots. Not installed on the phone; the website and APK do not have it yet.

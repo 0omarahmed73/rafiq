@@ -27,17 +27,28 @@ export function HomePage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="mb-1 text-sm text-muted">{formatArabicDate(dayKey(new Date()))}</div>
-          <h1 className="text-[28px] font-bold leading-snug">كيف حالك اليوم؟</h1>
+      <div className="flex flex-col gap-3">
+        <div className="flex min-h-11 items-center justify-between gap-3">
+          <div className="text-sm text-muted">{formatArabicDate(dayKey(new Date()))}</div>
+          <div className="flex shrink-0 items-center gap-2">
+            <Link
+              to="/library"
+              aria-label="مكتبتي"
+              className="flex h-11 w-11 items-center justify-center rounded-full bg-teal-soft text-teal-ink"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 7c-1.5-1.2-3.5-2-7-2v13c3.5 0 5.5.8 7 2 1.5-1.2 3.5-2 7-2V5c-3.5 0-5.5.8-7 2zM12 7v13" />
+              </svg>
+            </Link>
+            <Link
+              to="/calm"
+              className="flex min-h-11 items-center rounded-full bg-teal-soft px-4 text-sm font-semibold text-teal-ink"
+            >
+              أحتاج تهدئة
+            </Link>
+          </div>
         </div>
-        <Link
-          to="/calm"
-          className="flex min-h-11 items-center rounded-full bg-teal-soft px-4 text-sm font-semibold text-teal-ink"
-        >
-          أحتاج تهدئة
-        </Link>
+        <h1 className="text-[28px] font-bold leading-snug">كيف حالك اليوم؟</h1>
       </div>
 
       <HomeReminders />

@@ -197,6 +197,9 @@ export function SettingsPage({
 
   return (
     <div className="flex flex-col gap-4">
+      <Link to="/" className="flex min-h-11 items-center text-[15px] font-semibold text-teal">
+        ‹ الرئيسية
+      </Link>
       <h1 className="text-[28px] font-bold leading-snug">الإعدادات</h1>
 
       <section className={card} aria-labelledby="appearance-title">

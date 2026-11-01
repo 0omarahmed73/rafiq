@@ -21,7 +21,7 @@ describe('TabBar icons', () => {
       return svg!.innerHTML;
     });
     expect(new Set(shapes).size).toBe(links.length);
-    expect(container.querySelectorAll('svg')).toHaveLength(4);
+    expect(container.querySelectorAll('svg')).toHaveLength(5);
   });
 
   it('keeps each tab named by its text alone, not by its icon', () => {
@@ -42,7 +42,7 @@ describe('TabBar icons', () => {
 });
 
 describe('TabBar', () => {
-  it('links the four tabs to their routes', () => {
+  it('links the five tabs to their routes', () => {
     render(
       <MemoryRouter>
         <TabBar />
@@ -53,6 +53,7 @@ describe('TabBar', () => {
       الرحلة: '/journey',
       التتبّع: '/tracker',
       لمعالجي: '/therapist',
+      مكتبتي: '/library',
     };
     for (const [name, href] of Object.entries(expected)) {
       expect(screen.getByRole('link', { name })).toHaveAttribute('href', href);

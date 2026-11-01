@@ -48,6 +48,16 @@ const upload = (user: ReturnType<typeof userEvent.setup>, text: string) =>
     new File([text], 'backup.json', { type: 'application/json' }),
   );
 
+describe('SettingsPage navigation', () => {
+  it('has a back link to Home before the heading', async () => {
+    setup();
+    const back = await screen.findByRole('link', { name: /الرئيسية/ });
+    expect(back).toHaveAttribute('href', '/');
+    const heading = screen.getByRole('heading', { level: 1, name: 'الإعدادات' });
+    expect(back.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});
+
 describe('SettingsPage profile', () => {
   it('has a «معلوماتي» section', async () => {
     setup();

@@ -1,5 +1,9 @@
 import { Navigate, type RouteObject } from 'react-router-dom';
 import { Layout } from './Layout';
+import { LibraryPage } from './features/library/LibraryPage';
+import { ReadingPage } from './features/library/ReadingPage';
+import { SymptomPage } from './features/library/SymptomPage';
+import { SymptomsPage } from './features/library/SymptomsPage';
 import { CalmPage } from './features/calm/CalmPage';
 import { CheckinPage } from './features/checkin/CheckinPage';
 import { SettingsPage } from './features/settings/SettingsPage';
@@ -29,6 +33,11 @@ export const routes: RouteObject[] = [
       { path: 'journey', element: <JourneyPage /> },
       { path: 'calm', element: <CalmPage /> },
       { path: 'year', element: <YearPlanPage /> },
+      { path: 'library', element: <LibraryPage /> },
+      { path: 'library/about', element: <ReadingPage page="about" /> },
+      { path: 'library/hope', element: <ReadingPage page="hope" /> },
+      { path: 'library/symptoms', element: <SymptomsPage /> },
+      { path: 'library/symptoms/:id', element: <SymptomPage /> },
       { path: 'settings', element: <SettingsPage /> },
       { path: 'therapist', element: <TherapistPage /> },
       { path: 'therapist/summary', element: <SummaryPage /> },

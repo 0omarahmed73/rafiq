@@ -22,6 +22,16 @@ describe('HomePage', () => {
     expect(screen.getByRole('link', { name: 'أحتاج تهدئة' })).toHaveAttribute('href', '/calm');
   });
 
+  it('puts a library icon in the header, beside the calm button, named by its label', () => {
+    renderHome();
+    const library = screen.getByRole('link', { name: 'مكتبتي' });
+    expect(library).toHaveAttribute('href', '/library');
+    expect(library.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
+    expect(library.className).toMatch(/h-11|min-h-11/);
+    const calm = screen.getByRole('link', { name: 'أحتاج تهدئة' });
+    expect(library.parentElement).toBe(calm.parentElement);
+  });
+
   it('starts on step 1 when nothing is done', async () => {
     renderHome();
     expect(await screen.findByText('الخطوة ١ من ١٠')).toBeInTheDocument();
