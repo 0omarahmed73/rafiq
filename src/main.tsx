@@ -24,7 +24,7 @@ async function boot() {
   void reconcileDailyReminder(repo);
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
-      <App router={router} repo={repo} persistent={persistent} />
+      <App router={router} repo={repo} persistent={persistent} language={settings.language} />
     </StrictMode>,
   );
   // Let the first screen paint underneath, then hand over from the system splash and fade the web splash.

@@ -1,5 +1,7 @@
 import { Chip } from '../../../components/Chip';
 import type { Prompt } from '../../../content/schema';
+import { t } from '../../../i18n';
+import { useI18n } from '../../../i18n/LanguageProvider';
 import type { PromptProps } from './types';
 
 interface ChipsValue {
@@ -9,11 +11,15 @@ interface ChipsValue {
 
 function autoText(prompt: Prompt, values: string[]): string {
   if (!prompt.template || values.length === 0) return '';
-  const labels = values.map((v) => prompt.options?.find((o) => o.value === v)?.label ?? v);
-  return prompt.template.replace('{label}', labels.join(' و'));
+  const labels = values.map((v) => {
+    const option = prompt.options?.find((o) => o.value === v);
+    return option ? t(option.label) : v;
+  });
+  return t(prompt.template).replace('{label}', labels.join(t({ ar: ' و', en: ' and ' })));
 }
 
 export function ChipsPrompt({ prompt, value, onChange }: PromptProps) {
+  const { t } = useI18n();
   const current = (value ?? { values: [] }) as ChipsValue;
   const hasText = Boolean(prompt.template || prompt.textLabel);
 
@@ -39,7 +45,7 @@ export function ChipsPrompt({ prompt, value, onChange }: PromptProps) {
         {prompt.options?.map((o) => (
           <Chip
             key={o.value}
-            label={o.label}
+            label={t(o.label)}
             selected={current.values.includes(o.value)}
             onToggle={() => toggle(o.value)}
           />
@@ -47,7 +53,7 @@ export function ChipsPrompt({ prompt, value, onChange }: PromptProps) {
       </div>
       {hasText && (
         <textarea
-          aria-label={prompt.template ? 'أقولها لنفسي' : prompt.textLabel}
+          aria-label={t(prompt.template ? { ar: 'أقولها لنفسي', en: 'Say it to myself' } : prompt.textLabel!)}
           rows={prompt.template ? 3 : 4}
           value={current.text ?? ''}
           onChange={(e) => onChange({ ...current, text: e.target.value })}

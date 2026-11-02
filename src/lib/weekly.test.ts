@@ -92,18 +92,18 @@ describe('generateWeeklyReview', () => {
 
   it('picks the question by week number and wraps around the list', () => {
     const first = generateWeeklyReview([], [], '2026-01-03').question;
-    expect(first).toBe(weeklyQuestions[0]);
-    expect(generateWeeklyReview([], [], '2026-01-10').question).toBe(weeklyQuestions[1]);
+    expect(first).toBe(weeklyQuestions[0].ar);
+    expect(generateWeeklyReview([], [], '2026-01-10').question).toBe(weeklyQuestions[1].ar);
     const wrapped = addDays('2026-01-03', 7 * weeklyQuestions.length);
-    expect(generateWeeklyReview([], [], wrapped).question).toBe(weeklyQuestions[0]);
+    expect(generateWeeklyReview([], [], wrapped).question).toBe(weeklyQuestions[0].ar);
   });
 });
 
 describe('weeklyQuestions', () => {
   it('has at least six distinct questions, the first one fixed by the plan', () => {
     expect(weeklyQuestions.length).toBeGreaterThanOrEqual(6);
-    expect(new Set(weeklyQuestions).size).toBe(weeklyQuestions.length);
-    expect(weeklyQuestions[0]).toBe('متى شعرتُ بأنني أقرب ما أكون إلى نفسي؟');
+    expect(new Set(weeklyQuestions.map((q) => q.ar)).size).toBe(weeklyQuestions.length);
+    expect(weeklyQuestions[0].ar).toBe('متى شعرتُ بأنني أقرب ما أكون إلى نفسي؟');
   });
 });
 

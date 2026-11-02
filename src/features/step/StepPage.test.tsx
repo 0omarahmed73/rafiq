@@ -23,12 +23,41 @@ function renderStep(path: string, repo: Repo = createMemoryRepo()) {
 }
 
 describe('StepPage', () => {
+  it('lists the saved records of this step with their answers, and leaves other steps out', async () => {
+    const repo = createMemoryRepo();
+    const at = '2026-11-01T10:00:00.000Z';
+    await repo.savePractice({
+      id: 'c1',
+      practiceId: 'care',
+      stepId: 9,
+      startedAt: at,
+      completedAt: at,
+      answers: { g2: ['شرب كوب ماء', 'مشي قصير'], g3: { text: 'أمشي عشر دقائق بعد العشاء' } },
+      share: false,
+      forNextSession: false,
+    });
+    await repo.savePractice({
+      id: 'v1',
+      practiceId: 'validate',
+      stepId: 1,
+      startedAt: at,
+      completedAt: at,
+      answers: { v1: { text: 'رسالة من الخطوة الأولى' } },
+      share: false,
+      forNextSession: false,
+    });
+    renderStep('/step/9', repo);
+    expect(await screen.findByText('شرب كوب ماء، مشي قصير')).toBeInTheDocument();
+    expect(screen.getByText('أمشي عشر دقائق بعد العشاء')).toBeInTheDocument();
+    expect(screen.queryByText('رسالة من الخطوة الأولى')).not.toBeInTheDocument();
+  });
+
   it('shows the step title, core question and lesson', async () => {
     renderStep('/step/2');
     const step = steps[1];
-    expect(await screen.findByRole('heading', { name: step.title })).toBeInTheDocument();
-    expect(screen.getByText(step.coreQuestion)).toBeInTheDocument();
-    expect(screen.getByText(step.lesson)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: step.title.ar })).toBeInTheDocument();
+    expect(screen.getByText(step.coreQuestion.ar)).toBeInTheDocument();
+    expect(screen.getByText(step.lesson.ar)).toBeInTheDocument();
     expect(screen.getByText('الخطوة ٢ من ١٠')).toBeInTheDocument();
   });
 
@@ -66,7 +95,7 @@ describe('StepPage', () => {
 
   it('shows no decision card before the practice is done', async () => {
     renderStep('/step/2');
-    await screen.findByRole('heading', { name: steps[1].title });
+    await screen.findByRole('heading', { name: steps[1].title.ar });
     expect(screen.queryByText('قرارك')).not.toBeInTheDocument();
   });
 
@@ -110,7 +139,7 @@ it('opens the next step with its own unanswered readiness controls', async () =>
   renderStep('/step/2', repo);
   await userEvent.setup().click(await screen.findByRole('link', { name: 'أنتقل إلى الخطوة التالية' }));
   await screen.findByRole('heading', { name: 'تنظيم الذات' });
-  const group = screen.getByRole('group', { name: readinessQuestions[3][0] });
+  const group = screen.getByRole('group', { name: readinessQuestions[3][0].ar });
   for (const input of within(group).getAllByRole('radio')) expect(input).not.toBeChecked();
   expect(screen.queryByText('يبدو أن الوقت مناسب للانتقال إلى الخطوة التالية.')).not.toBeInTheDocument();
 });

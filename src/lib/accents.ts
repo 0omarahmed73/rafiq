@@ -1,3 +1,5 @@
+import type { Bi } from '../i18n';
+
 export type AccentId = 'teal' | 'blue' | 'purple' | 'rose' | 'amber' | 'green';
 
 /** The CSS variables a palette sets (see tokens.css): `--teal`, `--teal-soft`, `--teal-ink`, `--shade-*`. */
@@ -18,7 +20,7 @@ export interface AccentTokens {
 }
 
 export interface Accent {
-  label: string;
+  label: Bi;
   light: AccentTokens;
   dark: AccentTokens;
 }
@@ -31,7 +33,7 @@ export const ACCENT_IDS: AccentId[] = ['teal', 'blue', 'purple', 'rose', 'amber'
  */
 export const ACCENTS: Record<AccentId, Accent> = {
   teal: {
-    label: 'تركوازي',
+    label: { ar: 'تركوازي', en: 'Teal' },
     light: {
       teal: '#2F6F66',
       tealSoft: '#DCEBE7',
@@ -62,7 +64,7 @@ export const ACCENTS: Record<AccentId, Accent> = {
     },
   },
   blue: {
-    label: 'أزرق',
+    label: { ar: 'أزرق', en: 'Blue' },
     light: {
       teal: '#356DB6',
       tealSoft: '#DDE4EE',
@@ -93,7 +95,7 @@ export const ACCENTS: Record<AccentId, Accent> = {
     },
   },
   purple: {
-    label: 'بنفسجي',
+    label: { ar: 'بنفسجي', en: 'Purple' },
     light: {
       teal: '#7447AE',
       tealSoft: '#E5DFEC',
@@ -124,7 +126,7 @@ export const ACCENTS: Record<AccentId, Accent> = {
     },
   },
   rose: {
-    label: 'وردي',
+    label: { ar: 'وردي', en: 'Rose' },
     light: {
       teal: '#BA3B65',
       tealSoft: '#EDDEE3',
@@ -155,7 +157,7 @@ export const ACCENTS: Record<AccentId, Accent> = {
     },
   },
   amber: {
-    label: 'كهرماني',
+    label: { ar: 'كهرماني', en: 'Amber' },
     light: {
       teal: '#A85915',
       tealSoft: '#F1E5DA',
@@ -186,7 +188,7 @@ export const ACCENTS: Record<AccentId, Accent> = {
     },
   },
   green: {
-    label: 'أخضر',
+    label: { ar: 'أخضر', en: 'Green' },
     light: {
       teal: '#327B48',
       tealSoft: '#DFECE3',

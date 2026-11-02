@@ -96,6 +96,14 @@ describe.each(factories)('Repo contract (%s)', (_name, makeStore) => {
     expect(await repo.listSoothing()).toHaveLength(1);
   });
 
+  it('removes a soothing text, keeps the others, and leaves a deletion marker', async () => {
+    await repo.addSoothing('الرسم', 'user');
+    await repo.addSoothing('سماع ألبوم', 'step1');
+    await repo.removeSoothing(' الرسم ');
+    expect((await repo.listSoothing()).map((s) => s.text)).toEqual(['سماع ألبوم']);
+    expect((await repo.exportAll()).syncTombstones.map((t) => t.table)).toContain('soothingList');
+  });
+
   it('round-trips every table through exportAll and replaceAll, dropping extra rows', async () => {
     await repo.addCheckin(checkin());
     await repo.savePractice(practice());

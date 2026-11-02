@@ -79,6 +79,7 @@ describe('HomePage', () => {
 
       expect(await screen.findByText('أضفتُ الملاحظة.')).toBeInTheDocument();
       expect(screen.getByLabelText('ملاحظة سريعة')).toHaveValue('');
+      expect(screen.getByLabelText('ملاحظة سريعة')).toHaveFocus();
       expect((await repo.listNotes()).map((n) => [n.text, n.archivedAt])).toEqual([['تذكّرتُ أن أسأل عن النوم', undefined]]);
     });
 

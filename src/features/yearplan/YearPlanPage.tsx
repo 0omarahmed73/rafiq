@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { YEAR_GOALS, YEAR_MONTHS, YEAR_REVIEW_QUESTIONS, YEAR_VISION } from '../../content/yearPlan';
 import { useRepo } from '../../db/RepoContext';
-import { toArabicDigits } from '../../lib/digits';
 import {
   DEFAULT_AGE,
   DEFAULT_START,
@@ -18,6 +17,7 @@ import {
   toMap,
   type PlanMap,
 } from './progress';
+import { t } from '../../i18n';
 
 const field =
   'min-h-24 w-full rounded-xl border-[1.5px] border-line bg-card p-3 text-[15px] leading-7 text-ink';
@@ -95,17 +95,17 @@ export function YearPlanPage() {
   return (
     <div className="flex flex-col gap-5 pb-4">
       <Link to="/" className="flex min-h-11 items-center text-sm font-semibold text-teal">
-        ‹ الرئيسية
+        {t({ ar: '‹ الرئيسية', en: '‹ Home' })}
       </Link>
       <header className="flex flex-col gap-2">
-        <div className="text-sm text-muted">رؤيتي للسنة</div>
+        <div className="text-sm text-muted">{t({ ar: 'رؤيتي للسنة', en: 'My vision for the year' })}</div>
         <h1 className="text-2xl font-bold leading-snug">{planTitle(age && age >= 1 && age <= 99 ? age : DEFAULT_AGE)}</h1>
-        <div className="text-lg font-semibold">{YEAR_VISION.motto}</div>
-        <p className="text-[15px] leading-8 text-muted">{YEAR_VISION.text}</p>
-        <p className="text-sm text-muted">{`من ${label(0)} إلى ${label(11)}`}</p>
+        <div className="text-lg font-semibold">{t(YEAR_VISION.motto)}</div>
+        <p className="text-[15px] leading-8 text-muted">{t(YEAR_VISION.text)}</p>
+        <p className="text-sm text-muted">{t({ ar: 'من {from} إلى {to}', en: 'From {from} to {to}' }, { from: label(0), to: label(11) })}</p>
         <div className="grid grid-cols-2 gap-3">
           <label className="flex flex-col gap-1 text-sm font-semibold">
-            عمري في هذه السنة
+            {t({ ar: 'عمري في هذه السنة', en: 'My age this year' })}
             <input
               type="number"
               inputMode="numeric"
@@ -117,7 +117,7 @@ export function YearPlanPage() {
             />
           </label>
           <label className="flex flex-col gap-1 text-sm font-semibold">
-            شهر البداية
+            {t({ ar: 'شهر البداية', en: 'Start month' })}
             <input
               type="month"
               value={start}
@@ -127,36 +127,56 @@ export function YearPlanPage() {
           </label>
         </div>
         <div className="rounded-2xl bg-teal-soft p-3 text-sm font-semibold text-teal-ink">
-          {`التقدم: ${toArabicDigits(total.percent)}٪ · ${toArabicDigits(total.tasksDone)} من ${toArabicDigits(total.tasksTotal)} خطوة · ${toArabicDigits(total.goalsDone)} من ${toArabicDigits(total.goalsTotal)} أهداف`}
+          {t(
+            {
+              ar: 'التقدم: {percent}٪ · {done} من {total} خطوة · {goalsDone} من {goalsTotal} أهداف',
+              en: 'Progress: {percent}% · {done} of {total} steps · {goalsDone} of {goalsTotal} goals',
+            },
+            {
+              percent: total.percent,
+              done: total.tasksDone,
+              total: total.tasksTotal,
+              goalsDone: total.goalsDone,
+              goalsTotal: total.goalsTotal,
+            },
+          )}
         </div>
       </header>
 
       <section className="flex flex-col gap-1">
-        <h2 className="text-lg font-bold">أهداف السنة</h2>
+        <h2 className="text-lg font-bold">{t({ ar: 'أهداف السنة', en: 'Goals for the year' })}</h2>
         {YEAR_GOALS.map((g, i) => (
-          <Check key={g} label={g} ariaLabel={`هدف: ${g}`} checked={map.get(goalKey(i)) === true} onChange={(v) => set(goalKey(i), v)} />
+          <Check
+            key={g.ar}
+            label={t(g)}
+            ariaLabel={t({ ar: 'هدف: {goal}', en: 'Goal: {goal}' }, { goal: t(g) })}
+            checked={map.get(goalKey(i)) === true}
+            onChange={(v) => set(goalKey(i), v)}
+          />
         ))}
       </section>
 
       <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-bold">الأشهر</h2>
+        <h2 className="text-lg font-bold">{t({ ar: 'الأشهر', en: 'Months' })}</h2>
         {YEAR_MONTHS.map((m, mi) => (
-          <details key={m.name} role="group" aria-label={label(mi)} className="rounded-2xl border border-line bg-card p-3.5">
+          <details key={m.name.ar} role="group" aria-label={label(mi)} className="rounded-2xl border border-line bg-card p-3.5">
             <summary className="flex min-h-11 cursor-pointer flex-col justify-center gap-0.5">
               <span className="font-bold">{label(mi)}</span>
-              <span className="text-sm text-muted">{m.theme}</span>
-              <span className="text-xs font-semibold text-teal">{`تقدم الشهر: ${toArabicDigits(monthPercent(map, mi))}٪`}</span>
+              <span className="text-sm text-muted">{t(m.theme)}</span>
+              <span className="text-xs font-semibold text-teal">
+                {t({ ar: 'تقدم الشهر: {percent}٪', en: 'Month progress: {percent}%' }, { percent: monthPercent(map, mi) })}
+              </span>
             </summary>
-            <p className="mt-2 text-sm leading-7 text-muted">{m.intro}</p>
+            <p className="mt-2 text-sm leading-7 text-muted">{t(m.intro)}</p>
             {m.weeks.map((w, wi) => (
-              <div key={w.title} className="mt-3 flex flex-col">
-                <h3 className="text-[15px] font-bold">{w.title}</h3>
-                {w.tasks.map((t, ti) => (
-                  <div key={t} className="flex flex-col">
-                    <Check label={t} checked={map.get(taskKey(mi, wi, ti)) === true} onChange={(v) => set(taskKey(mi, wi, ti), v)} />
+              <div key={w.title.ar} className="mt-3 flex flex-col">
+                <h3 className="text-[15px] font-bold">{t(w.title)}</h3>
+                {w.tasks.map((task, ti) => (
+                  <div key={task.ar} className="flex flex-col">
+                    <Check label={t(task)} checked={map.get(taskKey(mi, wi, ti)) === true} onChange={(v) => set(taskKey(mi, wi, ti), v)} />
                     <textarea
-                      aria-label={`ما فعلته: ${t}`}
-                      placeholder="اكتب ما فعلته في هذه الخطوة…"
+                      aria-label={t({ ar: 'ما فعلته: {task}', en: 'What I did: {task}' }, { task: t(task) })}
+                      placeholder={t({ ar: 'اكتب ما فعلته في هذه الخطوة…', en: 'Write what I did in this step…' })}
                       className={`${field} mb-2 min-h-16`}
                       value={text(detailKey(mi, wi, ti))}
                       onChange={(e) => set(detailKey(mi, wi, ti), e.target.value)}
@@ -166,7 +186,7 @@ export function YearPlanPage() {
               </div>
             ))}
             <label className="mt-3 flex flex-col gap-1.5 text-sm font-semibold">
-              ملاحظات الشهر
+              {t({ ar: 'ملاحظات الشهر', en: 'Notes for the month' })}
               <textarea
                 className={field}
                 value={text(noteKey(mi))}
@@ -178,10 +198,10 @@ export function YearPlanPage() {
       </section>
 
       <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-bold">مراجعة السنة</h2>
+        <h2 className="text-lg font-bold">{t({ ar: 'مراجعة السنة', en: 'Review of the year' })}</h2>
         {YEAR_REVIEW_QUESTIONS.map((q, i) => (
-          <label key={q} className="flex flex-col gap-1.5 text-sm font-semibold">
-            {q}
+          <label key={q.ar} className="flex flex-col gap-1.5 text-sm font-semibold">
+            {t(q)}
             <textarea className={field} value={text(reviewKey(i))} onChange={(e) => set(reviewKey(i), e.target.value)} />
           </label>
         ))}

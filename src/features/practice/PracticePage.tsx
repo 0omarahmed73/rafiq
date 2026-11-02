@@ -1,8 +1,10 @@
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { practiceById } from '../../content/practices';
+import { useI18n } from '../../i18n/LanguageProvider';
 import { PracticeRunner } from './PracticeRunner';
 
 export function PracticePage() {
+  const { t } = useI18n();
   const { practiceId = '' } = useParams();
   const navigate = useNavigate();
   const def = practiceById(practiceId);
@@ -10,9 +12,9 @@ export function PracticePage() {
   if (!def) {
     return (
       <div className="flex flex-col gap-3">
-        <p>هذا التمرين غير موجود</p>
+        <p>{t({ ar: 'هذا التمرين غير موجود', en: 'This practice does not exist' })}</p>
         <Link to="/journey" className="flex min-h-11 items-center font-semibold text-teal">
-          العودة إلى الرحلة
+          {t({ ar: 'العودة إلى الرحلة', en: 'Back to the journey' })}
         </Link>
       </div>
     );

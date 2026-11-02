@@ -1,5 +1,5 @@
 import { useId } from 'react';
-import { toArabicDigits } from '../lib/digits';
+import { digits } from '../i18n';
 
 export function IntensitySlider({
   label,
@@ -17,7 +17,7 @@ export function IntensitySlider({
         <label htmlFor={id} className="text-sm text-muted">
           {label}
         </label>
-        <span className="text-lg font-bold text-teal-ink">{`${toArabicDigits(value)} / ${toArabicDigits(10)}`}</span>
+        <span className="text-lg font-bold text-teal-ink">{`${digits(value)} / ${digits(10)}`}</span>
       </div>
       <input
         id={id}

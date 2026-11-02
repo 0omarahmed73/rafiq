@@ -2,13 +2,17 @@ import type { ReactNode } from 'react';
 import { emotionLabel } from '../../content';
 import { practiceById } from '../../content/practices';
 import type { Checkin, Homework, Note, PracticeRecord } from '../../db/schema';
-import { dayKey, formatArabicDate, formatArabicFullDate, formatArabicTime } from '../../lib/dates';
-import { toArabicDigits } from '../../lib/digits';
+import { dayKey, formatDayLabel, formatFullDate, formatTime } from '../../lib/dates';
 import { IntensityCurve } from '../tracker/IntensityCurve';
 import type { SummaryModel, SummarySwitches } from './buildSummary';
 import { formatAnswer } from './formatAnswer';
+import { digits, t } from '../../i18n';
 
-const TREND = { up: 'ارتفاع', flat: 'استقرار', down: 'انخفاض' } as const;
+const TREND = {
+  up: { ar: 'ارتفاع', en: 'rising' },
+  flat: { ar: 'استقرار', en: 'steady' },
+  down: { ar: 'انخفاض', en: 'falling' },
+} as const;
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -33,13 +37,13 @@ function CheckinLine({ c }: { c: Checkin }) {
   return (
     <li className="break-inside-avoid border-b border-line py-2 last:border-b-0 text-sm leading-7">
       <div className="flex flex-wrap items-center justify-between gap-x-4">
-        <span className="font-bold">{`${formatArabicDate(c.day)} · ${formatArabicTime(c.at)}`}</span>
+        <span className="font-bold">{`${formatDayLabel(c.day)} · ${formatTime(c.at)}`}</span>
         <span className="flex items-center gap-2">
           <IntensityBar value={c.intensity} />
-          <span className="font-bold">{`${toArabicDigits(c.intensity)} / ${toArabicDigits(10)}`}</span>
+          <span className="font-bold">{`${digits(c.intensity)} / ${digits(10)}`}</span>
         </span>
       </div>
-      <div>{c.emotions.map(emotionLabel).join('، ')}</div>
+      <div>{c.emotions.map(emotionLabel).join(t({ ar: '، ', en: ', ' }))}</div>
       {c.note && <div className="text-muted">{c.note}</div>}
     </li>
   );
@@ -50,12 +54,12 @@ function PracticeBlock({ p }: { p: PracticeRecord }) {
   const day = dayKey(new Date(p.completedAt ?? p.startedAt));
   return (
     <li className="flex break-inside-avoid flex-col gap-1 border-b border-line pb-3 last:border-b-0 text-sm leading-7">
-      <span className="font-bold">{`${def?.title ?? p.practiceId} · ${formatArabicDate(day)}`}</span>
+      <span className="font-bold">{`${def ? t(def.title) : p.practiceId} · ${formatDayLabel(day)}`}</span>
       {def?.prompts.map((prompt) => {
         const text = formatAnswer(prompt, p.answers[prompt.id]);
         return text ? (
           <span key={prompt.id} className="whitespace-pre-line">
-            <span className="text-muted">{prompt.label}: </span>
+            <span className="text-muted">{t(prompt.label)}: </span>
             {text}
           </span>
         ) : null;
@@ -68,10 +72,10 @@ function HomeworkBlock({ h }: { h: Homework }) {
   return (
     <li className="flex break-inside-avoid flex-col gap-1 border-b border-line pb-3 last:border-b-0 text-sm leading-7">
       <span className="flex flex-wrap items-baseline justify-between gap-x-4">
-        <span className="font-bold">{`${h.text} · ${formatArabicDate(dayKey(new Date(h.createdAt)))}`}</span>
-        <span className="text-muted">{h.done ? 'أنجزتُه' : 'لم أنجزه'}</span>
+        <span className="font-bold">{`${h.text} · ${formatDayLabel(dayKey(new Date(h.createdAt)))}`}</span>
+        <span className="text-muted">{h.done ? t({ ar: 'أنجزتُه', en: 'Done' }) : t({ ar: 'لم أنجزه', en: 'Not done' })}</span>
       </span>
-      {h.answer ? <span className="whitespace-pre-line">{h.answer}</span> : <span className="text-muted">لم أكتب إجابة</span>}
+      {h.answer ? <span className="whitespace-pre-line">{h.answer}</span> : <span className="text-muted">{t({ ar: 'لم أكتب إجابة', en: 'No answer written' })}</span>}
     </li>
   );
 }
@@ -79,7 +83,7 @@ function HomeworkBlock({ h }: { h: Homework }) {
 function NoteBlock({ n }: { n: Note }) {
   return (
     <li className="flex break-inside-avoid flex-col gap-0.5 border-b border-line pb-2 last:border-b-0 text-sm leading-7">
-      <span className="font-bold">{`${formatArabicDate(dayKey(new Date(n.createdAt)))} · ${formatArabicTime(n.createdAt)}`}</span>
+      <span className="font-bold">{`${formatDayLabel(dayKey(new Date(n.createdAt)))} · ${formatTime(n.createdAt)}`}</span>
       <span className="whitespace-pre-line">{n.text}</span>
     </li>
   );
@@ -116,49 +120,49 @@ export function SummaryPrint({
     <article className="flex flex-col gap-4">
       <header className="flex flex-col gap-3 border-b-4 border-teal pb-3">
         <div className="flex items-baseline justify-between gap-3">
-          <h1 className="text-2xl font-bold text-teal-ink">ملخّص رفيق</h1>
-          <span className="text-xs font-semibold text-muted">للمعالج</span>
+          <h1 className="text-2xl font-bold text-teal-ink">{t({ ar: 'ملخّص رفيق', en: 'Rafiq summary' })}</h1>
+          <span className="text-xs font-semibold text-muted">{t({ ar: 'للمعالج', en: 'For the therapist' })}</span>
         </div>
         <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-sm">
           {profile?.displayName && (
             <>
-              <dt className="text-muted">الاسم:</dt>
+              <dt className="text-muted">{t({ ar: 'الاسم:', en: 'Name:' })}</dt>
               <dd className="m-0 font-bold">{profile.displayName}</dd>
             </>
           )}
           {profile?.therapistName && (
             <>
-              <dt className="text-muted">المعالج:</dt>
+              <dt className="text-muted">{t({ ar: 'المعالج:', en: 'Therapist:' })}</dt>
               <dd className="m-0 font-bold">{profile.therapistName}</dd>
             </>
           )}
-          <dt className="text-muted">الفترة:</dt>
-          <dd className="m-0 font-bold">{`${formatArabicFullDate(model.range.from)} – ${formatArabicFullDate(model.range.to)}`}</dd>
+          <dt className="text-muted">{t({ ar: 'الفترة:', en: 'Period:' })}</dt>
+          <dd className="m-0 font-bold">{`${formatFullDate(model.range.from)} – ${formatFullDate(model.range.to)}`}</dd>
         </dl>
       </header>
 
       {anySwitch && (
         <dl className="m-0 grid grid-cols-3 gap-2 text-center">
           <div className="rounded-lg border-[1.5px] border-teal bg-teal-soft p-2">
-            <dd className="m-0 text-xl font-bold">{toArabicDigits(totals.daysLogged)}</dd>
-            <dt className="text-xs text-muted">أيام التسجيل</dt>
+            <dd className="m-0 text-xl font-bold">{digits(totals.daysLogged)}</dd>
+            <dt className="text-xs text-muted">{t({ ar: 'أيام التسجيل', en: 'Days logged' })}</dt>
           </div>
           <div className="rounded-lg border-[1.5px] border-teal bg-teal-soft p-2">
             <dd className="m-0 text-xl font-bold">{totals.topEmotion ? emotionLabel(totals.topEmotion) : '—'}</dd>
-            <dt className="text-xs text-muted">أكثر شعور</dt>
+            <dt className="text-xs text-muted">{t({ ar: 'أكثر شعور', en: 'Most common feeling' })}</dt>
           </div>
           <div className="rounded-lg border-[1.5px] border-teal bg-teal-soft p-2">
-            <dd className="m-0 text-xl font-bold">{toArabicDigits(totals.currentStep)}</dd>
-            <dt className="text-xs text-muted">الخطوة الحالية</dt>
+            <dd className="m-0 text-xl font-bold">{digits(totals.currentStep)}</dd>
+            <dt className="text-xs text-muted">{t({ ar: 'الخطوة الحالية', en: 'Current step' })}</dt>
           </div>
         </dl>
       )}
 
-      {!anySwitch && <p className="text-sm text-muted">لم أختر ما يدخل في الملخّص.</p>}
-      {anySwitch && !hasContent && <p className="text-sm text-muted">لا توجد بيانات في هذه الفترة.</p>}
+      {!anySwitch && <p className="text-sm text-muted">{t({ ar: 'لم أختر ما يدخل في الملخّص.', en: 'I have not chosen what goes into the summary.' })}</p>}
+      {anySwitch && !hasContent && <p className="text-sm text-muted">{t({ ar: 'لا توجد بيانات في هذه الفترة.', en: 'There is no data in this period.' })}</p>}
 
       {model.checkins.length > 0 && (
-        <Section title="تسجيلات المشاعر">
+        <Section title={t({ ar: 'تسجيلات المشاعر', en: 'Feeling check-ins' })}>
           <ul className="m-0 flex list-none flex-col gap-2 p-0">
             {model.checkins.map((c) => (
               <CheckinLine key={c.id} c={c} />
@@ -168,18 +172,24 @@ export function SummaryPrint({
       )}
 
       {showCurve && (
-        <Section title="منحنى الشدّة">
+        <Section title={t({ ar: 'منحنى الشدّة', en: 'Intensity curve' })}>
           <IntensityCurve values={model.curve.map((d) => d.max)} />
         </Section>
       )}
 
       {model.weeklyReviews.length > 0 && (
-        <Section title="مراجعات الأسبوع">
+        <Section title={t({ ar: 'مراجعات الأسبوع', en: 'Weekly reviews' })}>
           <ul className="m-0 flex list-none flex-col gap-2 p-0">
             {model.weeklyReviews.map((r) => (
               <li key={r.id} className="flex flex-col gap-0.5 text-sm leading-7">
-                <span className="font-semibold">{`أسبوع ${formatArabicDate(r.weekStart)}`}</span>
-                <span>{`أكثر المشاعر: ${r.summary.topEmotions.map((e) => emotionLabel(e.id)).join('، ') || '—'} · الشدّة: ${TREND[r.summary.trend]}`}</span>
+                <span className="font-semibold">{t({ ar: 'أسبوع {date}', en: 'Week of {date}' }, { date: formatDayLabel(r.weekStart) })}</span>
+                <span>{t(
+                  { ar: 'أكثر المشاعر: {emotions} · الشدّة: {trend}', en: 'Most common feelings: {emotions} · Intensity: {trend}' },
+                  {
+                    emotions: r.summary.topEmotions.map((e) => emotionLabel(e.id)).join(t({ ar: '، ', en: ', ' })) || '—',
+                    trend: t(TREND[r.summary.trend]),
+                  },
+                )}</span>
                 <span className="text-muted">{r.summary.question}</span>
                 {r.answer && <span>{r.answer}</span>}
               </li>
@@ -189,7 +199,7 @@ export function SummaryPrint({
       )}
 
       {model.practices.length > 0 && (
-        <Section title="الممارسات الموجّهة">
+        <Section title={t({ ar: 'الممارسات الموجّهة', en: 'Guided practices' })}>
           <ul className="m-0 flex list-none flex-col gap-3 p-0">
             {model.practices.map((p) => (
               <PracticeBlock key={p.id} p={p} />
@@ -199,7 +209,7 @@ export function SummaryPrint({
       )}
 
       {model.homework.length > 0 && (
-        <Section title="إجابات الواجبات">
+        <Section title={t({ ar: 'إجابات الواجبات', en: 'Homework answers' })}>
           <ul className="m-0 flex list-none flex-col gap-3 p-0">
             {model.homework.map((h) => (
               <HomeworkBlock key={h.id} h={h} />
@@ -209,7 +219,7 @@ export function SummaryPrint({
       )}
 
       {model.notes.length > 0 && (
-        <Section title="ملاحظاتي">
+        <Section title={t({ ar: 'ملاحظاتي', en: 'My notes' })}>
           <ul className="m-0 flex list-none flex-col gap-2 p-0">
             {model.notes.map((n) => (
               <NoteBlock key={n.id} n={n} />
@@ -219,7 +229,7 @@ export function SummaryPrint({
       )}
 
       {model.tagged.length > 0 && (
-        <Section title="للنقاش في الجلسة">
+        <Section title={t({ ar: 'للنقاش في الجلسة', en: 'To discuss at the session' })}>
           <ul className="m-0 flex list-none flex-col gap-3 p-0">
             {model.tagged.map((item) =>
               'practiceId' in item ? <PracticeBlock key={item.id} p={item} /> : <CheckinLine key={item.id} c={item} />,
@@ -228,8 +238,8 @@ export function SummaryPrint({
         </Section>
       )}
       <footer className="mt-2 flex flex-col gap-0.5 border-t border-line pt-2 text-xs leading-6 text-muted">
-        <span>هذا الملخّص من تسجيلاتي الشخصية وليس تشخيصًا.</span>
-        {generatedOn && <span>{`أُنشئ في ${formatArabicFullDate(generatedOn)}`}</span>}
+        <span>{t({ ar: 'هذا الملخّص من تسجيلاتي الشخصية وليس تشخيصًا.', en: 'This summary comes from my personal records and is not a diagnosis.' })}</span>
+        {generatedOn && <span>{t({ ar: 'أُنشئ في {date}', en: 'Created on {date}' }, { date: formatFullDate(generatedOn) })}</span>}
       </footer>
     </article>
   );

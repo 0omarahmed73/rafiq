@@ -1,8 +1,17 @@
 import type { DayKey } from '../../lib/dates';
-import { toArabicDigits } from '../../lib/digits';
 import { shadeFor, type Shade } from '../../lib/shade';
+import { digits, t, type Bi } from '../../i18n';
 
-const WEEKDAYS = ['س', 'ح', 'ن', 'ث', 'ر', 'خ', 'ج'];
+/** Saturday first, as the Arabic week runs. */
+const WEEKDAYS: Bi[] = [
+  { ar: 'س', en: 'Sa' },
+  { ar: 'ح', en: 'Su' },
+  { ar: 'ن', en: 'Mo' },
+  { ar: 'ث', en: 'Tu' },
+  { ar: 'ر', en: 'We' },
+  { ar: 'خ', en: 'Th' },
+  { ar: 'ج', en: 'Fr' },
+];
 
 const SHADE_CLASS: Record<Shade, string> = {
   light: 'bg-shade-light text-ink',
@@ -46,15 +55,15 @@ export function MonthCalendar({
     <div className="grid grid-cols-7 gap-1">
       {WEEKDAYS.map((w, i) => (
         <div
-          key={w}
+          key={w.ar}
           aria-hidden="true"
           style={{ gridColumn: i + 1, gridRow: 1 }}
           className="pb-0.5 text-center text-xs font-semibold text-muted"
         >
-          {w}
+          {t(w)}
         </div>
       ))}
-      <ul aria-label="أيام التسجيل" className="contents m-0 list-none p-0">
+      <ul aria-label={t({ ar: 'أيام التسجيل', en: 'Days logged' })} className="contents m-0 list-none p-0">
         {logged.map(({ day, key, max }) => {
           const slot = offset + day - 1;
           const isSelected = key === selected;
@@ -72,7 +81,7 @@ export function MonthCalendar({
                   SHADE_CLASS[shadeFor(max)]
                 } ${key === today ? 'font-bold' : 'font-medium'} ${isSelected ? 'ring-2 ring-ink' : ''}`}
               >
-                {toArabicDigits(day)}
+                {digits(day)}
               </button>
             </li>
           );

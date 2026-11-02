@@ -1,16 +1,16 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useRepo } from '../../db/RepoContext';
 import type { Note } from '../../db/schema';
-import { dayKey, formatArabicDate, formatArabicTime } from '../../lib/dates';
-import { toArabicDigits } from '../../lib/digits';
+import { dayKey, formatDayLabel, formatTime } from '../../lib/dates';
+import { t } from '../../i18n';
 
-/** Arabic count phrase for a number of notes (1: ملاحظة واحدة, 2: ملاحظتين, 3 to 10: ملاحظات, 11+: ملاحظة). */
+/** The count of notes, in the active language (1: ملاحظة واحدة, 2: ملاحظتين, 3 to 10: ملاحظات, 11+: ملاحظة). */
 function notesPhrase(n: number): string {
-  if (n === 1) return 'ملاحظة واحدة';
-  if (n === 2) return 'ملاحظتين';
-  if (n <= 10) return `${toArabicDigits(n)} ملاحظات`;
-  return `${toArabicDigits(n)} ملاحظة`;
+  if (n === 1) return t({ ar: 'ملاحظة واحدة', en: '1 note' });
+  if (n === 2) return t({ ar: 'ملاحظتين', en: '2 notes' });
+  if (n <= 10) return t({ ar: '{count} ملاحظات', en: '{count} notes' }, { count: n });
+  return t({ ar: '{count} ملاحظة', en: '{count} notes' }, { count: n });
 }
 
 const card = 'flex flex-col gap-3 rounded-2xl border border-line bg-card p-4';
@@ -20,7 +20,10 @@ const small = 'min-h-11 rounded-full px-4 text-sm font-semibold text-teal-ink';
 const field = 'min-h-24 w-full resize-y rounded-2xl border border-line bg-card p-3.5 text-base leading-8 text-ink';
 
 function stamp(n: Note): string {
-  return `${formatArabicDate(dayKey(new Date(n.createdAt)))} · ${formatArabicTime(n.createdAt)}`;
+  return t(
+    { ar: '{date} · {time}', en: '{date} · {time}' },
+    { date: formatDayLabel(dayKey(new Date(n.createdAt))), time: formatTime(n.createdAt) },
+  );
 }
 
 /** «ملاحظاتي»: notes written through the week. «تجديد» moves them to an archive; nothing is deleted by it. */
@@ -33,6 +36,7 @@ export function NotesPage() {
   const [renewing, setRenewing] = useState(false);
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [message, setMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+  const newNote = useRef<HTMLTextAreaElement>(null);
 
   const reload = useCallback(async () => setNotes(await repo.listNotes()), [repo]);
   useEffect(() => {
@@ -45,7 +49,7 @@ export function NotesPage() {
       await action();
       await reload();
     } catch {
-      setMessage({ kind: 'error', text: 'تعذّر الحفظ، يمكنني المحاولة مرة أخرى.' });
+      setMessage({ kind: 'error', text: t({ ar: 'تعذّر الحفظ، يمكنني المحاولة مرة أخرى.', en: 'Could not save. I can try again.' }) });
     }
   }
 
@@ -55,6 +59,7 @@ export function NotesPage() {
       if (!text) return;
       await repo.saveNote({ id: crypto.randomUUID(), text, createdAt: new Date().toISOString() });
       setDraft('');
+      newNote.current?.focus();
     });
 
   const saveEdit = () =>
@@ -77,7 +82,7 @@ export function NotesPage() {
     guarded(async () => {
       const count = await repo.archiveNotes();
       setRenewing(false);
-      setMessage({ kind: 'ok', text: `نقلتُ ${notesPhrase(count)} إلى الأرشيف.` });
+      setMessage({ kind: 'ok', text: t({ ar: 'نقلتُ {notes} إلى الأرشيف.', en: 'I moved {notes} to the archive.' }, { notes: notesPhrase(count) }) });
     });
 
   if (!notes) return null;
@@ -94,17 +99,17 @@ export function NotesPage() {
         {isEditing ? (
           <>
             <textarea
-              aria-label="تعديل الملاحظة"
+              aria-label={t({ ar: 'تعديل الملاحظة', en: 'Edit the note' })}
               value={editing.text}
               onChange={(e) => setEditing({ id: n.id, text: e.target.value })}
               className={field}
             />
             <div className="flex gap-2">
               <button type="button" onClick={() => void saveEdit()} disabled={!editing.text.trim()} className={`${secondary} flex-1`}>
-                حفظ التعديل
+                {t({ ar: 'حفظ التعديل', en: 'Save edit' })}
               </button>
               <button type="button" onClick={() => setEditing(null)} className={small}>
-                إلغاء التعديل
+                {t({ ar: 'إلغاء التعديل', en: 'Cancel edit' })}
               </button>
             </div>
           </>
@@ -113,13 +118,13 @@ export function NotesPage() {
         )}
         {deleting === n.id ? (
           <div className="flex flex-col gap-2 rounded-xl bg-teal-soft p-3">
-            <span className="text-sm font-semibold">أحذف هذه الملاحظة؟ لا يمكن التراجع عن ذلك.</span>
+            <span className="text-sm font-semibold">{t({ ar: 'أحذف هذه الملاحظة؟ لا يمكن التراجع عن ذلك.', en: 'Delete this note? This cannot be undone.' })}</span>
             <div className="flex gap-2">
               <button type="button" onClick={() => void remove(n.id)} className={`${secondary} flex-1`}>
-                نعم، أحذف
+                {t({ ar: 'نعم، أحذف', en: 'Yes, delete' })}
               </button>
               <button type="button" onClick={() => setDeleting(null)} className={small}>
-                إلغاء الحذف
+                {t({ ar: 'إلغاء الحذف', en: 'Cancel deletion' })}
               </button>
             </div>
           </div>
@@ -127,12 +132,12 @@ export function NotesPage() {
           !isEditing && (
             <div className="flex gap-1">
               {!n.archivedAt && (
-                <button type="button" aria-label="تعديل الملاحظة" onClick={() => setEditing({ id: n.id, text: n.text })} className={small}>
-                  تعديل
+                <button type="button" aria-label={t({ ar: 'تعديل الملاحظة', en: 'Edit the note' })} onClick={() => setEditing({ id: n.id, text: n.text })} className={small}>
+                  {t({ ar: 'تعديل', en: 'Edit' })}
                 </button>
               )}
-              <button type="button" aria-label="حذف الملاحظة" onClick={() => setDeleting(n.id)} className={small}>
-                حذف
+              <button type="button" aria-label={t({ ar: 'حذف الملاحظة', en: 'Delete the note' })} onClick={() => setDeleting(n.id)} className={small}>
+                {t({ ar: 'حذف', en: 'Delete' })}
               </button>
             </div>
           )
@@ -144,20 +149,20 @@ export function NotesPage() {
   return (
     <div className="flex min-w-0 flex-col gap-4">
       <Link to="/therapist" className="flex min-h-11 items-center text-[15px] font-semibold text-teal">
-        ‹ جلسات المعالج
+        {t({ ar: '‹ جلسات المعالج', en: '‹ My therapist sessions' })}
       </Link>
       <div>
-        <h1 className="mb-1 text-2xl font-bold leading-snug">ملاحظاتي</h1>
-        <p className="m-0 text-sm leading-7 text-muted">أكتب ما أريد تذكّره طوال الأسبوع. تبقى على جهازي، وأضيفها إلى الملخّص إن شئت.</p>
+        <h1 className="mb-1 text-2xl font-bold leading-snug">{t({ ar: 'ملاحظاتي', en: 'My notes' })}</h1>
+        <p className="m-0 text-sm leading-7 text-muted">{t({ ar: 'أكتب ما أريد تذكّره طوال الأسبوع. تبقى على جهازي، وأضيفها إلى الملخّص إن شئت.', en: 'I write what I want to remember through the week. It stays on my device, and I can add it to the summary if I want.' })}</p>
       </div>
 
       <section className={card}>
         <label htmlFor="new-note" className="text-[13px] font-semibold text-muted">
-          ملاحظة جديدة
+          {t({ ar: 'ملاحظة جديدة', en: 'New note' })}
         </label>
-        <textarea id="new-note" value={draft} onChange={(e) => setDraft(e.target.value)} className={field} />
+        <textarea id="new-note" ref={newNote} value={draft} onChange={(e) => setDraft(e.target.value)} className={field} />
         <button type="button" onClick={() => void add()} disabled={!draft.trim()} className={primary}>
-          إضافة ملاحظة
+          {t({ ar: 'إضافة ملاحظة', en: 'Add note' })}
         </button>
       </section>
 
@@ -169,38 +174,38 @@ export function NotesPage() {
 
       <section className={card}>
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-base font-bold">ملاحظات هذا الأسبوع</h2>
+          <h2 className="text-base font-bold">{t({ ar: 'ملاحظات هذا الأسبوع', en: 'Notes this week' })}</h2>
           <button type="button" onClick={() => setRenewing(true)} disabled={current.length === 0} className={secondary}>
-            تجديد
+            {t({ ar: 'تجديد', en: 'Renew' })}
           </button>
         </div>
         {renewing && (
           <div className="flex flex-col gap-2 rounded-xl bg-teal-soft p-3">
-            <span className="text-sm leading-7">أنقل ملاحظات هذا الأسبوع إلى الأرشيف؟ لن يُحذف شيء، وتبدأ القائمة فارغة.</span>
+            <span className="text-sm leading-7">{t({ ar: 'أنقل ملاحظات هذا الأسبوع إلى الأرشيف؟ لن يُحذف شيء، وتبدأ القائمة فارغة.', en: 'Move this week\'s notes to the archive? Nothing is deleted, and the list starts empty.' })}</span>
             <div className="flex gap-2">
               <button type="button" onClick={() => void renew()} className={`${primary} flex-1`}>
-                نعم، أجدّد
+                {t({ ar: 'نعم، أجدّد', en: 'Yes, renew' })}
               </button>
               <button type="button" onClick={() => setRenewing(false)} className={small}>
-                إلغاء التجديد
+                {t({ ar: 'إلغاء التجديد', en: 'Cancel renewal' })}
               </button>
             </div>
           </div>
         )}
         {current.length === 0 ? (
-          <p className="m-0 text-[15px] leading-8 text-muted">لا توجد ملاحظات هذا الأسبوع بعد.</p>
+          <p className="m-0 text-[15px] leading-8 text-muted">{t({ ar: 'لا توجد ملاحظات هذا الأسبوع بعد.', en: 'There are no notes this week yet.' })}</p>
         ) : (
-          <ul aria-label="ملاحظات هذا الأسبوع" className="m-0 flex list-none flex-col gap-3 p-0">
+          <ul aria-label={t({ ar: 'ملاحظات هذا الأسبوع', en: 'Notes this week' })} className="m-0 flex list-none flex-col gap-3 p-0">
             {current.map(item)}
           </ul>
         )}
       </section>
 
       <section className="flex flex-col gap-3">
-        <h2 className="text-base font-bold">الأرشيف</h2>
+        <h2 className="text-base font-bold">{t({ ar: 'الأرشيف', en: 'Archive' })}</h2>
         {archives.length === 0 ? (
           <p className="m-0 rounded-2xl border border-dashed border-line bg-card p-5 text-[15px] leading-8 text-muted">
-            لم أنقل ملاحظات إلى الأرشيف بعد.
+            {t({ ar: 'لم أنقل ملاحظات إلى الأرشيف بعد.', en: 'I have not moved any notes to the archive yet.' })}
           </p>
         ) : (
           archives.map(([archivedAt, rows]) => {
@@ -224,7 +229,10 @@ export function NotesPage() {
                 >
                   <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                     <span className="text-[15px] font-bold text-ink">
-                      {`أُرشفت في ${formatArabicDate(dayKey(new Date(archivedAt)))} · ${notesPhrase(rows.length)}`}
+                      {t(
+                        { ar: 'أُرشفت في {date} · {notes}', en: 'Archived on {date} · {notes}' },
+                        { date: formatDayLabel(dayKey(new Date(archivedAt))), notes: notesPhrase(rows.length) },
+                      )}
                     </span>
                     {!isOpen && <span className="truncate text-[13px] text-muted">{rows[0].text}</span>}
                   </span>

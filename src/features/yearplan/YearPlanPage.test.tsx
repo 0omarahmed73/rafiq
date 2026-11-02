@@ -18,7 +18,7 @@ function setup(repo: Repo = createMemoryRepo()) {
   return { repo, user: userEvent.setup() };
 }
 
-const first = YEAR_MONTHS[0].weeks[0].tasks[0];
+const first = YEAR_MONTHS[0].weeks[0].tasks[0].ar;
 
 describe('YearPlanPage settings', () => {
   it('is titled with the saved age', async () => {

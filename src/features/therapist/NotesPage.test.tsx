@@ -39,6 +39,14 @@ describe('NotesPage', () => {
     expect((await repo.listNotes()).map((n) => [n.text, n.archivedAt])).toEqual([['نمتُ متأخرًا وشعرتُ بالقلق', undefined]]);
   });
 
+  it('keeps the note box focused after adding, so the next note can be typed straight away', async () => {
+    const { user } = setup();
+    await user.type(await screen.findByLabelText('ملاحظة جديدة'), 'ملاحظة أولى');
+    await user.click(screen.getByRole('button', { name: 'إضافة ملاحظة' }));
+    await screen.findByText('ملاحظة أولى');
+    expect(screen.getByLabelText('ملاحظة جديدة')).toHaveFocus();
+  });
+
   it('does not add a note made only of spaces', async () => {
     const { repo, user } = setup();
     await user.type(await screen.findByLabelText('ملاحظة جديدة'), '   ');

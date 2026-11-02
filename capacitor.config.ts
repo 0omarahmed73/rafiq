@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'dev.omarasaeed.rafiq',
-  appName: 'رفيق',
+  appName: 'Rafiq',
   webDir: 'dist',
   server: {
     androidScheme: 'https',

@@ -24,7 +24,7 @@ describe('JourneyPage', () => {
     expect(links).toHaveLength(10);
     steps.forEach((s, i) => {
       expect(links[i]).toHaveAttribute('href', `/step/${s.id}`);
-      expect(links[i]).toHaveTextContent(s.title);
+      expect(links[i]).toHaveTextContent(s.title.ar);
     });
   });
 

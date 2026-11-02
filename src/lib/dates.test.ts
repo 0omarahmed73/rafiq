@@ -1,30 +1,32 @@
+import { afterEach, beforeEach } from 'vitest';
+import { setActiveLanguage } from '../i18n';
 import {
   addDays,
   dayKey,
-  formatArabicDate,
-  formatArabicFullDate,
-  formatArabicMonthYear,
-  formatArabicTime,
+  formatDayLabel,
+  formatFullDate,
+  formatMonthYear,
+  formatTime,
   weekStartSaturday,
 } from './dates';
 
-describe('formatArabicFullDate', () => {
+describe('formatFullDate', () => {
   it('writes day, month name and year without hyphens, so right-to-left text cannot scramble it', () => {
-    expect(formatArabicFullDate('2026-10-31')).toBe('٣١ أكتوبر ٢٠٢٦');
-    expect(formatArabicFullDate('2026-01-01')).toBe('١ يناير ٢٠٢٦');
+    expect(formatFullDate('2026-10-31')).toBe('٣١ أكتوبر ٢٠٢٦');
+    expect(formatFullDate('2026-01-01')).toBe('١ يناير ٢٠٢٦');
   });
 });
 
-describe('formatArabicTime', () => {
+describe('formatTime', () => {
   it('writes local hours and minutes with two digits in Arabic-Indic digits', () => {
-    expect(formatArabicTime(new Date(2026, 9, 3, 9, 5).toISOString())).toBe('٠٩:٠٥');
-    expect(formatArabicTime(new Date(2026, 9, 3, 21, 30).toISOString())).toBe('٢١:٣٠');
+    expect(formatTime(new Date(2026, 9, 3, 9, 5).toISOString())).toBe('٠٩:٠٥');
+    expect(formatTime(new Date(2026, 9, 3, 21, 30).toISOString())).toBe('٢١:٣٠');
   });
 });
 
-describe('formatArabicMonthYear', () => {
+describe('formatMonthYear', () => {
   it('writes the month name and the year in Arabic-Indic digits', () => {
-    expect(formatArabicMonthYear('2026-10-31')).toBe('أكتوبر ٢٠٢٦');
+    expect(formatMonthYear('2026-10-31')).toBe('أكتوبر ٢٠٢٦');
   });
 });
 
@@ -64,8 +66,31 @@ describe('weekStartSaturday', () => {
   });
 });
 
-describe('formatArabicDate', () => {
+describe('formatDayLabel', () => {
   it('writes weekday, Arabic-Indic day and month name', () => {
-    expect(formatArabicDate('2026-10-31')).toBe('السبت ٣١ أكتوبر');
+    expect(formatDayLabel('2026-10-31')).toBe('السبت ٣١ أكتوبر');
+  });
+});
+
+describe('dates in English', () => {
+  beforeEach(() => setActiveLanguage('en'));
+  afterEach(() => setActiveLanguage('ar'));
+
+  it('writes the day, month and year in English words', () => {
+    expect(formatFullDate('2026-10-31')).toBe('31 October 2026');
+    expect(formatFullDate('2026-01-01')).toBe('1 January 2026');
+  });
+
+  it('writes the weekday with the day and month', () => {
+    expect(formatDayLabel('2026-10-31')).toBe('Saturday, 31 October');
+  });
+
+  it('writes the month and year', () => {
+    expect(formatMonthYear('2026-10-31')).toBe('October 2026');
+  });
+
+  it('writes the time with plain digits', () => {
+    expect(formatTime(new Date(2026, 9, 3, 9, 5).toISOString())).toBe('09:05');
+    expect(formatTime(new Date(2026, 9, 3, 21, 30).toISOString())).toBe('21:30');
   });
 });

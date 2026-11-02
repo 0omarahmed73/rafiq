@@ -1,4 +1,6 @@
 import type { ReactNode } from 'react';
+import { type Bi } from '../../i18n';
+import { useI18n } from '../../i18n/LanguageProvider';
 
 const icon = {
   width: 18,
@@ -12,9 +14,9 @@ const icon = {
   'aria-hidden': true,
 };
 
-const ROWS: { label: string; address: string; href: string; glyph: ReactNode }[] = [
+const ROWS: { label: Bi; address: string; href: string; glyph: ReactNode }[] = [
   {
-    label: 'جيت هب',
+    label: { ar: 'جيت هب', en: 'GitHub' },
     address: 'github.com/0omarahmed73',
     href: 'https://github.com/0omarahmed73',
     glyph: (
@@ -27,7 +29,7 @@ const ROWS: { label: string; address: string; href: string; glyph: ReactNode }[]
     ),
   },
   {
-    label: 'لينكد إن',
+    label: { ar: 'لينكد إن', en: 'LinkedIn' },
     address: 'linkedin.com/in/0omarahmed73',
     href: 'https://linkedin.com/in/0omarahmed73',
     glyph: (
@@ -38,7 +40,7 @@ const ROWS: { label: string; address: string; href: string; glyph: ReactNode }[]
     ),
   },
   {
-    label: 'الموقع الشخصي',
+    label: { ar: 'الموقع الشخصي', en: 'Personal website' },
     address: 'omarasaeed.dev',
     href: 'https://omarasaeed.dev',
     glyph: (
@@ -52,10 +54,11 @@ const ROWS: { label: string; address: string; href: string; glyph: ReactNode }[]
 
 /** Static attribution with safe outbound links; nothing here is stored or exported. */
 export function DeveloperInfo({ className }: { className: string }) {
+  const { t } = useI18n();
   return (
     <section className={className} aria-labelledby="developer-title">
       <h2 id="developer-title" className="text-base font-bold">
-        عن المطوّر
+        {t({ ar: 'عن المطوّر', en: 'About the developer' })}
       </h2>
       <div className="flex items-center gap-3.5">
         <div
@@ -73,7 +76,7 @@ export function DeveloperInfo({ className }: { className: string }) {
           </p>
         </div>
       </div>
-      <ul aria-label="عناوين المطوّر" className="m-0 flex list-none flex-col p-0">
+      <ul aria-label={t({ ar: 'عناوين المطوّر', en: 'Developer links' })} className="m-0 flex list-none flex-col p-0">
         {ROWS.map((row) => (
           <li key={row.address} className="flex min-h-12 items-center gap-3 border-t border-line py-2">
             <span
@@ -83,7 +86,7 @@ export function DeveloperInfo({ className }: { className: string }) {
               {row.glyph}
             </span>
             <span className="flex min-w-0 flex-col">
-              <span className="text-xs font-semibold text-muted">{row.label}</span>
+              <span className="text-xs font-semibold text-muted">{t(row.label)}</span>
               <a
                 href={row.href}
                 target="_blank"

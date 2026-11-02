@@ -1,9 +1,11 @@
 import { expect, test } from '@playwright/test';
+import { chooseArabicIfAsked } from './helpers';
 
 test.use({ viewport: { width: 375, height: 700 } });
 
 test('a new page opens at its top, and going back returns to where the reader was', async ({ page }) => {
   await page.goto('/');
+  await chooseArabicIfAsked(page);
   await page.getByRole('button', { name: 'أفهم، لنبدأ' }).click();
   await expect(page.getByRole('heading', { name: 'كيف حالك اليوم؟' })).toBeVisible();
   await page.locator('#splash').waitFor({ state: 'detached' });

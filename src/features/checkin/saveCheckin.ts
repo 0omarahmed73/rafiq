@@ -1,3 +1,4 @@
+import { t } from '../../i18n';
 import { dayKey } from '../../lib/dates';
 import type { Repo } from '../../db/repo';
 import type { Checkin } from '../../db/schema';
@@ -24,9 +25,13 @@ export async function saveCheckin(
   input: CheckinInput,
   now: Date = new Date(),
 ): Promise<Checkin> {
-  if (input.emotions.length === 0) throw new ValidationError('أختار شعورًا واحدًا على الأقل');
+  if (input.emotions.length === 0) {
+    throw new ValidationError(t({ ar: 'أختار شعورًا واحدًا على الأقل', en: 'I choose at least one feeling' }));
+  }
   if (!Number.isInteger(input.intensity) || input.intensity < 0 || input.intensity > 10) {
-    throw new ValidationError('الشدّة رقم صحيح من صفر إلى عشرة');
+    throw new ValidationError(
+      t({ ar: 'الشدّة رقم صحيح من صفر إلى عشرة', en: 'Intensity is a whole number from zero to ten' }),
+    );
   }
   const note = input.note?.trim();
   return repo.addCheckin({

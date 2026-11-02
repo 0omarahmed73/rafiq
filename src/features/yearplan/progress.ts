@@ -1,18 +1,19 @@
 import { YEAR_GOALS, YEAR_MONTHS } from '../../content/yearPlan';
+import { t } from '../../i18n';
 import type { YearPlanEntry } from '../../db/schema';
-import { formatArabicMonthYear } from '../../lib/dates';
-import { ordinalAr } from '../../lib/ordinal';
+import { formatMonthYear } from '../../lib/dates';
+import { ordinal } from '../../lib/ordinal';
 
 export const DEFAULT_AGE = 25;
 export const DEFAULT_START = '2026-10';
 
-export const planTitle = (age: number) => `عامي ${ordinalAr(age)}`;
+export const planTitle = (age: number) => t({ ar: 'عامي {ordinal}', en: 'My {ordinal} year' }, { ordinal: ordinal(age) });
 
 /** Label of the plan's `index`-th month (0–11) when it starts at `start` (`YYYY-MM`). */
 export function monthLabel(start: string, index: number): string {
   const [y, m] = start.split('-').map(Number);
   const d = new Date(y, m - 1 + index, 1);
-  return formatArabicMonthYear(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`);
+  return formatMonthYear(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`);
 }
 
 export type PlanMap = Map<string, boolean | string>;

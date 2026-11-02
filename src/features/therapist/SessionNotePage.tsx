@@ -5,11 +5,13 @@ import { useRepo } from '../../db/RepoContext';
 import type { Homework } from '../../db/schema';
 import { dayKey } from '../../lib/dates';
 import { homeworkStatus, photosLabel } from './homeworkLabels';
+import { useI18n } from '../../i18n/LanguageProvider';
 
 const label = 'text-[13px] font-semibold text-muted';
 const area = 'w-full min-w-0 break-words rounded-2xl border border-line bg-card p-3 text-base leading-8 text-ink';
 
 export function SessionNotePage() {
+  const { t } = useI18n();
   const repo = useRepo();
   const navigate = useNavigate();
   const { id } = useParams();
@@ -66,7 +68,7 @@ export function SessionNotePage() {
       await saveSession();
       navigate('/therapist');
     } catch {
-      setError('تعذّر حفظ الملاحظات، يمكنني المحاولة مرة أخرى.');
+      setError(t({ ar: 'تعذّر حفظ الملاحظات، يمكنني المحاولة مرة أخرى.', en: 'Could not save the notes. I can try again.' }));
     }
   }
 
@@ -76,7 +78,7 @@ export function SessionNotePage() {
       await saveSession();
       navigate(`/therapist/homework/new?session=${sessionId}`);
     } catch {
-      setError('تعذّر حفظ الملاحظات، يمكنني المحاولة مرة أخرى.');
+      setError(t({ ar: 'تعذّر حفظ الملاحظات، يمكنني المحاولة مرة أخرى.', en: 'Could not save the notes. I can try again.' }));
     }
   }
 
@@ -85,13 +87,13 @@ export function SessionNotePage() {
   return (
     <div className="flex min-w-0 flex-col gap-4">
       <Link to="/therapist" className="flex min-h-11 items-center text-[15px] font-semibold text-teal">
-        ‹ جلسات المعالج
+        {t({ ar: '‹ جلسات المعالج', en: '‹ My therapist sessions' })}
       </Link>
-      <h1 className="text-2xl font-bold leading-snug">ملاحظات الجلسة</h1>
+      <h1 className="text-2xl font-bold leading-snug">{t({ ar: 'ملاحظات الجلسة', en: 'Session notes' })}</h1>
 
       <div className="flex flex-col gap-1.5">
         <label htmlFor="session-date" className={label}>
-          تاريخ الجلسة
+          {t({ ar: 'تاريخ الجلسة', en: 'Session date' })}
         </label>
         <input
           id="session-date"
@@ -104,14 +106,14 @@ export function SessionNotePage() {
 
       <div className="flex flex-col gap-1.5">
         <label htmlFor="session-said" className={label}>
-          أهم ما قاله المعالج
+          {t({ ar: 'أهم ما قاله المعالج', en: 'The main thing my therapist said' })}
         </label>
         <textarea id="session-said" rows={4} value={said} onChange={(e) => setSaid(e.target.value)} className={area} />
       </div>
 
       <div className="flex flex-col gap-1.5">
         <label htmlFor="session-takeaway" className={label}>
-          ما الذي سآخذه معي؟
+          {t({ ar: 'ما الذي سآخذه معي؟', en: 'What will I take with me?' })}
         </label>
         <textarea
           id="session-takeaway"
@@ -124,14 +126,14 @@ export function SessionNotePage() {
 
       <section aria-labelledby="session-homework" className="flex min-w-0 flex-col gap-2">
         <h2 id="session-homework" className={label}>
-          الواجب
+          {t({ ar: 'الواجب', en: 'Homework' })}
         </h2>
         {homework.length === 0 ? (
           <p className="m-0 rounded-2xl border border-dashed border-line bg-card p-4 text-[15px] leading-8 text-muted">
-            لم أضف واجبًا بعد.
+            {t({ ar: 'لم أضف واجبًا بعد.', en: 'I have not added any homework yet.' })}
           </p>
         ) : (
-          <ul aria-label="الواجب" className="m-0 flex list-none flex-col gap-2 p-0">
+          <ul aria-label={t({ ar: 'الواجب', en: 'Homework' })} className="m-0 flex list-none flex-col gap-2 p-0">
             {homework.map((h) => (
               <li key={h.id} className="min-w-0">
                 <Link
@@ -153,7 +155,7 @@ export function SessionNotePage() {
           onClick={() => void addHomework()}
           className="min-h-12 rounded-full border-[1.5px] border-teal bg-card px-6 text-[15px] font-bold text-teal-ink"
         >
-          أضيف واجبًا
+          {t({ ar: 'أضيف واجبًا', en: 'Add homework' })}
         </button>
       </section>
 
@@ -164,9 +166,9 @@ export function SessionNotePage() {
       )}
 
       <button type="button" onClick={() => void save()} className="min-h-12 rounded-full bg-teal px-6 text-base font-bold text-card">
-        حفظ الملاحظات
+        {t({ ar: 'حفظ الملاحظات', en: 'Save the notes' })}
       </button>
-      <p className="text-center text-xs text-muted">ملاحظاتي خاصة ولا تدخل في الملخّص.</p>
+      <p className="text-center text-xs text-muted">{t({ ar: 'ملاحظاتي خاصة ولا تدخل في الملخّص.', en: 'My notes are private and do not go into the summary.' })}</p>
     </div>
   );
 }

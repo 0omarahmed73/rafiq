@@ -1,4 +1,5 @@
 import { useId } from 'react';
+import { useI18n } from '../../../i18n/LanguageProvider';
 import type { PromptProps } from './types';
 
 interface ChoiceValue {
@@ -7,6 +8,7 @@ interface ChoiceValue {
 }
 
 export function ChoicePrompt({ prompt, value, onChange }: PromptProps) {
+  const { t } = useI18n();
   const base = useId();
   const current = (value ?? {}) as ChoiceValue;
 
@@ -15,7 +17,7 @@ export function ChoicePrompt({ prompt, value, onChange }: PromptProps) {
       {prompt.textLabel && (
         <div className="flex flex-col gap-1.5">
           <label htmlFor={`${base}-text`} className="text-[13px] font-semibold text-muted">
-            {prompt.textLabel}
+            {t(prompt.textLabel!)}
           </label>
           <input
             id={`${base}-text`}
@@ -27,7 +29,7 @@ export function ChoicePrompt({ prompt, value, onChange }: PromptProps) {
         </div>
       )}
       <fieldset className="m-0 flex flex-col gap-2.5 border-0 p-0">
-        <legend className="sr-only">{prompt.label}</legend>
+        <legend className="sr-only">{t(prompt.label)}</legend>
         {prompt.options?.map((o) => (
           <label
             key={o.value}
@@ -46,11 +48,11 @@ export function ChoicePrompt({ prompt, value, onChange }: PromptProps) {
             />
             <span>
               <span id={`${base}-${o.value}-t`} className="block text-base font-bold">
-                {o.label}
+                {t(o.label)}
               </span>
               {o.description && (
                 <span id={`${base}-${o.value}-d`} className="block text-sm leading-6 text-muted">
-                  {o.description}
+                  {t(o.description!)}
                 </span>
               )}
             </span>

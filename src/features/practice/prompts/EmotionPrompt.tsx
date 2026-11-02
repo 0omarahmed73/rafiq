@@ -1,6 +1,7 @@
 import { Chip } from '../../../components/Chip';
 import { IntensitySlider } from '../../../components/IntensitySlider';
 import { emotionGroups, emotionLabel } from '../../../content';
+import { useI18n } from '../../../i18n/LanguageProvider';
 import type { PromptProps } from './types';
 
 interface EmotionEntry {
@@ -9,6 +10,7 @@ interface EmotionEntry {
 }
 
 export function EmotionPrompt({ prompt, value, onChange }: PromptProps) {
+  const { t } = useI18n();
   const entries = Array.isArray(value) ? (value as EmotionEntry[]) : [];
 
   function toggle(id: string) {
@@ -25,12 +27,12 @@ export function EmotionPrompt({ prompt, value, onChange }: PromptProps) {
     <div className="flex flex-col gap-4">
       {emotionGroups.map((g) => (
         <fieldset key={g.id} className="m-0 flex flex-col gap-2 border-0 p-0">
-          <legend className="mb-2 text-[13px] font-semibold text-muted">{g.label}</legend>
+          <legend className="mb-2 text-[13px] font-semibold text-muted">{t(g.label)}</legend>
           <div className="flex flex-wrap gap-2">
             {g.words.map((w) => (
               <Chip
                 key={w.id}
-                label={w.label}
+                label={t(w.label)}
                 selected={entries.some((e) => e.id === w.id)}
                 onToggle={() => toggle(w.id)}
               />
@@ -41,7 +43,7 @@ export function EmotionPrompt({ prompt, value, onChange }: PromptProps) {
       {entries.map((e) => (
         <section key={e.id} className="rounded-2xl border border-line bg-card p-4">
           <IntensitySlider
-            label={`شدّة ${emotionLabel(e.id)}`}
+            label={t({ ar: 'شدّة {emotion}', en: 'Strength of {emotion}' }, { emotion: emotionLabel(e.id) })}
             value={e.intensity}
             onChange={(intensity) =>
               onChange(entries.map((x) => (x.id === e.id ? { ...x, intensity } : x)))

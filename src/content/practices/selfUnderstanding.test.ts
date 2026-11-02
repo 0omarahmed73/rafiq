@@ -9,7 +9,7 @@ describe('owner-supplied Step 4 self understanding', () => {
     const def = practiceById('self-understanding');
     expect(def).toBeDefined();
     expect(def!.stepId).toBe(4);
-    expect(def!.prompts.map(p => [p.id, p.kind, p.label])).toEqual([
+    expect(def!.prompts.map(p => [p.id, p.kind, p.label.ar])).toEqual([
       ['s1', 'text', 'ما المشكلة في جملة واحدة؟'],
       ['s2', 'text', 'ماذا يقول لي صوت الخزي عني بسبب هذه المشكلة؟'],
       ['s3', 'text', 'ما الذي يحاول هذا النمط أن يحميني منه؟'],
@@ -17,17 +17,17 @@ describe('owner-supplied Step 4 self understanding', () => {
       ['s5', 'text', 'ماذا كان سيقول صديق منصف، لا يحكم عليّ، عن قصتي؟'],
     ]);
     expect(() => validatePractice(def!)).not.toThrow();
-    expect(steps.find(s => s.id === 4)?.coreQuestion).toBe('ما الذي أحتاج إلى فهمه حقًا عن نفسي في هذه المشكلة؟');
+    expect(steps.find(s => s.id === 4)?.coreQuestion.ar).toBe('ما الذي أحتاج إلى فهمه حقًا عن نفسي في هذه المشكلة؟');
   });
 
   it('has a lesson sentence in correct, plain Arabic', () => {
-    expect(steps.find(s => s.id === 4)?.lesson).toBe(
+    expect(steps.find(s => s.id === 4)?.lesson.ar).toBe(
       'أقرأ قصتي بصدق، وألاحظ النمط الذي أكرره، وأفهم ما كان ينقصني حين حاولتُ التغيير. أبدأ بالتقبّل، وأترك مساحة للتغيير دون جلد للذات.',
     );
   });
 
   it('preserves historical trigger question ids and meanings', () => {
-    expect(practiceById('understand')!.prompts.map(p => [p.id, p.label])).toEqual([
+    expect(practiceById('understand')!.prompts.map(p => [p.id, p.label.ar])).toEqual([
       ['u1', 'ما الموقف بالتحديد؟'], ['u2', 'ما أول فكرة خطرت لي؟'],
       ['u3', 'أين شعرتُ به في جسدي؟'], ['u4', 'ماذا فعلتُ بعد ذلك؟'],
       ['u5', 'ما الحاجة أو الخوف الذي كان خلف ذلك؟'],

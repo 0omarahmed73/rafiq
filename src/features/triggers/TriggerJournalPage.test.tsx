@@ -9,7 +9,7 @@ import type { Repo } from '../../db/repo';
 async function openJournal(repo: Repo) {
   await repo.saveSettings({ id: 'settings', theme: 'system', disclaimerAcceptedAt: '2026-10-31T00:00:00Z' });
   const router = createMemoryRouter(routes, { initialEntries: ['/triggers'] });
-  const view = render(<App router={router} repo={repo} persistent />);
+  const view = render(<App router={router} repo={repo} persistent language="ar" />);
   return { ...view, user: userEvent.setup() };
 }
 

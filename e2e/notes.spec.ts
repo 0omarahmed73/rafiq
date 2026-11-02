@@ -1,9 +1,11 @@
 import { expect, test } from '@playwright/test';
+import { chooseArabicIfAsked } from './helpers';
 
 test.use({ viewport: { width: 375, height: 812 } });
 
 test('weekly notes: write, renew into the archive, and print them in the therapist summary', async ({ page }) => {
   await page.goto('/');
+  await chooseArabicIfAsked(page);
   await page.getByRole('button', { name: 'أفهم، لنبدأ' }).click();
   await expect(page.getByRole('heading', { name: 'كيف حالك اليوم؟' })).toBeVisible();
 

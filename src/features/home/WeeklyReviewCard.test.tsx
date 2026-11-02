@@ -41,7 +41,7 @@ describe('WeeklyReviewCard', () => {
     expect(await screen.findByText('مراجعة الأسبوع جاهزة')).toBeInTheDocument();
     expect(screen.getByText(/قلق/)).toBeInTheDocument();
     // The week starting 2026-10-24 is 42 weeks after the question epoch (2026-01-03).
-    expect(screen.getByText(weeklyQuestions[42 % weeklyQuestions.length])).toBeInTheDocument();
+    expect(screen.getByText(weeklyQuestions[42 % weeklyQuestions.length].ar)).toBeInTheDocument();
   });
 
   it('saves the answer to the question', async () => {

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { chooseArabicIfAsked } from './helpers';
 
 test.use({ viewport: { width: 375, height: 812 } });
 
@@ -9,6 +10,7 @@ async function noSidewaysScroll(page: Page, where: string) {
 
 test('library: open the tab, read a symptom with its sources, reach help, and never scroll sideways', async ({ page }) => {
   await page.goto('/');
+  await chooseArabicIfAsked(page);
   await page.getByRole('button', { name: 'أفهم، لنبدأ' }).click();
   await expect(page.getByRole('heading', { name: 'كيف حالك اليوم؟' })).toBeVisible();
 
@@ -32,6 +34,7 @@ test('library: open the tab, read a symptom with its sources, reach help, and ne
 
 test('library: the harm symptom shows help before anything else, in light and dark', async ({ page }) => {
   await page.goto('/');
+  await chooseArabicIfAsked(page);
   await page.getByRole('button', { name: 'أفهم، لنبدأ' }).click();
   await expect(page.getByRole('heading', { name: 'كيف حالك اليوم؟' })).toBeVisible();
   for (const scheme of ['light', 'dark'] as const) {

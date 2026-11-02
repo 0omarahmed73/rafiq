@@ -4,7 +4,7 @@ import { contrastRatio, luminance } from './color';
 describe('accent palettes', () => {
   it('offers six accents, teal first, with Arabic labels', () => {
     expect(ACCENT_IDS).toEqual(['teal', 'blue', 'purple', 'rose', 'amber', 'green']);
-    expect(ACCENT_IDS.map((id) => ACCENTS[id].label)).toEqual([
+    expect(ACCENT_IDS.map((id) => ACCENTS[id].label.ar)).toEqual([
       'تركوازي',
       'أزرق',
       'بنفسجي',

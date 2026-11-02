@@ -1,0 +1,6 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <!-- Phones set to Arabic keep the Arabic launcher name. The app itself follows the language chosen inside it. -->
+    <string name="app_name">رفيق</string>
+    <string name="title_activity_main">رفيق</string>
+</resources>

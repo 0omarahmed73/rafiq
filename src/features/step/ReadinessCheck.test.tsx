@@ -13,7 +13,8 @@ function setup(repo: Repo = createMemoryRepo(), stepId = 2) {
       <MemoryRouter><ReadinessCheck stepId={stepId} /></MemoryRouter>
     </RepoProvider>,
   );
-  return { repo, user: userEvent.setup(), questions: readinessQuestions[stepId] };
+  // The statements as they are written in Arabic, the language these tests run in.
+  return { repo, user: userEvent.setup(), questions: readinessQuestions[stepId].map((q) => q.ar) };
 }
 
 async function answer(

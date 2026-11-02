@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { BackLink as SharedBackLink } from '../../components/BackLink';
 import { Collapsible } from '../../components/Collapsible';
 import { sourceById, type ReviewStatus } from '../../content/library';
-import { toArabicDigits } from '../../lib/digits';
+import { t } from '../../i18n';
 
 /** Goes back to where the reader came from; `to` is only the fallback. */
 export const BackLink = ({ to, children }: { to: string; children: ReactNode }) => (
@@ -18,7 +18,7 @@ export function DraftBadge({ status }: { status: ReviewStatus }) {
       <svg aria-hidden="true" viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4" />
       </svg>
-      مسودة للمراجعة
+      {t({ ar: 'مسودة للمراجعة', en: 'Draft for review' })}
     </span>
   );
 }
@@ -27,20 +27,24 @@ export function DraftBadge({ status }: { status: ReviewStatus }) {
 export function Sources({ ids }: { ids: string[] }) {
   const list = ids.map((id) => sourceById(id)).filter((s) => s !== undefined);
   return (
-    <Collapsible title={`المصادر (${toArabicDigits(list.length)})`}>
+    <Collapsible title={t({ ar: 'المصادر ({count})', en: 'Sources ({count})' }, { count: list.length })}>
       <ul className="m-0 flex list-none flex-col gap-4 p-0">
         {list.map((s) => (
           <li key={s.id} className="flex min-w-0 flex-col gap-1">
             <span dir="ltr" lang="en" className="break-words text-start text-[14px] font-semibold leading-6 text-ink">
               {s.title}
             </span>
-            <span className="text-[14px] leading-7 text-muted">{s.about}</span>
+            <span className="text-[14px] leading-7 text-muted">{t(s.about)}</span>
             {s.address && (
               <span dir="ltr" className="select-all break-all text-start text-[13px] leading-6 text-teal-ink">
                 {s.address}
               </span>
             )}
-            {s.limit && <span className="text-[13px] leading-7 text-muted">{`حدّ هذا المصدر: ${s.limit}`}</span>}
+            {s.limit && (
+              <span className="text-[13px] leading-7 text-muted">
+                {t({ ar: 'حدّ هذا المصدر: {limit}', en: 'The limit of this source: {limit}' }, { limit: t(s.limit) })}
+              </span>
+            )}
           </li>
         ))}
       </ul>
@@ -53,13 +57,13 @@ export function Footer() {
   return (
     <footer className="flex flex-col gap-3 border-t border-line pt-4">
       <p className="m-0 text-[14px] leading-7 text-muted">
-        هذا ليس تشخيصًا، وهو لا يغني عن مختص. وإن كنتُ في ضيق شديد أو في خطر فلا أنتظر.
+        {t({ ar: 'هذا ليس تشخيصًا، وهو لا يغني عن مختص. وإن كنتُ في ضيق شديد أو في خطر فلا أنتظر.', en: 'This is not a diagnosis, and it does not replace a professional. If I am in great distress or in danger, I do not wait.' })}
       </p>
       <Link
         to="/calm"
         className="flex min-h-12 items-center justify-center rounded-full bg-teal-soft px-5 text-[15px] font-bold text-teal-ink"
       >
-        أحتاج تهدئة
+        {t({ ar: 'أحتاج تهدئة', en: 'I need calm' })}
       </Link>
     </footer>
   );

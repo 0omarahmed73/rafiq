@@ -1,4 +1,4 @@
-import { toArabicDigits } from '../../lib/digits';
+import { useI18n } from '../../i18n/LanguageProvider';
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const HOURS = Array.from({ length: 24 }, (_, i) => pad(i));
@@ -11,17 +11,18 @@ const select =
  * the numbers are shown in Arabic-Indic digits. The row is left-to-right so the time reads hour then minute.
  */
 export function ReminderTimePicker({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const { t, digits } = useI18n();
   const [hour = '', minute = ''] = /^\d\d:\d\d$/.test(value) ? value.split(':') : [];
 
   return (
-    <div role="group" aria-label="وقت التذكير اليومي" className="flex flex-col gap-1.5">
+    <div role="group" aria-label={t({ ar: 'وقت التذكير اليومي', en: 'Daily reminder time' })} className="flex flex-col gap-1.5">
       <span aria-hidden="true" className="text-[13px] font-semibold text-muted">
-        وقت التذكير اليومي
+        {t({ ar: 'وقت التذكير اليومي', en: 'Daily reminder time' })}
       </span>
       <div dir="ltr" className="flex items-end gap-2">
         <div dir="rtl" className="flex flex-1 flex-col gap-1">
           <label htmlFor="reminder-hour" className="text-xs font-semibold text-muted">
-            الساعة
+            {t({ ar: 'الساعة', en: 'Hour' })}
           </label>
           <select
             id="reminder-hour"
@@ -32,7 +33,7 @@ export function ReminderTimePicker({ value, onChange }: { value: string; onChang
             <option value="">—</option>
             {HOURS.map((h) => (
               <option key={h} value={h}>
-                {toArabicDigits(h)}
+                {digits(h)}
               </option>
             ))}
           </select>
@@ -42,7 +43,7 @@ export function ReminderTimePicker({ value, onChange }: { value: string; onChang
         </span>
         <div dir="rtl" className="flex flex-1 flex-col gap-1">
           <label htmlFor="reminder-minute" className="text-xs font-semibold text-muted">
-            الدقيقة
+            {t({ ar: 'الدقيقة', en: 'Minute' })}
           </label>
           <select
             id="reminder-minute"
@@ -53,7 +54,7 @@ export function ReminderTimePicker({ value, onChange }: { value: string; onChang
             <option value="">—</option>
             {MINUTES.map((m) => (
               <option key={m} value={m}>
-                {toArabicDigits(m)}
+                {digits(m)}
               </option>
             ))}
           </select>

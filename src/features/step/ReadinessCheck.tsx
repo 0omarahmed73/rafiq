@@ -1,18 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
 import { readinessQuestions } from '../../content/readiness';
 import { useRepo } from '../../db/RepoContext';
-import { toArabicDigits } from '../../lib/digits';
+import { type Bi } from '../../i18n';
+import { useI18n } from '../../i18n/LanguageProvider';
 import { readinessMessage } from '../../lib/readiness';
 import { StepCompletion } from './StepCompletion';
 
-const MESSAGE = {
-  ready: 'يبدو أن الوقت مناسب للانتقال إلى الخطوة التالية.',
-  stay: 'من الأفضل البقاء قليلًا في هذه الخطوة.',
-} as const;
+const MESSAGE: Record<'ready' | 'stay', Bi> = {
+  ready: {
+    ar: 'يبدو أن الوقت مناسب للانتقال إلى الخطوة التالية.',
+    en: 'It looks like a good time to move on to the next step.',
+  },
+  stay: { ar: 'من الأفضل البقاء قليلًا في هذه الخطوة.', en: 'It is better to stay a little longer in this step.' },
+};
 
 /** A self-reflection, never a gate: the result is advice and nothing is locked or blocked. */
 export function ReadinessCheck({ stepId }: { stepId: number }) {
   const repo = useRepo();
+  const { t, digits } = useI18n();
   const questions = readinessQuestions[stepId];
   const [answers, setAnswers] = useState<(number | null)[]>([null, null, null]);
   const [saved, setSaved] = useState<number[] | null>(null);
@@ -61,7 +66,7 @@ export function ReadinessCheck({ stepId }: { stepId: number }) {
       setJustCompleted(true);
       setDone(true);
     } catch {
-      setError('أحتاج إلى المحاولة مرة أخرى لحفظ إتمام هذه الخطوة.');
+      setError(t({ ar: 'أحتاج إلى المحاولة مرة أخرى لحفظ إتمام هذه الخطوة.', en: 'I need to try again to save finishing this step.' }));
     } finally {
       busy.current = false;
       setFinishing(false);
@@ -70,14 +75,17 @@ export function ReadinessCheck({ stepId }: { stepId: number }) {
 
   return (
     <section className="flex flex-col gap-4 rounded-2xl border border-line bg-card p-4">
-      <h2 className="text-base font-bold">هل أنا جاهز للخطوة التالية؟</h2>
+      <h2 className="text-base font-bold">{t({ ar: 'هل أنا جاهز للخطوة التالية؟', en: 'Am I ready for the next step?' })}</h2>
       <p className="text-[13px] leading-7 text-muted">
-        هذه مراجعة لنفسي وليست اختبارًا. لا شيء يُغلق مهما كانت النتيجة.
+        {t({
+          ar: 'هذه مراجعة لنفسي وليست اختبارًا. لا شيء يُغلق مهما كانت النتيجة.',
+          en: 'This is a check-in with myself, not a test. Nothing is locked, whatever the result.',
+        })}
       </p>
 
       {questions.map((q, qi) => (
-        <fieldset key={q} className="m-0 flex flex-col gap-2 border-0 p-0">
-          <legend className="mb-1 text-[15px] font-semibold leading-7">{q}</legend>
+        <fieldset key={q.ar} className="m-0 flex flex-col gap-2 border-0 p-0">
+          <legend className="mb-1 text-[15px] font-semibold leading-7">{t(q)}</legend>
           <div className="flex gap-2">
             {[1, 2, 3, 4, 5].map((n) => (
               <label
@@ -91,16 +99,16 @@ export function ReadinessCheck({ stepId }: { stepId: number }) {
                   name={`readiness-${stepId}-${qi}`}
                   checked={answers[qi] === n}
                   onChange={() => setAnswers((a) => a.map((x, i) => (i === qi ? n : x)))}
-                  aria-label={toArabicDigits(n)}
+                  aria-label={digits(n)}
                   className="sr-only"
                 />
-                {toArabicDigits(n)}
+                {digits(n)}
               </label>
             ))}
           </div>
           <div className="flex justify-between text-xs text-muted">
-            <span>لا ينطبق</span>
-            <span>ينطبق تمامًا</span>
+            <span>{t({ ar: 'لا ينطبق', en: 'Does not apply' })}</span>
+            <span>{t({ ar: 'ينطبق تمامًا', en: 'Applies fully' })}</span>
           </div>
         </fieldset>
       ))}
@@ -111,12 +119,12 @@ export function ReadinessCheck({ stepId }: { stepId: number }) {
         disabled={!complete}
         className="min-h-12 rounded-full bg-teal px-6 text-[15px] font-bold text-card disabled:opacity-50"
       >
-        حفظ الإجابات
+        {t({ ar: 'حفظ الإجابات', en: 'Save answers' })}
       </button>
 
       {saved && (
         <p role="status" className="rounded-xl bg-teal-soft p-3 text-[15px] font-semibold leading-7 text-teal-ink">
-          {MESSAGE[readinessMessage(saved)]}
+          {t(MESSAGE[readinessMessage(saved)])}
         </p>
       )}
       {error && <p role="alert" className="text-sm leading-7 text-ink">{error}</p>}
@@ -129,7 +137,7 @@ export function ReadinessCheck({ stepId }: { stepId: number }) {
           disabled={!loaded || finishing}
           className="min-h-12 rounded-full border-[1.5px] border-teal bg-card px-6 text-[15px] font-bold text-teal-ink disabled:opacity-50"
         >
-          أنهيتُ هذه الخطوة
+          {t({ ar: 'أنهيتُ هذه الخطوة', en: 'I have finished this step' })}
         </button>
       )}
     </section>

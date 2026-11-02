@@ -4,6 +4,7 @@ import { newId } from '../../db/repo';
 import { useRepo } from '../../db/RepoContext';
 import { ImageError, MAX_PHOTOS, shrinkImage } from '../../lib/image';
 import { PhotoGrid, type Photo } from './PhotoGrid';
+import { useI18n } from '../../i18n/LanguageProvider';
 
 const label = 'text-[13px] font-semibold text-muted';
 const field = 'w-full min-w-0 break-words rounded-2xl border border-line bg-card px-3.5 text-base leading-8 text-ink';
@@ -17,6 +18,7 @@ interface Stored extends Photo {
 }
 
 export function HomeworkPage() {
+  const { t } = useI18n();
   const repo = useRepo();
   const navigate = useNavigate();
   const { id: param = 'new' } = useParams();
@@ -109,13 +111,13 @@ export function HomeworkPage() {
   async function persist(doneValue: boolean): Promise<boolean> {
     if (addingPhotos.current) {
       setNotice('');
-      setError('أنتظر انتهاء تجهيز الصور قبل الحفظ.');
+      setError(t({ ar: 'أنتظر انتهاء تجهيز الصور قبل الحفظ.', en: 'I am waiting for the photos to finish preparing before I save.' }));
       return false;
     }
     const title = text.trim();
     if (!title) {
       setNotice('');
-      setError('أكتب ما الواجب أولًا.');
+      setError(t({ ar: 'أكتب ما الواجب أولًا.', en: 'I write what the homework is first.' }));
       return false;
     }
     setBusy(true);
@@ -137,7 +139,7 @@ export function HomeworkPage() {
         setPhotos((list) => list.map((p) => (p.id === photo.id ? { ...p, persisted: true } : p)));
       }
       dirty.current = false;
-      setNotice('حفظتُ الواجب.');
+      setNotice(t({ ar: 'حفظتُ الواجب.', en: 'I saved the homework.' }));
       // From now on this is the homework's own page: a reload or a second save must not start a new one.
       if (isNew) {
         skipLoad.current = id;
@@ -146,7 +148,7 @@ export function HomeworkPage() {
       return true;
     } catch {
       setNotice('');
-      setError('تعذّر حفظ الواجب، يمكنني المحاولة مرة أخرى.');
+      setError(t({ ar: 'تعذّر حفظ الواجب، يمكنني المحاولة مرة أخرى.', en: 'Could not save the homework. I can try again.' }));
       return false;
     } finally {
       setBusy(false);
@@ -172,7 +174,7 @@ export function HomeworkPage() {
     try {
       for (const file of Array.from(files ?? [])) {
         if (count >= MAX_PHOTOS) {
-          if (!didUnmount.current) setError('وصلتُ إلى الحد الأقصى: ٦ صور.');
+          if (!didUnmount.current) setError(t({ ar: 'وصلتُ إلى الحد الأقصى: ٦ صور.', en: 'I have reached the limit: 6 photos.' }));
           break;
         }
         try {
@@ -204,9 +206,9 @@ export function HomeworkPage() {
             setError(
               e instanceof ImageError
                 ? e.code === 'not-image'
-                  ? 'الملف ليس صورة.'
-                  : 'لا أستطيع قراءة هذه الصورة.'
-                : 'تعذّر حفظ الصورة، يمكنني المحاولة مرة أخرى.',
+                  ? t({ ar: 'الملف ليس صورة.', en: 'The file is not a picture.' })
+                  : t({ ar: 'لا أستطيع قراءة هذه الصورة.', en: 'I cannot read this picture.' })
+                : t({ ar: 'تعذّر حفظ الصورة، يمكنني المحاولة مرة أخرى.', en: 'Could not save the picture. I can try again.' }),
             );
           }
           break;
@@ -228,7 +230,7 @@ export function HomeworkPage() {
       else dirty.current = true;
       setPhotos((list) => list.filter((p) => p.id !== photo.id));
     } catch {
-      setError('تعذّر حذف الصورة، يمكنني المحاولة مرة أخرى.');
+      setError(t({ ar: 'تعذّر حذف الصورة، يمكنني المحاولة مرة أخرى.', en: 'Could not delete the picture. I can try again.' }));
     }
   }
 
@@ -240,7 +242,7 @@ export function HomeworkPage() {
       dirty.current = false;
       navigate('/therapist/homework');
     } catch {
-      setError('تعذّر حذف الواجب، يمكنني المحاولة مرة أخرى.');
+      setError(t({ ar: 'تعذّر حذف الواجب، يمكنني المحاولة مرة أخرى.', en: 'Could not delete the homework. I can try again.' }));
       setBusy(false);
     }
   }
@@ -249,8 +251,8 @@ export function HomeworkPage() {
   if (missing) {
     return (
       <div className="flex flex-col gap-4">
-        <Link to="/therapist/homework" className="flex min-h-11 items-center text-[15px] font-semibold text-teal">‹ واجباتي</Link>
-        <p className="m-0 text-[15px] leading-8">لا أجد هذا الواجب.</p>
+        <Link to="/therapist/homework" className="flex min-h-11 items-center text-[15px] font-semibold text-teal">{t({ ar: '‹ واجباتي', en: '‹ My homework' })}</Link>
+        <p className="m-0 text-[15px] leading-8">{t({ ar: 'لا أجد هذا الواجب.', en: 'I cannot find this homework.' })}</p>
       </div>
     );
   }
@@ -261,12 +263,12 @@ export function HomeworkPage() {
         to={sessionId ? `/therapist/note/${sessionId}` : '/therapist/homework'}
         className="flex min-h-11 items-center text-[15px] font-semibold text-teal"
       >
-        {sessionId ? '‹ ملاحظات الجلسة' : '‹ واجباتي'}
+        {sessionId ? t({ ar: '‹ ملاحظات الجلسة', en: '‹ Session notes' }) : t({ ar: '‹ واجباتي', en: '‹ My homework' })}
       </Link>
-      <h1 className="text-2xl font-bold leading-snug">{isNew ? 'واجب جديد' : 'الواجب'}</h1>
+      <h1 className="text-2xl font-bold leading-snug">{isNew ? t({ ar: 'واجب جديد', en: 'New homework' }) : t({ ar: 'الواجب', en: 'The homework' })}</h1>
 
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="hw-title" className={label}>ما الواجب؟</label>
+        <label htmlFor="hw-title" className={label}>{t({ ar: 'ما الواجب؟', en: 'What is the homework?' })}</label>
         <input id="hw-title" type="text" value={text} onChange={(e) => {
             dirty.current = true;
             setText(e.target.value);
@@ -274,7 +276,7 @@ export function HomeworkPage() {
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="hw-notes" className={label}>ملاحظات</label>
+        <label htmlFor="hw-notes" className={label}>{t({ ar: 'ملاحظات', en: 'Notes' })}</label>
         <textarea id="hw-notes" rows={3} value={notes} onChange={(e) => {
             dirty.current = true;
             setNotes(e.target.value);
@@ -282,27 +284,27 @@ export function HomeworkPage() {
       </div>
 
       <section aria-labelledby="hw-photos" className="flex flex-col gap-2">
-        <h2 id="hw-photos" className={label}>صور الواجب</h2>
+        <h2 id="hw-photos" className={label}>{t({ ar: 'صور الواجب', en: 'Homework photos' })}</h2>
         {photos.some((p) => p.kind === 'prompt') && <PhotoGrid photos={photos.filter((p) => p.kind === 'prompt')} disabled={busy} onOpen={setViewer} onRemove={(p) => void removePhoto(p)} />}
         <input
           ref={promptFileInput}
           type="file"
           accept="image/*"
           multiple
-          aria-label="اختيار صور الواجب"
+          aria-label={t({ ar: 'اختيار صور الواجب', en: 'Choose homework photos' })}
           className="sr-only"
           onChange={(e) => void addPhotos(e.target.files, 'prompt')}
         />
-        <input ref={promptCameraInput} type="file" accept="image/*" capture="environment" aria-label="التقاط صورة للواجب" className="sr-only" onChange={(e) => void addPhotos(e.target.files, 'prompt')} />
+        <input ref={promptCameraInput} type="file" accept="image/*" capture="environment" aria-label={t({ ar: 'التقاط صورة للواجب', en: 'Take a photo of the homework' })} className="sr-only" onChange={(e) => void addPhotos(e.target.files, 'prompt')} />
         <div className="flex flex-col gap-2 sm:flex-row">
-          <button type="button" disabled={busy || photos.length >= MAX_PHOTOS} onClick={() => promptFileInput.current?.click()} className={`${secondary} flex-none disabled:opacity-50`}>أضيف صورة</button>
-          <button type="button" disabled={busy || photos.length >= MAX_PHOTOS} onClick={() => promptCameraInput.current?.click()} className={`${secondary} flex-none disabled:opacity-50`}>ألتقط صورة</button>
+          <button type="button" disabled={busy || photos.length >= MAX_PHOTOS} onClick={() => promptFileInput.current?.click()} className={`${secondary} flex-none disabled:opacity-50`}>{t({ ar: 'أضيف صورة', en: 'Add a photo' })}</button>
+          <button type="button" disabled={busy || photos.length >= MAX_PHOTOS} onClick={() => promptCameraInput.current?.click()} className={`${secondary} flex-none disabled:opacity-50`}>{t({ ar: 'ألتقط صورة', en: 'Take a photo' })}</button>
         </div>
-        {!persisted && photos.length > 0 && <p className="m-0 text-xs text-muted">تُحفظ الصور مع الواجب عند الحفظ أو عند الخروج.</p>}
+        {!persisted && photos.length > 0 && <p className="m-0 text-xs text-muted">{t({ ar: 'تُحفظ الصور مع الواجب عند الحفظ أو عند الخروج.', en: 'The photos are saved with the homework when I save or leave.' })}</p>}
       </section>
 
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="hw-answer" className={label}>إجابتي</label>
+        <label htmlFor="hw-answer" className={label}>{t({ ar: 'إجابتي', en: 'My answer' })}</label>
         <textarea id="hw-answer" rows={5} value={answer} onChange={(e) => {
             dirty.current = true;
             setAnswer(e.target.value);
@@ -310,50 +312,50 @@ export function HomeworkPage() {
       </div>
 
       <section aria-labelledby="hw-answer-photos" className="flex flex-col gap-2">
-        <h2 id="hw-answer-photos" className={label}>صور الإجابة الخاصة</h2>
-        {photos.some((p) => p.kind === 'answer') && <PhotoGrid photos={photos.filter((p) => p.kind === 'answer')} disabled={busy} itemLabel="صورة الإجابة" onOpen={setViewer} onRemove={(p) => void removePhoto(p)} />}
-        <input ref={answerFileInput} type="file" accept="image/*" multiple aria-label="اختيار صور الإجابة" className="sr-only" onChange={(e) => void addPhotos(e.target.files, 'answer')} />
-        <input ref={answerCameraInput} type="file" accept="image/*" capture="environment" aria-label="التقاط صورة للإجابة" className="sr-only" onChange={(e) => void addPhotos(e.target.files, 'answer')} />
+        <h2 id="hw-answer-photos" className={label}>{t({ ar: 'صور الإجابة الخاصة', en: 'My private answer photos' })}</h2>
+        {photos.some((p) => p.kind === 'answer') && <PhotoGrid photos={photos.filter((p) => p.kind === 'answer')} disabled={busy} itemLabel={t({ ar: 'صورة الإجابة', en: 'Answer photo' })} onOpen={setViewer} onRemove={(p) => void removePhoto(p)} />}
+        <input ref={answerFileInput} type="file" accept="image/*" multiple aria-label={t({ ar: 'اختيار صور الإجابة', en: 'Choose answer photos' })} className="sr-only" onChange={(e) => void addPhotos(e.target.files, 'answer')} />
+        <input ref={answerCameraInput} type="file" accept="image/*" capture="environment" aria-label={t({ ar: 'التقاط صورة للإجابة', en: 'Take a photo for the answer' })} className="sr-only" onChange={(e) => void addPhotos(e.target.files, 'answer')} />
         <div className="flex flex-col gap-2 sm:flex-row">
-          <button type="button" disabled={busy || photos.length >= MAX_PHOTOS} onClick={() => answerFileInput.current?.click()} className={`${secondary} flex-none disabled:opacity-50`}>أختار صورة للإجابة</button>
-          <button type="button" disabled={busy || photos.length >= MAX_PHOTOS} onClick={() => answerCameraInput.current?.click()} className={`${secondary} flex-none disabled:opacity-50`}>ألتقط صورة للإجابة</button>
+          <button type="button" disabled={busy || photos.length >= MAX_PHOTOS} onClick={() => answerFileInput.current?.click()} className={`${secondary} flex-none disabled:opacity-50`}>{t({ ar: 'أختار صورة للإجابة', en: 'Choose a photo for the answer' })}</button>
+          <button type="button" disabled={busy || photos.length >= MAX_PHOTOS} onClick={() => answerCameraInput.current?.click()} className={`${secondary} flex-none disabled:opacity-50`}>{t({ ar: 'ألتقط صورة للإجابة', en: 'Take a photo for the answer' })}</button>
         </div>
-        <p className="m-0 text-xs leading-6 text-muted">صور الإجابة خاصة ولا تظهر في ملخّص المعالج.</p>
+        <p className="m-0 text-xs leading-6 text-muted">{t({ ar: 'صور الإجابة خاصة ولا تظهر في ملخّص المعالج.', en: 'Answer photos are private and do not appear in the therapist summary.' })}</p>
       </section>
 
       <label className="flex min-h-12 cursor-pointer items-center gap-3 text-[15px] font-medium">
         <input type="checkbox" checked={done} disabled={busy} onChange={(e) => void toggleDone(e.target.checked)} className="plan-check !mt-0" />
-        أنجزتُ هذا الواجب
+        {t({ ar: 'أنجزتُ هذا الواجب', en: 'I have done this homework' })}
       </label>
 
       {error && <p role="alert" className="m-0 text-sm font-semibold leading-7 text-ink">{error}</p>}
       {notice && <p role="status" className="m-0 text-sm font-semibold leading-7 text-teal-ink">{notice}</p>}
 
-      <button type="button" onClick={() => void persist(done)} disabled={busy} className={`${primary} flex-none`}>حفظ</button>
+      <button type="button" onClick={() => void persist(done)} disabled={busy} className={`${primary} flex-none`}>{t({ ar: 'حفظ', en: 'Save' })}</button>
 
       {persisted &&
         (confirming ? (
-          <div role="group" aria-label="تأكيد الحذف" className="flex flex-col gap-3 rounded-2xl bg-teal-soft p-4">
-            <p className="m-0 text-[15px] font-semibold leading-8 text-teal-ink">أحذف هذا الواجب مع صوره؟ لا يمكن التراجع عن ذلك.</p>
+          <div role="group" aria-label={t({ ar: 'تأكيد الحذف', en: 'Confirm deletion' })} className="flex flex-col gap-3 rounded-2xl bg-teal-soft p-4">
+            <p className="m-0 text-[15px] font-semibold leading-8 text-teal-ink">{t({ ar: 'أحذف هذا الواجب مع صوره؟ لا يمكن التراجع عن ذلك.', en: 'Delete this homework and its photos? This cannot be undone.' })}</p>
             <div className="flex gap-2">
-              <button type="button" onClick={() => void remove()} disabled={busy} className="min-h-12 flex-1 rounded-full bg-ink px-5 text-[15px] font-bold text-card disabled:opacity-50">نعم، أحذف</button>
-              <button type="button" onClick={() => setConfirming(false)} disabled={busy} className={secondary}>إلغاء الحذف</button>
+              <button type="button" onClick={() => void remove()} disabled={busy} className="min-h-12 flex-1 rounded-full bg-ink px-5 text-[15px] font-bold text-card disabled:opacity-50">{t({ ar: 'نعم، أحذف', en: 'Yes, delete' })}</button>
+              <button type="button" onClick={() => setConfirming(false)} disabled={busy} className={secondary}>{t({ ar: 'إلغاء الحذف', en: 'Cancel deletion' })}</button>
             </div>
           </div>
         ) : (
-          <button type="button" disabled={busy} onClick={() => setConfirming(true)} className="min-h-12 rounded-full border border-line bg-card px-5 text-[15px] font-semibold text-ink disabled:opacity-50">حذف الواجب</button>
+          <button type="button" disabled={busy} onClick={() => setConfirming(true)} className="min-h-12 rounded-full border border-line bg-card px-5 text-[15px] font-semibold text-ink disabled:opacity-50">{t({ ar: 'حذف الواجب', en: 'Delete the homework' })}</button>
         ))}
 
       {viewer && (
         <div
           role="dialog"
           aria-modal="true"
-          aria-label="عرض الصورة"
+          aria-label={t({ ar: 'عرض الصورة', en: 'View the photo' })}
           onKeyDown={(e) => e.key === 'Escape' && setViewer(null)}
           className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-black/85 p-4"
         >
-          <img src={viewer.dataUrl} alt="الصورة مكبّرة" className="max-h-[75vh] max-w-full rounded-2xl object-contain" />
-          <button type="button" autoFocus onClick={() => setViewer(null)} className="min-h-12 rounded-full bg-card px-8 text-[15px] font-bold text-ink">إغلاق</button>
+          <img src={viewer.dataUrl} alt={t({ ar: 'الصورة مكبّرة', en: 'Enlarged photo' })} className="max-h-[75vh] max-w-full rounded-2xl object-contain" />
+          <button type="button" autoFocus onClick={() => setViewer(null)} className="min-h-12 rounded-full bg-card px-8 text-[15px] font-bold text-ink">{t({ ar: 'إغلاق', en: 'Close' })}</button>
         </div>
       )}
     </div>

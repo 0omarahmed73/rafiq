@@ -9,6 +9,9 @@ import { ChipsPrompt } from './ChipsPrompt';
 import { EmotionPrompt } from './EmotionPrompt';
 import { ListPrompt } from './ListPrompt';
 
+/** Bilingual text for fixtures; the English is not used here. */
+const bi = (ar: string) => ({ ar, en: ar });
+
 function Harness({
   prompt,
   Component,
@@ -34,7 +37,7 @@ function Harness({
 }
 
 describe('ListPrompt', () => {
-  const prompt: Prompt = { id: 'l', kind: 'list', label: 'الأسباب' };
+  const prompt: Prompt = { id: 'l', kind: 'list', label: bi('الأسباب') };
 
   it('adds an item and removes it', async () => {
     const user = userEvent.setup();
@@ -58,7 +61,7 @@ describe('ListPrompt', () => {
 });
 
 describe('ListPrompt prefill', () => {
-  const prompt: Prompt = { id: 'l', kind: 'list', label: 'ما يريحني', prefill: 'soothingList' };
+  const prompt: Prompt = { id: 'l', kind: 'list', label: bi('ما يريحني'), prefill: 'soothingList' };
 
   async function repoWithTwoItems() {
     const repo = createMemoryRepo();
@@ -95,6 +98,16 @@ describe('ListPrompt prefill', () => {
     expect(screen.queryByText('الرسم')).not.toBeInTheDocument();
   });
 
+  it('a removed item leaves the soothing list too, so a later practice does not offer it again', async () => {
+    const user = userEvent.setup();
+    const repo = await repoWithTwoItems();
+    renderPrefilled(repo);
+    await user.click(await screen.findByRole('button', { name: 'حذف: الرسم' }));
+    await vi.waitFor(async () => {
+      expect((await repo.listSoothing()).map((s) => s.text)).toEqual(['سماع ألبوم']);
+    });
+  });
+
   it('does nothing when the soothing list is empty', async () => {
     const onValue = vi.fn();
     renderPrefilled(createMemoryRepo(), undefined, onValue);
@@ -107,13 +120,13 @@ describe('ChipsPrompt', () => {
   const prompt: Prompt = {
     id: 'c',
     kind: 'chips',
-    label: 'ما يؤلمني',
+    label: bi('ما يؤلمني'),
     multi: false,
     options: [
-      { value: 'ignored', label: 'أن أُهمَل' },
-      { value: 'rejected', label: 'أن أُرفَض' },
+      { value: 'ignored', label: bi('أن أُهمَل') },
+      { value: 'rejected', label: bi('أن أُرفَض') },
     ],
-    template: 'طبعًا يؤلمني هذا، لأنني أخاف {label}.',
+    template: bi('طبعًا يؤلمني هذا، لأنني أخاف {label}.'),
   };
 
   it('fills the editable sentence from the chosen chip', async () => {
@@ -146,7 +159,7 @@ describe('ChipsPrompt', () => {
 });
 
 describe('EmotionPrompt', () => {
-  const prompt: Prompt = { id: 'e', kind: 'emotion', label: 'ما الذي تشعر به؟' };
+  const prompt: Prompt = { id: 'e', kind: 'emotion', label: bi('ما الذي تشعر به؟') };
 
   it('shows an intensity slider (default 5) for the chosen emotion', async () => {
     const user = userEvent.setup();

@@ -1,12 +1,15 @@
 import { validatePractice, type PracticeDef } from './schema';
 
+/** Bilingual text for fixtures; the English is not checked here. */
+const bi = (ar: string) => ({ ar, en: ar });
+
 const base: PracticeDef = {
   id: 'x',
   stepId: 1,
-  title: 'تمرين',
+  title: bi('تمرين'),
   prompts: [
-    { id: 'a', kind: 'text', label: 'سؤال' },
-    { id: 'b', kind: 'chips', label: 'سؤال', options: [{ value: 'v', label: 'ل' }] },
+    { id: 'a', kind: 'text', label: bi('سؤال') },
+    { id: 'b', kind: 'chips', label: bi('سؤال'), options: [{ value: 'v', label: bi('ل') }] },
   ],
 };
 
@@ -32,7 +35,7 @@ describe('validatePractice', () => {
   });
 
   it('rejects a chips or choice prompt without options', () => {
-    const def = { ...base, prompts: [{ id: 'a', kind: 'choice' as const, label: 'سؤال' }] };
+    const def = { ...base, prompts: [{ id: 'a', kind: 'choice' as const, label: bi('سؤال') }] };
     expect(() => validatePractice(def)).toThrow(/options/);
   });
 });

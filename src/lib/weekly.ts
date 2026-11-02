@@ -20,7 +20,8 @@ export function reviewWeekStart(today: Date): DayKey {
 function questionFor(weekStart: DayKey): string {
   const weeks = Math.floor((toUtcDays(weekStart) - toUtcDays(QUESTION_EPOCH)) / 7);
   const n = weeklyQuestions.length;
-  return weeklyQuestions[((weeks % n) + n) % n];
+  // Reviews keep the question as written (Arabic), so the text stays the same whatever the language.
+  return weeklyQuestions[((weeks % n) + n) % n].ar;
 }
 
 /** Summarises the seven days from `weekStart`; items outside the week are ignored. No AI involved. */

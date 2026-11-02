@@ -90,6 +90,8 @@ export interface Repo {
   listSoothing(): Promise<SoothingItem[]>;
   /** A text already in the list is not added again. */
   addSoothing(text: string, source: SoothingItem['source']): Promise<SoothingItem>;
+  /** Removes every row with this text and leaves a deletion marker, so a merged backup cannot bring it back. */
+  removeSoothing(text: string): Promise<void>;
 
   getSettings(): Promise<Settings>;
   saveSettings(s: Draft<Settings>): Promise<void>;
