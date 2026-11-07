@@ -23,6 +23,7 @@ import { ReminderTimePicker } from './ReminderTimePicker';
 import { ProfileCard } from './ProfileCard';
 import { CurrentCountryPicker } from './CurrentCountryPicker';
 import { LanguageChoice } from '../language/LanguageChoice';
+import { LockSettings } from '../lock/LockSettings';
 
 type Mode = 'replace' | 'merge';
 
@@ -270,6 +271,8 @@ export function SettingsPage({
         <p className="text-sm leading-7 text-muted">{t({ ar: 'في الوضع التلقائي، أتبع مظهر جهازي.', en: 'In automatic mode, I follow my device\'s appearance.' })}</p>
         <AccentPicker />
       </section>
+
+      <LockSettings />
 
       <CurrentCountryPicker />
 

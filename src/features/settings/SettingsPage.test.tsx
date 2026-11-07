@@ -5,6 +5,7 @@ import { exportBackup } from '../../db/backup';
 import { createMemoryRepo } from '../../db/memoryRepo';
 import type { Repo } from '../../db/repo';
 import { RepoProvider } from '../../db/RepoContext';
+import { LockProvider } from '../lock/LockProvider';
 import { SettingsPage } from './SettingsPage';
 
 const documents = vi.hoisted(() => ({
@@ -28,9 +29,11 @@ vi.mock('../../platform/notifications', () => notifications);
 function setup(repo: Repo = createMemoryRepo(), download = vi.fn()) {
   render(
     <RepoProvider repo={repo}>
-      <MemoryRouter>
-        <SettingsPage download={download} />
-      </MemoryRouter>
+      <LockProvider>
+        <MemoryRouter>
+          <SettingsPage download={download} />
+        </MemoryRouter>
+      </LockProvider>
     </RepoProvider>,
   );
   return { repo, download, user: userEvent.setup() };
