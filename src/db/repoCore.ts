@@ -363,6 +363,10 @@ export function createRepo(store: Store): Repo {
           for (const row of d[t] ?? []) await store.put(t, row);
         }
       }),
+    eraseAll: () =>
+      store.transaction(async () => {
+        for (const table of TABLES) await store.clear(table);
+      }),
     mergeAll: (d) =>
       store.transaction(async () => {
         const local = {} as AllData;
