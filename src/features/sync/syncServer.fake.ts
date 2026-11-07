@@ -39,7 +39,7 @@ export interface FakeSyncServer extends SyncServer {
   prevEnvelope(): Envelope | null;
   /** Replaces the signed-in account's envelope without changing the version (tampering, damaged copies). */
   setEnvelope(envelope: unknown): void;
-  /** The next vault call (get, push or reset) throws this kind. */
+  /** The next vault call (get, push or replace) throws this kind. */
   failNext(kind: SyncServerErrorKind): void;
   setOffline(on: boolean): void;
   /** Every push from now on is refused as stale. */
@@ -134,9 +134,17 @@ export function createFakeSyncServer(opts: { latencyMs?: number; shared?: FakeBa
       });
       return { ok: true, version: version + 1 };
     },
-    async resetVault() {
+    async replaceVault(envelope) {
       const userId = await vaultCall();
-      shared.vaults.delete(userId);
+      if (JSON.stringify(envelope).length > MAX_ENVELOPE_BYTES) throw new SyncServerError('tooLarge');
+      const row = shared.vaults.get(userId);
+      const version = (row?.version ?? 0) + 1;
+      shared.vaults.set(userId, {
+        version,
+        envelope: structuredClone(envelope),
+        prevEnvelope: row?.envelope ?? null,
+      });
+      return { version };
     },
 
     vault() {

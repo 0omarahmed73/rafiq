@@ -39,6 +39,10 @@ export interface SyncServer {
    * returns `{ ok: false, version: <current> }`.
    */
   pushVault(expectedVersion: number, envelope: Envelope): Promise<{ ok: boolean; version: number }>;
-  /** Deletes this account's cloud row. */
-  resetVault(): Promise<void>;
+  /**
+   * Atomically replaces this account's row whatever its version (a reset under a new passphrase): inserts version 1
+   * when there is none, otherwise keeps the current envelope as the previous one and bumps the version. There is
+   * never a moment without a row, so no other device can slip a copy under the old key in between. Same 5 MB cap.
+   */
+  replaceVault(envelope: Envelope): Promise<{ version: number }>;
 }

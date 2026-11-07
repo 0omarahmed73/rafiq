@@ -4,7 +4,7 @@ import { createMemoryRepo } from '../../db/memoryRepo';
 import type { Repo } from '../../db/repo';
 import { decryptEnvelope, deriveVaultKey, encryptEnvelope, newSalt } from './envelope';
 import { parseRemote, sameSyncData, toPlaintext, toSyncData, type SyncData } from './syncData';
-import { createSyncEngine, type SyncEngine, type SyncState } from './syncEngine';
+import { createSyncEngine, stopActiveSync, type SyncEngine, type SyncState } from './syncEngine';
 import { clearSyncIdentity, loadSyncMeta, saveSyncKey, type SyncKey } from './syncKeyStore';
 import { createFakeSyncServer, FAKE_CODE, type FakeBackingStore, type FakeSyncServer } from './syncServer.fake';
 
@@ -17,6 +17,7 @@ interface Device {
   server: FakeSyncServer;
   repo: Repo;
   engine: SyncEngine;
+  merged: ReturnType<typeof vi.fn>;
 }
 
 const engines: SyncEngine[] = [];
@@ -35,9 +36,10 @@ async function device(shared?: FakeBackingStore, signIn = true): Promise<Device>
   const server = createFakeSyncServer({ shared });
   if (signIn) await server.verifyCode(EMAIL, FAKE_CODE);
   const repo = createMemoryRepo();
-  const engine = createSyncEngine({ repo, server });
+  const merged = vi.fn();
+  const engine = createSyncEngine({ repo, server, onMerged: merged });
   engines.push(engine);
-  return { server, repo, engine };
+  return { server, repo, engine, merged };
 }
 
 /** Passes real macrotasks (setImmediate is not faked) until `done()` holds; IndexedDB and WebCrypto progress. */
@@ -107,6 +109,45 @@ describe('sync engine: state', () => {
     await engine.refresh();
     expect(engine.getState()).toEqual({ status: 'idle', email: EMAIL });
     expect(seen).toEqual([{ status: 'idle', email: EMAIL }]);
+  });
+
+  async function refreshDuringRun(d: Device) {
+    const run = d.engine.syncNow();
+    const session = d.server.session;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    d.server.session = async () => {
+      d.server.session = session;
+      await gate;
+      return session();
+    };
+    const refreshing = d.engine.refresh();
+    await run;
+    const after = d.engine.getState();
+    release();
+    await refreshing;
+    return after;
+  }
+
+  it('refresh() keeps attention/keyChanged from a run that ended while it was reading', async () => {
+    const d = await device();
+    await cacheKey();
+    await d.server.pushVault(0, await encryptEnvelope((await makeKey()).key, newSalt(), 'user-1', {}, ITER));
+    const after = await refreshDuringRun(d);
+    expect(after).toMatchObject({ status: 'attention', issue: 'keyChanged' });
+    expect(d.engine.getState()).toEqual(after);
+  });
+
+  it('refresh() keeps offline and the pending retry from a run that ended while it was reading', async () => {
+    const d = await device();
+    await cacheKey();
+    d.server.setOffline(true);
+    const after = await refreshDuringRun(d);
+    expect(after.status).toBe('offline');
+    expect(d.engine.getState()).toEqual(after);
+    expect(vi.getTimerCount()).toBe(1);
   });
 
   it('never touches the repo or the server while off', async () => {
@@ -253,6 +294,12 @@ describe('sync engine: syncing', () => {
     expect(server.pushCount()).toBe(3);
     expect(await snapshot(repo)).toBe(before);
     expect(vi.getTimerCount()).toBe(1);
+    const getVault = vi.spyOn(server, 'getVault');
+    await vi.advanceTimersByTimeAsync(29_999);
+    expect(getVault).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    // The retry runs its own 3 attempts and schedules the next retry.
+    await until(() => getVault.mock.calls.length === 3 && vi.getTimerCount() === 1);
   });
 
   it('refuses a push expecting no row when one exists, and the engine merges instead of overwriting', async () => {
@@ -282,7 +329,7 @@ describe('sync engine: syncing', () => {
   });
 
   it('pushes nothing and schedules nothing when there is nothing to change', async () => {
-    const { server, repo, engine } = await device();
+    const { server, repo, engine, merged } = await device();
     await cacheKey();
     await checkin(repo, 'once');
     await engine.syncNow();
@@ -292,6 +339,44 @@ describe('sync engine: syncing', () => {
     expect(server.pushCount()).toBe(pushes);
     expect(vi.getTimerCount()).toBe(0);
     expect(engine.getState().status).toBe('idle');
+    expect(merged).not.toHaveBeenCalled();
+  });
+
+  it('merges a full cloud into empty local data and pushes nothing', async () => {
+    const a = await device();
+    const b = await device(a.server.shared);
+    await cacheKey();
+    await checkin(a.repo, 'one');
+    await a.repo.saveNote({ id: 'n1', text: 'note', createdAt: T0.toISOString() });
+    await a.engine.syncNow();
+    const pushes = a.server.pushCount();
+    const vault = JSON.stringify(a.server.vault());
+    await b.engine.syncNow();
+    expect(await notes(b.repo)).toEqual(['one']);
+    expect((await b.repo.listNotes()).map((n) => n.id)).toEqual(['n1']);
+    expect(a.server.pushCount()).toBe(pushes);
+    expect(JSON.stringify(a.server.vault())).toBe(vault);
+    expect(b.engine.getState().status).toBe('idle');
+  });
+
+  it('calls onMerged once when a remote change arrives and not when nothing changed', async () => {
+    const a = await device();
+    const b = await device(a.server.shared);
+    await cacheKey();
+    await a.engine.syncNow();
+    expect(a.merged).not.toHaveBeenCalled();
+    await b.engine.syncNow();
+    expect(b.merged).not.toHaveBeenCalled();
+    later();
+    await checkin(a.repo, 'news');
+    await a.engine.syncNow();
+    expect(a.merged).not.toHaveBeenCalled();
+    await b.engine.syncNow();
+    expect(b.merged).toHaveBeenCalledTimes(1);
+    await b.engine.syncNow();
+    await a.engine.syncNow();
+    expect(b.merged).toHaveBeenCalledTimes(1);
+    expect(a.merged).not.toHaveBeenCalled();
   });
 });
 
@@ -301,17 +386,28 @@ describe('sync engine: never overwriting local data', () => {
     const k = await cacheKey();
     await checkin(a.repo, 'cloud');
     await a.engine.syncNow();
+    later();
     const b = await device(a.server.shared);
     await checkin(b.repo, 'local only');
+    // An orphan photo: a run that cleaned up photos before validating the cloud copy would remove it.
+    await b.repo.saveHomeworkImage({
+      id: 'orphan',
+      homeworkId: 'gone',
+      dataUrl: 'data:image/jpeg;base64,AAAA',
+      createdAt: T0.toISOString(),
+    });
     return { a, b, k, before: await snapshot(b.repo) };
   }
 
   async function expectUntouched(b: Device, before: string, issue: string) {
     const pushes = b.server.pushCount();
+    const meta = await loadSyncMeta();
     await b.engine.syncNow();
     expect(b.engine.getState()).toMatchObject({ status: 'attention', issue });
     expect(await snapshot(b.repo)).toBe(before);
     expect(b.server.pushCount()).toBe(pushes);
+    expect(await loadSyncMeta()).toEqual(meta);
+    expect(b.merged).not.toHaveBeenCalled();
     expect(vi.getTimerCount()).toBe(0);
   }
 
@@ -369,12 +465,39 @@ describe('sync engine: never overwriting local data', () => {
   it('reports keyChanged after a reset on another device, without writing or pushing', async () => {
     const { a, b, before } = await seeded();
     const fresh = await makeKey();
-    await a.server.resetVault();
-    const data = (await a.repo.exportAll()) as SyncData;
-    expect(
-      (await a.server.pushVault(0, await encryptEnvelope(fresh.key, fresh.salt, 'user-1', toPlaintext(data), ITER))).ok,
-    ).toBe(true);
+    const data = toPlaintext((await a.repo.exportAll()) as SyncData);
+    expect(await a.server.replaceVault(await encryptEnvelope(fresh.key, fresh.salt, 'user-1', data, ITER))).toEqual({
+      version: 2,
+    });
     await expectUntouched(b, before, 'keyChanged');
+  });
+
+  it('cannot leave a stale-salt row when another device syncs while the vault is replaced', async () => {
+    const { a, b } = await seeded();
+    const fresh = await makeKey();
+    const replacement = await encryptEnvelope(
+      fresh.key,
+      fresh.salt,
+      'user-1',
+      toPlaintext((await a.repo.exportAll()) as SyncData),
+      ITER,
+    );
+    // B has pulled the old copy and is about to push when A replaces the vault.
+    b.server.beforeNextPush(async () => {
+      await a.server.replaceVault(replacement);
+    });
+    const getVault = b.server.getVault;
+    let pulls = 0;
+    b.server.getVault = async () => {
+      pulls++;
+      return getVault();
+    };
+    await b.engine.syncNow();
+    expect(pulls).toBe(2);
+    expect(a.server.vault()).toEqual({ version: 2, envelope: replacement });
+    expect(b.engine.getState()).toMatchObject({ status: 'attention', issue: 'keyChanged' });
+    // B merged the old copy before the replacement; its own data is still all there.
+    expect(await notes(b.repo)).toEqual(['cloud', 'local only']);
   });
 
   it('reports keyChanged when only the iteration count differs', async () => {
@@ -401,6 +524,94 @@ describe('sync engine: never overwriting local data', () => {
     expect(fresh.getState()).toEqual({ status: 'off' });
     expect((await other.exportAll()).checkins).toEqual([]);
     expect(server.pushCount()).toBe(pushes);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('stop() during a run: no push, no write, no retry, no follow-up', async () => {
+    const { a, b, before } = await seeded();
+    const vault = JSON.stringify(a.server.vault());
+    const pushes = a.server.pushCount();
+    const meta = await loadSyncMeta();
+    const getVault = vi.spyOn(b.server, 'getVault');
+    b.server.beforeNextGet(() => {
+      b.engine.requestSync('manual');
+      b.engine.stop();
+    });
+    await b.engine.syncNow();
+    await settle();
+    expect(getVault).toHaveBeenCalledTimes(1);
+    expect(await snapshot(b.repo)).toBe(before);
+    expect(JSON.stringify(a.server.vault())).toBe(vault);
+    expect(a.server.pushCount()).toBe(pushes);
+    expect(await loadSyncMeta()).toEqual(meta);
+    expect(vi.getTimerCount()).toBe(0);
+    expect(b.merged).not.toHaveBeenCalled();
+  });
+
+  it('never pushes an erased repo over the cloud copy when stop() and erase land after the merge', async () => {
+    const { a, b } = await seeded();
+    const vault = JSON.stringify(a.server.vault());
+    const pushes = a.server.pushCount();
+    const meta = await loadSyncMeta();
+    const mergeAll = b.repo.mergeAll.bind(b.repo);
+    b.repo.mergeAll = async (d) => {
+      await mergeAll(d);
+      b.engine.stop();
+      await b.repo.eraseAll();
+    };
+    await b.engine.syncNow();
+    await settle();
+    expect(JSON.stringify(a.server.vault())).toBe(vault);
+    expect(a.server.pushCount()).toBe(pushes);
+    expect(await loadSyncMeta()).toEqual(meta);
+    expect((await b.repo.exportAll()).checkins).toEqual([]);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('does nothing on requestSync or syncNow after stop()', async () => {
+    const { server, repo, engine } = await device();
+    await cacheKey();
+    await checkin(repo, 'x');
+    const getVault = vi.spyOn(server, 'getVault');
+    engine.stop();
+    engine.requestSync('manual');
+    engine.requestSync('change');
+    engine.requestSync('foreground');
+    engine.start();
+    await engine.syncNow();
+    await vi.advanceTimersByTimeAsync(3_600_000);
+    await settle();
+    expect(getVault).not.toHaveBeenCalled();
+    expect(server.pushCount()).toBe(0);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('stopActiveSync() stops the latest engine and resolves at once when it is idle', async () => {
+    const { server, engine } = await device();
+    await cacheKey();
+    await engine.syncNow();
+    await stopActiveSync();
+    expect(vi.getTimerCount()).toBe(0);
+    const getVault = vi.spyOn(server, 'getVault');
+    await engine.syncNow();
+    expect(getVault).not.toHaveBeenCalled();
+  });
+
+  it('stopActiveSync() resolves within its timeout when a run hangs', async () => {
+    const { server, engine } = await device();
+    await cacheKey();
+    server.beforeNextGet(() => new Promise<void>(() => undefined));
+    void engine.syncNow();
+    await until(() => engine.getState().status === 'syncing');
+    let done = false;
+    const stopping = stopActiveSync(1_000).then(() => {
+      done = true;
+    });
+    await vi.advanceTimersByTimeAsync(999);
+    expect(done).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    await stopping;
+    expect(done).toBe(true);
     expect(vi.getTimerCount()).toBe(0);
   });
 
