@@ -253,6 +253,27 @@ describe('LockProvider', () => {
       expect(isLocked()).toBe(true);
     });
 
+    it('does not lock while auto-lock is paused, and locks normally again after unpausing', async () => {
+      await openWith(60000);
+      act(() => api.setAutoLockPaused(true));
+      act(() => fg.cb!(false));
+      act(() => vi.advanceTimersByTime(5 * 60000));
+      act(() => fg.cb!(true));
+      expect(isOpen()).toBe(true);
+
+      // A hide that started while paused leaves no stale time behind once the pause ends.
+      act(() => fg.cb!(false));
+      act(() => vi.advanceTimersByTime(2 * 60000));
+      act(() => api.setAutoLockPaused(false));
+      act(() => fg.cb!(true));
+      expect(isOpen()).toBe(true);
+
+      act(() => fg.cb!(false));
+      act(() => vi.advanceTimersByTime(61000));
+      act(() => fg.cb!(true));
+      expect(isLocked()).toBe(true);
+    });
+
     it('locks on every return when set to immediately', async () => {
       await openWith(0);
       act(() => fg.cb!(false));

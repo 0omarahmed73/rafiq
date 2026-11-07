@@ -56,6 +56,8 @@ export interface LockApi {
   changePin(pin: string): Promise<string>;
   setAutoLockMs(ms: number): void;
   setBiometric(on: boolean): void;
+  /** While true (a recovery code is on screen), leaving and returning to the app does not lock it. */
+  setAutoLockPaused(paused: boolean): void;
   turnOff(): void;
   eraseEverything(): Promise<void>;
 }
@@ -137,6 +139,7 @@ export function LockProvider({
   const recoveryPinSaved = useRef(false);
   const chain = useRef<Promise<unknown>>(Promise.resolve());
   const hiddenAt = useRef<number | null>(null);
+  const autoLockPaused = useRef(false);
 
   const setRecord = useCallback((next: LockRecord | null) => {
     recordRef.current = next;
@@ -178,11 +181,12 @@ export function LockProvider({
     () =>
       onForegroundChange((active) => {
         if (!active) {
-          if (hiddenAt.current === null) hiddenAt.current = Date.now();
+          if (hiddenAt.current === null && !autoLockPaused.current) hiddenAt.current = Date.now();
           return;
         }
         const since = hiddenAt.current;
         hiddenAt.current = null;
+        if (autoLockPaused.current) return;
         const current = recordRef.current;
         if (since === null || !current || lockedRef.current) return;
         if (Date.now() - since >= current.autoLockMs) {
@@ -372,6 +376,12 @@ export function LockProvider({
 
   const setBiometric = useCallback((on: boolean) => update({ biometric: on }), [update]);
 
+  // Pausing or resuming forgets any background time, so a pause never leaves a stale one behind.
+  const setAutoLockPaused = useCallback((paused: boolean) => {
+    autoLockPaused.current = paused;
+    hiddenAt.current = null;
+  }, []);
+
   const turnOff = useCallback(() => {
     if (lockedRef.current) return;
     clearLock();
@@ -406,6 +416,7 @@ export function LockProvider({
       changePin,
       setAutoLockMs,
       setBiometric,
+      setAutoLockPaused,
       turnOff,
       eraseEverything,
     }),
@@ -425,6 +436,7 @@ export function LockProvider({
       changePin,
       setAutoLockMs,
       setBiometric,
+      setAutoLockPaused,
       turnOff,
       eraseEverything,
     ],
