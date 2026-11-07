@@ -62,7 +62,7 @@ export function EraseView({ onBack }: { onBack: () => void }) {
       </ul>
       <p className="text-sm leading-7">
         {t({
-          ar: 'إذا صنعت ملف نسخة احتياطية من قبل، يمكنني استعادة بياناتي منه بعد الحذف. القفل نفسه لا يكون في أي نسخة احتياطية، فأفعّله من جديد إن أردت.',
+          ar: 'إذا أنشأت ملف نسخة احتياطية من قبل، يمكنني استعادة بياناتي منه بعد الحذف. القفل نفسه لا يكون في أي نسخة احتياطية، فأفعّله من جديد إن أردت.',
           en: 'If I made a backup file earlier, I can restore my data from it afterwards. The lock itself is never in a backup, so I set it up again if I want it.',
         })}
       </p>

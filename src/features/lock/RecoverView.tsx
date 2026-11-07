@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { useI18n } from '../../i18n/LanguageProvider';
 import { useLock } from './LockProvider';
-import { BackButton, RANGE_ERROR, WaitStatus, card, errorText, field, primary, secondary } from './lockUi';
+import { BackButton, CHECK_FAILED, RANGE_ERROR, WaitStatus, card, errorText, field, primary, secondary } from './lockUi';
 import { isValidPin, isWeakPin, normalizeDigits, normalizeRecoveryCode } from './pin';
 
 type Step = 'code' | 'newPin' | 'saved';
@@ -37,9 +37,17 @@ export function RecoverView({ onBack }: { onBack: () => void }) {
       return;
     }
     setBusy(true);
-    const result = await recover(code);
-    setBusy(false);
-    if (result === 'ok') {
+    let result: Awaited<ReturnType<typeof recover>> | 'failed' = 'failed';
+    try {
+      result = await recover(code);
+    } catch {
+      result = 'failed';
+    } finally {
+      setBusy(false);
+    }
+    if (result === 'failed') {
+      setError(t(CHECK_FAILED));
+    } else if (result === 'ok') {
       setCode('');
       setStep('newPin');
     } else if (result === 'wrong') {
@@ -75,7 +83,7 @@ export function RecoverView({ onBack }: { onBack: () => void }) {
     } catch {
       setError(
         t({
-          ar: 'تعذّر حفظ الرمز. يمكنني المحاولة مرة أخرى.',
+          ar: 'تعذّر حفظ رمز الدخول الجديد. يمكنني المحاولة مرة أخرى.',
           en: 'Could not save the PIN. I can try again.',
         }),
       );
@@ -107,7 +115,7 @@ export function RecoverView({ onBack }: { onBack: () => void }) {
         </h2>
         <p className="text-sm leading-7 text-muted">
           {t({
-            ar: 'حفظت رمزي الجديد. أكتب رمز الاسترداد هذا وأحفظه في مكان آمن خارج الهاتف. الرمز القديم لم يعد يعمل، ولن يظهر هذا الرمز مرة أخرى.',
+            ar: 'تم حفظ رمز الدخول الجديد. أكتب رمز الاسترداد هذا وأحفظه في مكان آمن خارج الهاتف. الرمز القديم لم يعد يعمل، ولن يظهر هذا الرمز مرة أخرى.',
             en: 'My new PIN is saved. I write this recovery code down and keep it somewhere safe off this phone. The old code no longer works, and this one will not be shown again.',
           })}
         </p>
@@ -149,8 +157,8 @@ export function RecoverView({ onBack }: { onBack: () => void }) {
           onChange={setAgain}
         />
         {alert}
-        <button type="submit" disabled={busy} className={primary}>
-          {t({ ar: 'احفظ الرمز الجديد', en: 'Save the new PIN' })}
+        <button type="submit" aria-disabled={busy || undefined} className={primary}>
+          {t({ ar: 'أحفظ الرمز الجديد', en: 'Save the new PIN' })}
         </button>
         <BackButton onBack={onBack} />
       </form>
@@ -187,8 +195,8 @@ export function RecoverView({ onBack }: { onBack: () => void }) {
       />
       {alert}
       <WaitStatus waitMs={waitMs} />
-      <button type="submit" disabled={blocked || busy} className={primary}>
-        {t({ ar: 'تحقّق', en: 'Check' })}
+      <button type="submit" disabled={blocked} aria-disabled={busy || undefined} className={primary}>
+        {t({ ar: 'أتحقق', en: 'Check' })}
       </button>
       <BackButton onBack={onBack} />
     </form>

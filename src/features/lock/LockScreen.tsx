@@ -4,7 +4,7 @@ import { isBiometricAvailable } from '../../platform/biometric';
 import { EraseView } from './EraseView';
 import { useLock } from './LockProvider';
 import { RecoverView } from './RecoverView';
-import { BackButton, RANGE_ERROR, WaitStatus, card, errorText, link, primary, secondary } from './lockUi';
+import { BackButton, CHECK_FAILED, RANGE_ERROR, WaitStatus, card, errorText, link, primary, secondary } from './lockUi';
 import { isValidPin, normalizeDigits } from './pin';
 
 type View = 'pin' | 'forgot' | 'recover' | 'erase';
@@ -30,7 +30,7 @@ export function LockScreen() {
       setBioReady(true);
       if (promptTried.current) return;
       promptTried.current = true;
-      void unlockWithBiometric();
+      void unlockWithBiometric().catch(() => false);
     });
     return () => {
       alive = false;
@@ -75,6 +75,8 @@ function PinView({ bioReady, onForgot }: { bioReady: boolean; onForgot: () => vo
   const [value, setValue] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
   const blocked = waitMs > 0;
 
   function change(next: string) {
@@ -90,11 +92,20 @@ function PinView({ bioReady, onForgot }: { bioReady: boolean; onForgot: () => vo
       return;
     }
     setBusy(true);
-    const result = await unlock(value);
+    let result: Awaited<ReturnType<typeof unlock>> | 'failed' = 'failed';
+    try {
+      result = await unlock(value);
+    } catch {
+      result = 'failed';
+    } finally {
+      if (result !== 'ok') setBusy(false);
+    }
     if (result === 'ok') return;
-    setBusy(false);
     setValue('');
     if (result === 'wrong') setError(t({ ar: 'الرمز غير صحيح', en: 'That PIN is not right' }));
+    if (result === 'failed') setError(t(CHECK_FAILED));
+    // The button may have become disabled by a wait: keep keyboard focus on the PIN field.
+    input.current?.focus();
   }
 
   const padButton =
@@ -104,7 +115,9 @@ function PinView({ bioReady, onForgot }: { bioReady: boolean; onForgot: () => vo
     <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
       <label
         htmlFor="lock-pin"
-        className="flex flex-col items-center gap-2 rounded-2xl border border-line bg-card p-4 focus-within:ring-2 focus-within:ring-teal"
+        data-testid="pin-display"
+        data-focused={focused}
+        className="flex flex-col items-center gap-2 rounded-2xl border border-line bg-card p-4 data-[focused=true]:ring-2 data-[focused=true]:ring-teal data-[focused=true]:ring-offset-2"
       >
         <span className="text-[15px] font-semibold">{t({ ar: 'الرمز', en: 'PIN' })}</span>
         <span aria-hidden="true" dir="ltr" className="flex min-h-6 items-center gap-3">
@@ -114,17 +127,20 @@ function PinView({ bioReady, onForgot }: { bioReady: boolean; onForgot: () => vo
             [...value].map((_, i) => <span key={i} className="h-3.5 w-3.5 rounded-full bg-ink" />)
           )}
         </span>
+        <input
+          ref={input}
+          id="lock-pin"
+          type="password"
+          inputMode="numeric"
+          autoComplete="off"
+          maxLength={MAX_PIN}
+          value={value}
+          onChange={(e) => change(e.target.value)}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          className="sr-only"
+        />
       </label>
-      <input
-        id="lock-pin"
-        type="password"
-        inputMode="numeric"
-        autoComplete="off"
-        maxLength={MAX_PIN}
-        value={value}
-        onChange={(e) => change(e.target.value)}
-        className="sr-only"
-      />
       {error && (
         <p role="alert" className={errorText}>
           {error}
@@ -144,7 +160,7 @@ function PinView({ bioReady, onForgot }: { bioReady: boolean; onForgot: () => vo
         ))}
         <button
           type="button"
-          aria-label={t({ ar: 'احذف آخر رقم', en: 'Delete the last digit' })}
+          aria-label={t({ ar: 'أحذف آخر رقم', en: 'Delete the last digit' })}
           onClick={() => change(value.slice(0, -1))}
           className={`${padButton} text-base`}
         >
@@ -159,11 +175,12 @@ function PinView({ bioReady, onForgot }: { bioReady: boolean; onForgot: () => vo
         />
         <span />
       </div>
-      <button type="submit" disabled={blocked || busy} className={primary}>
+      {/* aria-disabled while checking keeps focus on the button; disabled only during a wait. */}
+      <button type="submit" disabled={blocked} aria-disabled={busy || undefined} className={primary}>
         {t({ ar: 'فتح', en: 'Unlock' })}
       </button>
       {bioReady && (
-        <button type="button" onClick={() => void unlockWithBiometric()} className={secondary}>
+        <button type="button" onClick={() => void unlockWithBiometric().catch(() => false)} className={secondary}>
           {t({ ar: 'استخدم البصمة', en: 'Use biometrics' })}
         </button>
       )}

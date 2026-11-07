@@ -6,7 +6,7 @@ import { createMemoryRepo } from '../../db/memoryRepo';
 import type { Repo } from '../../db/repo';
 import { setActiveLanguage } from '../../i18n';
 import { isBiometricAvailable, verifyBiometric } from '../../platform/biometric';
-import { LockProvider } from './LockProvider';
+import { LockProvider, type LockApi } from './LockProvider';
 import { LockScreen } from './LockScreen';
 import { consumeResetNotice, readLock, writeLock, type LockRecord } from './lockStore';
 import { hashSecret, normalizeRecoveryCode } from './pin';
@@ -18,6 +18,13 @@ vi.mock('../../platform/biometric', () => ({
   isBiometricAvailable: vi.fn(async () => false),
   verifyBiometric: vi.fn(async () => false),
 }));
+
+// Lets a test replace one provider call (for example with a rejecting one) while the rest stay real.
+const overrides = vi.hoisted(() => ({ api: {} as Record<string, unknown> }));
+vi.mock('./LockProvider', async (importOriginal) => {
+  const real = await importOriginal<typeof import('./LockProvider')>();
+  return { ...real, useLock: (): LockApi => ({ ...real.useLock(), ...overrides.api }) };
+});
 
 const CODE = 'ABCD-EFGH-JKMN';
 const SLOW = { timeout: 5000 };
@@ -54,6 +61,7 @@ const unlockButton = (name = 'فتح') => screen.getByRole('button', { name });
 beforeEach(() => {
   localStorage.clear();
   consumeResetNotice();
+  overrides.api = {};
   vi.mocked(isBiometricAvailable).mockReset().mockResolvedValue(false);
   vi.mocked(verifyBiometric).mockReset().mockResolvedValue(false);
   vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
@@ -111,7 +119,7 @@ describe('LockScreen', () => {
     await storeRecord();
     renderScreen();
     await pressDigits(user, '13579');
-    await user.click(screen.getByRole('button', { name: 'احذف آخر رقم' }));
+    await user.click(screen.getByRole('button', { name: 'أحذف آخر رقم' }));
     expect(screen.getByLabelText('الرمز')).toHaveValue('1357');
     await user.click(unlockButton());
     expect(await screen.findByText('app content', undefined, SLOW)).toBeInTheDocument();
@@ -201,6 +209,63 @@ describe('LockScreen', () => {
     expect(screen.getByRole('button', { name: 'Unlock' })).toBeDisabled();
   });
 
+  it('shows where keyboard focus is on the PIN field', async () => {
+    const user = userEvent.setup();
+    await storeRecord();
+    renderScreen();
+    const display = screen.getByTestId('pin-display');
+    expect(display).toHaveAttribute('data-focused', 'false');
+    await user.tab();
+    expect(screen.getByLabelText('الرمز')).toHaveFocus();
+    expect(display).toHaveAttribute('data-focused', 'true');
+    expect(display.className).toContain('data-[focused=true]:ring-2');
+    await user.tab();
+    expect(display).toHaveAttribute('data-focused', 'false');
+  });
+
+  it('returns focus to the PIN field after a wrong PIN and after a blocking one', async () => {
+    const user = userEvent.setup();
+    await storeRecord({ failures: 3 });
+    renderScreen();
+    await pressDigits(user, '0000');
+    await user.click(unlockButton());
+    expect(await screen.findByText('الرمز غير صحيح', undefined, SLOW)).toBeInTheDocument();
+    expect(screen.getByLabelText('الرمز')).toHaveFocus();
+
+    await pressDigits(user, '0000');
+    await user.click(unlockButton());
+    expect(await screen.findByText('الرمز غير صحيح', undefined, SLOW)).toBeInTheDocument();
+    expect(unlockButton()).toBeDisabled();
+    expect(screen.getByLabelText('الرمز')).toHaveFocus();
+  });
+
+  it('shows a calm error and stays usable when the unlock check fails', async () => {
+    const user = userEvent.setup();
+    overrides.api = { unlock: vi.fn(async () => Promise.reject(new Error('boom'))) };
+    await storeRecord();
+    renderScreen();
+    await pressDigits(user, '1357');
+    await user.click(unlockButton());
+    expect(await screen.findByRole('alert')).toHaveTextContent('تعذّر التحقق. يمكنني المحاولة مرة أخرى.');
+    expect(unlockButton()).toBeEnabled();
+    expect(unlockButton()).not.toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByLabelText('الرمز')).toHaveFocus();
+  });
+
+  it('shows a calm error and stays usable when the recovery check fails', async () => {
+    const user = userEvent.setup();
+    overrides.api = { recover: vi.fn(async () => Promise.reject(new Error('boom'))) };
+    await storeRecord();
+    renderScreen();
+    await user.click(screen.getByRole('button', { name: 'نسيت الرمز؟' }));
+    await user.click(screen.getByRole('button', { name: 'لدي رمز الاسترداد' }));
+    await user.type(screen.getByLabelText('رمز الاسترداد'), CODE);
+    await user.click(screen.getByRole('button', { name: 'أتحقق' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('تعذّر التحقق. يمكنني المحاولة مرة أخرى.');
+    expect(screen.getByRole('button', { name: 'أتحقق' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'أتحقق' })).not.toHaveAttribute('aria-disabled', 'true');
+  });
+
   describe('biometrics', () => {
     it('has no biometric button and never asks when biometrics are off', async () => {
       vi.mocked(isBiometricAvailable).mockResolvedValue(true);
@@ -277,7 +342,7 @@ describe('LockScreen', () => {
       await user.click(screen.getByRole('button', { name: 'نسيت الرمز؟' }));
       await user.click(screen.getByRole('button', { name: 'لدي رمز الاسترداد' }));
       await user.type(screen.getByLabelText('رمز الاسترداد'), 'abcdefghjkmn');
-      await user.click(screen.getByRole('button', { name: 'تحقّق' }));
+      await user.click(screen.getByRole('button', { name: 'أتحقق' }));
 
       const first = await screen.findByLabelText('الرمز الجديد', undefined, SLOW);
       const again = screen.getByLabelText('أعيد كتابة الرمز الجديد');
@@ -285,11 +350,12 @@ describe('LockScreen', () => {
       await user.type(first, '٢٤٦٨');
       expect(first).toHaveValue('2468');
       await user.type(again, '2468');
-      await user.click(screen.getByRole('button', { name: 'احفظ الرمز الجديد' }));
+      await user.click(screen.getByRole('button', { name: 'أحفظ الرمز الجديد' }));
 
       const shown = await screen.findByTestId('new-recovery-code', undefined, SLOW);
       expect(shown.textContent).toMatch(/^[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$/);
       expect(shown.textContent).not.toBe(CODE);
+      expect(screen.getByText(/^تم حفظ رمز الدخول الجديد\./)).toBeInTheDocument();
       expect(screen.queryByText('app content')).toBeNull();
 
       const done = screen.getByRole('button', { name: 'تم' });
@@ -311,11 +377,11 @@ describe('LockScreen', () => {
       await user.click(screen.getByRole('button', { name: 'نسيت الرمز؟' }));
       await user.click(screen.getByRole('button', { name: 'لدي رمز الاسترداد' }));
       await user.type(screen.getByLabelText('رمز الاسترداد'), CODE);
-      await user.click(screen.getByRole('button', { name: 'تحقّق' }));
+      await user.click(screen.getByRole('button', { name: 'أتحقق' }));
 
       const first = await screen.findByLabelText('الرمز الجديد', undefined, SLOW);
       const again = screen.getByLabelText('أعيد كتابة الرمز الجديد');
-      const save = screen.getByRole('button', { name: 'احفظ الرمز الجديد' });
+      const save = screen.getByRole('button', { name: 'أحفظ الرمز الجديد' });
 
       await user.type(first, '12');
       await user.type(again, '12');
@@ -345,10 +411,10 @@ describe('LockScreen', () => {
       await user.click(screen.getByRole('button', { name: 'نسيت الرمز؟' }));
       await user.click(screen.getByRole('button', { name: 'لدي رمز الاسترداد' }));
       await user.type(screen.getByLabelText('رمز الاسترداد'), 'ZZZZ-ZZZZ-ZZZZ');
-      await user.click(screen.getByRole('button', { name: 'تحقّق' }));
+      await user.click(screen.getByRole('button', { name: 'أتحقق' }));
       expect(await screen.findByText('رمز الاسترداد غير صحيح', undefined, SLOW)).toBeInTheDocument();
       expect(readLock()?.failures).toBe(5);
-      expect(screen.getByRole('button', { name: 'تحقّق' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'أتحقق' })).toBeDisabled();
       expect(screen.getByRole('status')).toHaveTextContent('٣٠');
 
       await user.click(screen.getByRole('button', { name: 'رجوع' }));
