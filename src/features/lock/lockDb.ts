@@ -6,10 +6,10 @@
  * Keys in the `kv` store: `lock` (the record, as given) and `initialized` (`true` once anything was written, so an
  * erased lock reads as "initialized, no record").
  */
-export const LOCK_DB_NAME = "rafiq-lock";
-const STORE = "kv";
-const LOCK = "lock";
-const INITIALIZED = "initialized";
+export const LOCK_DB_NAME = 'rafiq-lock';
+const STORE = 'kv';
+const LOCK = 'lock';
+const INITIALIZED = 'initialized';
 const DEFAULT_TIMEOUT_MS = 2000;
 
 export interface LockDbState {
@@ -18,20 +18,14 @@ export interface LockDbState {
 }
 
 export function lockDbAvailable(): boolean {
-  return (
-    typeof globalThis.indexedDB !== "undefined" && globalThis.indexedDB !== null
-  );
+  return typeof globalThis.indexedDB !== 'undefined' && globalThis.indexedDB !== null;
 }
 
 /**
  * Opens the database, runs `work` inside one transaction and resolves with its result once the transaction has
  * completed. Rejects on any error, abort, block or timeout, and always closes the connection.
  */
-function run<T>(
-  mode: IDBTransactionMode,
-  timeoutMs: number,
-  work: (store: IDBObjectStore) => () => T,
-): Promise<T> {
+function run<T>(mode: IDBTransactionMode, timeoutMs: number, work: (store: IDBObjectStore) => () => T): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     let db: IDBDatabase | undefined;
     let settled = false;
@@ -51,19 +45,14 @@ function run<T>(
     };
 
     try {
-      if (!lockDbAvailable()) throw new Error("IndexedDB is not available");
-      timer = setTimeout(
-        () => finish(new Error("IndexedDB timed out")),
-        timeoutMs,
-      );
+      if (!lockDbAvailable()) throw new Error('IndexedDB is not available');
+      timer = setTimeout(() => finish(new Error('IndexedDB timed out')), timeoutMs);
       const request = globalThis.indexedDB.open(LOCK_DB_NAME, 1);
       request.onupgradeneeded = () => {
-        if (!request.result.objectStoreNames.contains(STORE))
-          request.result.createObjectStore(STORE);
+        if (!request.result.objectStoreNames.contains(STORE)) request.result.createObjectStore(STORE);
       };
-      request.onblocked = () => finish(new Error("IndexedDB open was blocked"));
-      request.onerror = () =>
-        finish(request.error ?? new Error("IndexedDB open failed"));
+      request.onblocked = () => finish(new Error('IndexedDB open was blocked'));
+      request.onerror = () => finish(request.error ?? new Error('IndexedDB open failed'));
       request.onsuccess = () => {
         db = request.result;
         db.onversionchange = () => db?.close();
@@ -72,31 +61,33 @@ function run<T>(
           db.close();
           return;
         }
+        let tx: IDBTransaction | undefined;
         try {
-          const tx =
-            mode === "readwrite"
-              ? db.transaction(STORE, mode, { durability: "strict" })
-              : db.transaction(STORE, mode);
-          const result = work(tx.objectStore(STORE));
-          tx.oncomplete = () => finish(undefined, result());
-          tx.onerror = () =>
-            finish(tx.error ?? new Error("IndexedDB transaction failed"));
-          tx.onabort = () =>
-            finish(tx.error ?? new Error("IndexedDB transaction aborted"));
+          const opened =
+            mode === 'readwrite' ? db.transaction(STORE, mode, { durability: 'strict' }) : db.transaction(STORE, mode);
+          tx = opened;
+          const result = work(opened.objectStore(STORE));
+          opened.oncomplete = () => finish(undefined, result());
+          opened.onerror = () => finish(opened.error ?? new Error('IndexedDB transaction failed'));
+          opened.onabort = () => finish(opened.error ?? new Error('IndexedDB transaction aborted'));
         } catch (error) {
-          finish(error ?? new Error("IndexedDB transaction failed"));
+          try {
+            // a throw inside the body must not let a partial transaction auto-commit
+            tx?.abort();
+          } catch {
+            // already finished
+          }
+          finish(error ?? new Error('IndexedDB transaction failed'));
         }
       };
     } catch (error) {
-      finish(error ?? new Error("IndexedDB failed"));
+      finish(error ?? new Error('IndexedDB failed'));
     }
   });
 }
 
-export function readLockDb(
-  timeoutMs: number = DEFAULT_TIMEOUT_MS,
-): Promise<LockDbState> {
-  return run("readonly", timeoutMs, (store) => {
+export function readLockDb(timeoutMs: number = DEFAULT_TIMEOUT_MS): Promise<LockDbState> {
+  return run('readonly', timeoutMs, (store) => {
     const initialized = store.get(INITIALIZED);
     const lock = store.get(LOCK);
     return () => ({
@@ -106,21 +97,21 @@ export function readLockDb(
   });
 }
 
-export function writeLockDb(
-  record: unknown,
-  timeoutMs: number = DEFAULT_TIMEOUT_MS,
-): Promise<void> {
-  return run("readwrite", timeoutMs, (store) => {
+/**
+ * Writes the record durably. A rejection (especially a timeout) means the outcome is UNKNOWN: the write may still
+ * have committed. Callers must treat it as 'unknown', not as 'not written'.
+ */
+export function writeLockDb(record: unknown, timeoutMs: number = DEFAULT_TIMEOUT_MS): Promise<void> {
+  return run('readwrite', timeoutMs, (store) => {
     store.put(record, LOCK);
     store.put(true, INITIALIZED);
     return () => undefined;
   });
 }
 
-export function clearLockDb(
-  timeoutMs: number = DEFAULT_TIMEOUT_MS,
-): Promise<void> {
-  return run("readwrite", timeoutMs, (store) => {
+/** Erases the record durably. A rejection (especially a timeout) leaves the outcome UNKNOWN, as for writeLockDb. */
+export function clearLockDb(timeoutMs: number = DEFAULT_TIMEOUT_MS): Promise<void> {
+  return run('readwrite', timeoutMs, (store) => {
     store.delete(LOCK);
     store.put(true, INITIALIZED);
     return () => undefined;
