@@ -18,15 +18,30 @@ export interface LockRecord {
 
 let resetNotice = false;
 
+const SALT_BYTES = 16;
+const HASH_BYTES = 32;
+const MAX_ITERATIONS = 1_000_000;
+
+/** True when `value` is canonical base64 that decodes to exactly `bytes` bytes. */
+function isBase64Of(value: unknown, bytes: number): boolean {
+  if (typeof value !== 'string') return false;
+  if (value.length !== Math.ceil(bytes / 3) * 4 || !/^[A-Za-z0-9+/]*={0,2}$/.test(value)) return false;
+  try {
+    return atob(value).length === bytes;
+  } catch {
+    return false;
+  }
+}
+
 function isSecret(value: unknown): value is SecretRecord {
   if (typeof value !== 'object' || value === null) return false;
   const secret = value as Record<string, unknown>;
   return (
-    typeof secret.salt === 'string' &&
-    typeof secret.hash === 'string' &&
-    typeof secret.iter === 'number' &&
-    Number.isFinite(secret.iter) &&
-    secret.iter > 0
+    isBase64Of(secret.salt, SALT_BYTES) &&
+    isBase64Of(secret.hash, HASH_BYTES) &&
+    Number.isInteger(secret.iter) &&
+    (secret.iter as number) >= 1 &&
+    (secret.iter as number) <= MAX_ITERATIONS
   );
 }
 
@@ -43,6 +58,7 @@ function isLockRecord(value: unknown): value is LockRecord {
     isSecret(record.recovery) &&
     typeof record.biometric === 'boolean' &&
     (AUTO_LOCK_OPTIONS as readonly number[]).includes(record.autoLockMs as number) &&
+    Number.isInteger(record.failures) &&
     isNonNegative(record.failures) &&
     isNonNegative(record.blockedUntil)
   );

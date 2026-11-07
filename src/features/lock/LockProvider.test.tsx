@@ -189,11 +189,20 @@ describe('LockProvider', () => {
     expect(readLock()?.failures).toBe(5);
   });
 
-  it('treats a record that cannot be verified as a wrong PIN', async () => {
-    await storeRecord({ pin: { salt: '!!not base64!!', hash: '%%%', iter: 1000 } });
+  it('treats a verification that throws as a wrong PIN', async () => {
+    await storeRecord();
     renderLock();
+    vi.spyOn(crypto.subtle, 'deriveBits').mockRejectedValueOnce(new Error('OperationError'));
     expect(await call(() => api.unlock('1357'))).toBe('wrong');
     expect(isLocked()).toBe(true);
+  });
+
+  it('treats a record with damaged hash strings as off, with the reset notice', async () => {
+    await storeRecord({ pin: { salt: '!', hash: '%%%', iter: 1000 } });
+    renderLock();
+    expect(api.enabled).toBe(false);
+    expect(api.resetNotice).toBe(true);
+    expect(isOpen()).toBe(true);
   });
 
   it('still unlocks, and still reports wrong, when storage cannot be written', async () => {
@@ -279,6 +288,65 @@ describe('LockProvider', () => {
       act(() => fg.cb!(false));
       act(() => fg.cb!(true));
       expect(isLocked()).toBe(true);
+    });
+
+    it('locks when the clock is moved back while the app is hidden', async () => {
+      await openWith(60000);
+      act(() => fg.cb!(false));
+      vi.setSystemTime(Date.now() - 3600000);
+      act(() => fg.cb!(true));
+      expect(isLocked()).toBe(true);
+    });
+
+    it('uses the monotonic time when the clock was set back by less than the time away', async () => {
+      const mono = vi.spyOn(performance, 'now').mockReturnValue(1000);
+      await openWith(60000);
+      act(() => fg.cb!(false));
+      act(() => vi.advanceTimersByTime(120000));
+      mono.mockReturnValue(121000);
+      vi.setSystemTime(Date.now() - 100000);
+      act(() => fg.cb!(true));
+      expect(isLocked()).toBe(true);
+    });
+
+    it('a short background with both clocks agreeing still does not lock', async () => {
+      const mono = vi.spyOn(performance, 'now').mockReturnValue(1000);
+      await openWith(60000);
+      act(() => fg.cb!(false));
+      act(() => vi.advanceTimersByTime(30000));
+      mono.mockReturnValue(31000);
+      act(() => fg.cb!(true));
+      expect(isOpen()).toBe(true);
+    });
+
+    it('a pause released while hidden starts the timeout from the release', async () => {
+      await openWith(60000);
+      act(() => api.setAutoLockPaused(true));
+      act(() => fg.cb!(false));
+      act(() => vi.advanceTimersByTime(5 * 60000));
+      act(() => api.setAutoLockPaused(false));
+      act(() => vi.advanceTimersByTime(61000));
+      act(() => fg.cb!(true));
+      expect(isLocked()).toBe(true);
+    });
+
+    it('a pause released while hidden locks on return when set to immediately', async () => {
+      await openWith(0);
+      act(() => api.setAutoLockPaused(true));
+      act(() => fg.cb!(false));
+      act(() => api.setAutoLockPaused(false));
+      act(() => fg.cb!(true));
+      expect(isLocked()).toBe(true);
+    });
+
+    it('a pause released while visible leaves no background time behind', async () => {
+      await openWith(0);
+      act(() => api.setAutoLockPaused(true));
+      act(() => fg.cb!(false));
+      act(() => fg.cb!(true));
+      act(() => api.setAutoLockPaused(false));
+      act(() => fg.cb!(true));
+      expect(isOpen()).toBe(true);
     });
 
     it('never locks when the page is never backgrounded', async () => {
@@ -511,6 +579,64 @@ describe('LockProvider', () => {
     act(() => api.setAutoLockMs(0));
     expect(readLock()).toMatchObject({ autoLockMs: 60000 });
     expect(isLocked()).toBe(true);
+  });
+
+  it('adopts a newer record written by another tab instead of writing the old one back', async () => {
+    await storeRecord();
+    renderLock();
+    const other: LockRecord = {
+      v: 1,
+      pin: await hashSecret('2468', 1000),
+      recovery: await hashSecret(normalizeRecoveryCode('ZZZZ-ZZZZ-ZZZZ'), 1000),
+      biometric: false,
+      autoLockMs: 300000,
+      failures: 2,
+      blockedUntil: 0,
+    };
+    writeLock(other);
+    expect(await call(() => api.unlock('0000'))).toBe('wrong');
+    expect(readLock()).toMatchObject({ pin: other.pin, recovery: other.recovery, autoLockMs: 300000, failures: 3 });
+    expect(await call(() => api.unlock('1357'))).toBe('wrong');
+    expect(await call(() => api.unlock('2468'))).toBe('ok');
+    expect(readLock()).toMatchObject({ pin: other.pin, failures: 0 });
+  });
+
+  it('adopts another tab\'s record before a settings change', async () => {
+    const mine = await storeRecord();
+    renderLock();
+    await call(() => api.unlock('1357'));
+    const otherPin = await hashSecret('2468', 1000);
+    writeLock({ ...mine, pin: otherPin });
+    act(() => api.setBiometric(true));
+    expect(readLock()).toMatchObject({ pin: otherPin, biometric: true });
+  });
+
+  it('a check whose record another tab replaces while it runs returns wrong without counting', async () => {
+    await storeRecord();
+    renderLock();
+    const otherPin = await hashSecret('2468', 1000);
+    const derive = crypto.subtle.deriveBits.bind(crypto.subtle);
+    vi.spyOn(crypto.subtle, 'deriveBits').mockImplementationOnce(async (...args) => {
+      writeLock({ ...readLock()!, pin: otherPin });
+      return derive(...args);
+    });
+    expect(await call(() => api.verifyPin('1357'))).toBe('wrong');
+    expect(readLock()).toMatchObject({ pin: otherPin, failures: 0 });
+  });
+
+  it('keeps the lock on when a storage read returns nothing', async () => {
+    await storeRecord();
+    renderLock();
+    vi.spyOn(Storage.prototype, 'getItem').mockReturnValue(null);
+    expect(await call(() => api.unlock('0000'))).toBe('wrong');
+    expect(api.enabled).toBe(true);
+    expect(isLocked()).toBe(true);
+    act(() => api.turnOff());
+    expect(api.enabled).toBe(true);
+    expect(await call(() => api.unlock('1357'))).toBe('ok');
+    act(() => api.setAutoLockMs(0));
+    expect(api.enabled).toBe(true);
+    expect(api.record?.autoLockMs).toBe(0);
   });
 
   it('reports a damaged record once, even under StrictMode', () => {

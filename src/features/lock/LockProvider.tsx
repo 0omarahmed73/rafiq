@@ -108,6 +108,26 @@ function clampAndPersist(record: LockRecord, now: number): LockRecord {
   return clamped;
 }
 
+function sameSecret(a: SecretRecord, b: SecretRecord): boolean {
+  return a.salt === b.salt && a.hash === b.hash && a.iter === b.iter;
+}
+
+function sameRecord(a: LockRecord, b: LockRecord): boolean {
+  return (
+    sameSecret(a.pin, b.pin) &&
+    sameSecret(a.recovery, b.recovery) &&
+    a.biometric === b.biometric &&
+    a.autoLockMs === b.autoLockMs &&
+    a.failures === b.failures &&
+    a.blockedUntil === b.blockedUntil
+  );
+}
+
+/** Wall-clock and monotonic stamps of one moment, so a clock moved back cannot shorten the time away. */
+function stamp(): { wall: number; mono: number } {
+  return { wall: Date.now(), mono: performance.now() };
+}
+
 function readClamped(): LockRecord | null {
   const record = readLock();
   return record ? clampAndPersist(record, Date.now()) : null;
@@ -138,7 +158,9 @@ export function LockProvider({
   /** True once a new PIN has been saved on the recovery path; finishRecovery needs it. */
   const recoveryPinSaved = useRef(false);
   const chain = useRef<Promise<unknown>>(Promise.resolve());
-  const hiddenAt = useRef<number | null>(null);
+  const hiddenAt = useRef<{ wall: number; mono: number } | null>(null);
+  /** Whether the app is in the background right now, tracked even while auto-lock is paused. */
+  const isHidden = useRef(typeof document !== 'undefined' && document.hidden);
   const autoLockPaused = useRef(false);
 
   const setRecord = useCallback((next: LockRecord | null) => {
@@ -158,6 +180,21 @@ export function LockProvider({
   useEffect(() => {
     pendingResetNotice = false;
   }, []);
+
+  /**
+   * Adopts the stored record when it is valid and differs from memory (another tab changed it), so this tab
+   * never writes an old PIN or recovery back over a newer one. A read that finds nothing keeps the in-memory
+   * record: a transient storage failure must never turn the lock off.
+   */
+  const syncFromStorage = useCallback((): LockRecord | null => {
+    const stored = readLock();
+    const mine = recordRef.current;
+    if (stored && (!mine || !sameRecord(stored, mine))) {
+      setRecord(stored);
+      return stored;
+    }
+    return mine;
+  }, [setRecord]);
 
   /** The current record with blockedUntil clamped (and stored) so a block never lasts past the longest wait. */
   const currentClamped = useCallback((): LockRecord | null => {
@@ -181,15 +218,20 @@ export function LockProvider({
     () =>
       onForegroundChange((active) => {
         if (!active) {
-          if (hiddenAt.current === null && !autoLockPaused.current) hiddenAt.current = Date.now();
+          isHidden.current = true;
+          if (hiddenAt.current === null && !autoLockPaused.current) hiddenAt.current = stamp();
           return;
         }
+        isHidden.current = false;
         const since = hiddenAt.current;
         hiddenAt.current = null;
         if (autoLockPaused.current) return;
         const current = recordRef.current;
         if (since === null || !current || lockedRef.current) return;
-        if (Date.now() - since >= current.autoLockMs) {
+        const now = stamp();
+        const wall = now.wall - since.wall;
+        // A wall clock moved back counts as past the timeout; otherwise the longer of the two clocks wins.
+        if (wall < 0 || Math.max(wall, now.mono - since.mono) >= current.autoLockMs) {
           setRecoveredBoth(false);
           setLockedBoth(true);
         }
@@ -215,13 +257,14 @@ export function LockProvider({
   const check = useCallback(
     (secret: string, pick: (rec: LockRecord) => SecretRecord): Promise<VerifyResult> => {
       const run = async (): Promise<VerifyResult> => {
+        syncFromStorage();
         const rec = currentClamped();
         if (!rec) return 'wrong';
         if (remainingWaitMs(rec, Date.now()) > 0) return 'blocked';
         const target = pick(rec);
         const ok = await safeVerify(secret, target);
-        const latest = recordRef.current;
-        if (!latest || pick(latest) !== target) return 'wrong';
+        const latest = syncFromStorage();
+        if (!latest || !sameSecret(pick(latest), target)) return 'wrong';
         if (ok) {
           setRecord(
             persistOr(() => recordSuccess(latest), {
@@ -245,7 +288,7 @@ export function LockProvider({
       };
       return enqueue(run);
     },
-    [setRecord, currentClamped, enqueue],
+    [setRecord, syncFromStorage, currentClamped, enqueue],
   );
 
   const verifyPin = useCallback((pin: string) => check(normalizeDigits(pin), (rec) => rec.pin), [check]);
@@ -293,7 +336,7 @@ export function LockProvider({
     (pin: string, biometric: boolean) =>
       enqueue(async () => {
         const normalized = newPin(pin);
-        if (recordRef.current) throw new Error('The lock is already on.');
+        if (syncFromStorage()) throw new Error('The lock is already on.');
         const code = generateRecoveryCode();
         const next: LockRecord = {
           v: 1,
@@ -304,21 +347,21 @@ export function LockProvider({
           failures: 0,
           blockedUntil: 0,
         };
-        if (recordRef.current) throw new Error('The lock is already on.');
+        if (syncFromStorage()) throw new Error('The lock is already on.');
         writeLock(next);
         setRecord(next);
         setRecoveredBoth(false);
         setLockedBoth(false);
         return code;
       }),
-    [enqueue, setRecord, setLockedBoth, setRecoveredBoth],
+    [enqueue, syncFromStorage, setRecord, setLockedBoth, setRecoveredBoth],
   );
 
   const changePin = useCallback(
     (pin: string) =>
       enqueue(async () => {
         const normalized = newPin(pin);
-        if (!recordRef.current) throw new Error('The lock is off.');
+        if (!syncFromStorage()) throw new Error('The lock is off.');
         if (lockedRef.current && !recoveredRef.current) throw new Error('Unlock or recover before changing the PIN.');
         // Recovery path: locked with a recovered code; it stays locked so the new code can be shown, and
         // finishRecovery opens the app. Settings path: open; it changes nothing else.
@@ -326,7 +369,7 @@ export function LockProvider({
         const code = generateRecoveryCode();
         const pinHash = await hashSecret(normalized);
         const recoveryHash = await hashSecret(normalizeRecoveryCode(code));
-        const current = recordRef.current;
+        const current = syncFromStorage();
         if (!current) throw new Error('The lock is off.');
         const stillAllowed = viaRecovery ? lockedRef.current && recoveredRef.current : !lockedRef.current;
         if (!stillAllowed) throw new Error('The lock state changed while the PIN was being changed.');
@@ -342,7 +385,7 @@ export function LockProvider({
         if (viaRecovery) recoveryPinSaved.current = true;
         return code;
       }),
-    [enqueue, setRecord],
+    [enqueue, syncFromStorage, setRecord],
   );
 
   const finishRecovery = useCallback(() => {
@@ -353,8 +396,9 @@ export function LockProvider({
 
   const update = useCallback(
     (change: Partial<LockRecord>) => {
-      const current = recordRef.current;
-      if (!current || lockedRef.current) return;
+      if (lockedRef.current) return;
+      const current = syncFromStorage();
+      if (!current) return;
       const next = { ...current, ...change };
       try {
         writeLock(next);
@@ -363,7 +407,7 @@ export function LockProvider({
       }
       setRecord(next);
     },
-    [setRecord],
+    [syncFromStorage, setRecord],
   );
 
   const setAutoLockMs = useCallback(
@@ -376,19 +420,21 @@ export function LockProvider({
 
   const setBiometric = useCallback((on: boolean) => update({ biometric: on }), [update]);
 
-  // Pausing or resuming forgets any background time, so a pause never leaves a stale one behind.
+  // Pausing forgets any background time. Releasing while visible forgets it too; releasing while hidden
+  // (the card unmounted in the background) starts the time away from the release, so the timeout still applies.
   const setAutoLockPaused = useCallback((paused: boolean) => {
     autoLockPaused.current = paused;
-    hiddenAt.current = null;
+    hiddenAt.current = !paused && isHidden.current ? stamp() : null;
   }, []);
 
   const turnOff = useCallback(() => {
     if (lockedRef.current) return;
+    syncFromStorage();
     clearLock();
     setRecord(null);
     setRecoveredBoth(false);
     setLockedBoth(false);
-  }, [setRecord, setLockedBoth, setRecoveredBoth]);
+  }, [syncFromStorage, setRecord, setLockedBoth, setRecoveredBoth]);
 
   const eraseEverything = useCallback(async () => {
     await repo.eraseAll();
