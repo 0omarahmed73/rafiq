@@ -1,7 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   EnvelopeError,
   KDF_ITERATIONS,
+  MAX_KDF_ITERATIONS,
+  assertSupportedKdf,
   decryptEnvelope,
   deriveVaultKey,
   encryptEnvelope,
@@ -33,6 +35,11 @@ function flip(text: string, index: number) {
 }
 
 describe('envelope', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
   it('uses 600000 PBKDF2 iterations and 16-byte random salts', () => {
     expect(KDF_ITERATIONS).toBe(600000);
     const a = newSalt();
@@ -99,11 +106,88 @@ describe('envelope', () => {
     expect(await decryptEnvelope(key, 'u1', env)).toEqual(big);
   });
 
-  it('derives the same key from the same passphrase and salt', async () => {
-    const salt = 'AAECAwQFBgcICQoLDA0ODw==';
-    const first = await deriveVaultKey('same phrase', salt, ITER);
-    const second = await deriveVaultKey('same phrase', salt, ITER);
-    const env = await encryptEnvelope(first, salt, 'u1', sample, ITER);
-    expect(await decryptEnvelope(second, 'u1', env)).toEqual(sample);
+  it('cannot decrypt with a key derived from a different salt', async () => {
+    const { key, salt } = await setup('same phrase');
+    const env = await encryptEnvelope(key, salt, 'u1', sample, ITER);
+    const other = await deriveVaultKey('same phrase', newSalt(), ITER);
+    expect(await kindOf(decryptEnvelope(other, 'u1', env))).toBe('decrypt');
+  });
+
+  it('cannot decrypt with a key derived with a different iteration count', async () => {
+    const { key, salt } = await setup('same phrase');
+    const env = await encryptEnvelope(key, salt, 'u1', sample, ITER);
+    const other = await deriveVaultKey('same phrase', salt, ITER + 1);
+    expect(await kindOf(decryptEnvelope(other, 'u1', env))).toBe('decrypt');
+    const same = await deriveVaultKey('same phrase', salt, ITER);
+    expect(await decryptEnvelope(same, 'u1', env)).toEqual(sample);
+  });
+
+  it('round-trips a large incompressible payload', async () => {
+    const { key, salt } = await setup();
+    const bytes = new Uint8Array(300 * 1024);
+    for (let i = 0; i < bytes.length; i += 65536) crypto.getRandomValues(bytes.subarray(i, i + 65536));
+    const big = { blob: Buffer.from(bytes).toString('base64') };
+    const env = await encryptEnvelope(key, salt, 'u1', big, ITER);
+    expect(env.ct.length).toBeGreaterThan(300 * 1024);
+    expect(await decryptEnvelope(key, 'u1', env)).toEqual(big);
+  });
+
+  it('skips compression when CompressionStream is missing', async () => {
+    const { key, salt } = await setup();
+    vi.stubGlobal('CompressionStream', undefined);
+    const env = await encryptEnvelope(key, salt, 'u1', sample, ITER);
+    vi.unstubAllGlobals();
+    expect(env.gz).toBe(false);
+    expect(await decryptEnvelope(key, 'u1', env)).toEqual(sample);
+  });
+
+  it('reports a compressed envelope as unsupported when DecompressionStream is missing', async () => {
+    const { key, salt } = await setup();
+    const env = await encryptEnvelope(key, salt, 'u1', sample, ITER);
+    expect(env.gz).toBe(true);
+    vi.stubGlobal('DecompressionStream', undefined);
+    expect(await kindOf(decryptEnvelope(key, 'u1', env))).toBe('unsupported');
+  });
+
+  it('rejects unknown algorithms as unsupported', async () => {
+    const { key, salt } = await setup();
+    const env = await encryptEnvelope(key, salt, 'u1', sample, ITER);
+    expect(await kindOf(decryptEnvelope(key, 'u1', { ...env, alg: 'AES-128-CBC' } as never))).toBe('unsupported');
+    const kdf = { ...env.kdf, name: 'scrypt' };
+    expect(await kindOf(decryptEnvelope(key, 'u1', { ...env, kdf } as never))).toBe('unsupported');
+  });
+
+  describe('key derivation bounds', () => {
+    it('refuses an absurd iteration count without starting a derivation', async () => {
+      const { key, salt } = await setup();
+      const env = await encryptEnvelope(key, salt, 'u1', sample, ITER);
+      const bad = { ...env, kdf: { ...env.kdf, iter: 2 ** 31 } };
+      const deriveKey = vi.spyOn(crypto.subtle, 'deriveKey');
+      const deriveBits = vi.spyOn(crypto.subtle, 'deriveBits');
+      expect(await kindOf(deriveVaultKey('p', salt, 2 ** 31))).toBe('unsupported');
+      expect(() => assertSupportedKdf(bad)).toThrow(EnvelopeError);
+      expect(await kindOf(decryptEnvelope(key, 'u1', bad))).toBe('unsupported');
+      expect(deriveKey).not.toHaveBeenCalled();
+      expect(deriveBits).not.toHaveBeenCalled();
+    });
+
+    it('treats a non-integer or non-positive iteration count as a format error', async () => {
+      const { key, salt } = await setup();
+      const env = await encryptEnvelope(key, salt, 'u1', sample, ITER);
+      for (const iter of [Number.NaN, -1, 0, 1.5]) {
+        const bad = { ...env, kdf: { ...env.kdf, iter } };
+        expect(isEnvelope(bad)).toBe(false);
+        expect(await kindOf(decryptEnvelope(key, 'u1', bad))).toBe('format');
+        expect(await kindOf(deriveVaultKey('p', salt, iter))).toBe('format');
+      }
+    });
+
+    it('accepts exactly the maximum in the shape check', async () => {
+      const { key, salt } = await setup();
+      const env = await encryptEnvelope(key, salt, 'u1', sample, ITER);
+      const edge = { ...env, kdf: { ...env.kdf, iter: MAX_KDF_ITERATIONS } };
+      expect(isEnvelope(edge)).toBe(true);
+      expect(() => assertSupportedKdf(edge)).not.toThrow();
+    });
   });
 });
