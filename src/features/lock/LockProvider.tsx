@@ -16,6 +16,7 @@ import { verifyBiometric } from '../../platform/biometric';
 import {
   AUTO_LOCK_OPTIONS,
   DEFAULT_AUTO_LOCK_MS,
+  clampBlock,
   clearLock,
   consumeResetNotice,
   readLock,
@@ -90,11 +91,38 @@ function newPin(pin: string): string {
   return normalized;
 }
 
+/** Clamps a far-away blockedUntil to the longest wait from now and tries to persist the clamped value. */
+function clampAndPersist(record: LockRecord, now: number): LockRecord {
+  const clamped = clampBlock(record, now);
+  if (clamped !== record) {
+    try {
+      writeLock(clamped);
+    } catch {
+      // storage unavailable: the clamp still applies in memory
+    }
+  }
+  return clamped;
+}
+
+function readClamped(): LockRecord | null {
+  const record = readLock();
+  return record ? clampAndPersist(record, Date.now()) : null;
+}
+
 const NullScreen: ComponentType = () => null;
 
-export function LockProvider({ children, screen: Screen = NullScreen }: { children: ReactNode; screen?: ComponentType }) {
+export function LockProvider({
+  children,
+  screen: Screen = NullScreen,
+}: {
+  children: ReactNode;
+  screen?: ComponentType;
+}) {
   const repo = useRepo();
-  const [initial] = useState(() => ({ record: readLock(), notice: takeResetNotice() }));
+  const [initial] = useState(() => ({
+    record: readClamped(),
+    notice: takeResetNotice(),
+  }));
   const [record, setRecordState] = useState<LockRecord | null>(initial.record);
   const [locked, setLocked] = useState(initial.record !== null);
   const [recovered, setRecovered] = useState(false);
@@ -121,6 +149,22 @@ export function LockProvider({ children, screen: Screen = NullScreen }: { childr
 
   useEffect(() => {
     pendingResetNotice = false;
+  }, []);
+
+  /** The current record with blockedUntil clamped (and stored) so a block never lasts past the longest wait. */
+  const currentClamped = useCallback((): LockRecord | null => {
+    const rec = recordRef.current;
+    if (!rec) return null;
+    const clamped = clampAndPersist(rec, Date.now());
+    if (clamped !== rec) setRecord(clamped);
+    return clamped;
+  }, [setRecord]);
+
+  /** Runs tasks one at a time: PIN and recovery checks and PIN changes share this queue. */
+  const enqueue = useCallback(<T,>(task: () => Promise<T>): Promise<T> => {
+    const result = chain.current.then(task, task);
+    chain.current = result.catch(() => undefined);
+    return result;
   }, []);
 
   // Auto-lock: remember when the app left the foreground (in memory only) and lock on return when
@@ -151,17 +195,18 @@ export function LockProvider({ children, screen: Screen = NullScreen }: { childr
   useEffect(() => {
     if (blockedUntil <= Date.now()) return;
     const id = setInterval(() => {
+      currentClamped();
       setTick((n) => n + 1);
       if (Date.now() >= blockedUntil) clearInterval(id);
     }, 1000);
     return () => clearInterval(id);
-  }, [blockedUntil]);
+  }, [blockedUntil, currentClamped]);
 
   /** Runs one check at a time against the stored counter; while blocked, hashes nothing and changes nothing. */
   const check = useCallback(
     (secret: string, pick: (rec: LockRecord) => SecretRecord): Promise<VerifyResult> => {
       const run = async (): Promise<VerifyResult> => {
-        const rec = recordRef.current;
+        const rec = currentClamped();
         if (!rec) return 'wrong';
         if (remainingWaitMs(rec, Date.now()) > 0) return 'blocked';
         const target = pick(rec);
@@ -169,21 +214,29 @@ export function LockProvider({ children, screen: Screen = NullScreen }: { childr
         const latest = recordRef.current;
         if (!latest || pick(latest) !== target) return 'wrong';
         if (ok) {
-          setRecord(persistOr(() => recordSuccess(latest), { ...latest, failures: 0, blockedUntil: 0 }));
+          setRecord(
+            persistOr(() => recordSuccess(latest), {
+              ...latest,
+              failures: 0,
+              blockedUntil: 0,
+            }),
+          );
           return 'ok';
         }
         const now = Date.now();
         const failures = latest.failures + 1;
         setRecord(
-          persistOr(() => recordFailure(latest, now), { ...latest, failures, blockedUntil: now + waitForFailures(failures) }),
+          persistOr(() => recordFailure(latest, now), {
+            ...latest,
+            failures,
+            blockedUntil: now + waitForFailures(failures),
+          }),
         );
         return 'wrong';
       };
-      const result = chain.current.then(run, run);
-      chain.current = result.catch(() => undefined);
-      return result;
+      return enqueue(run);
     },
-    [setRecord],
+    [setRecord, currentClamped, enqueue],
   );
 
   const verifyPin = useCallback((pin: string) => check(normalizeDigits(pin), (rec) => rec.pin), [check]);
@@ -200,12 +253,19 @@ export function LockProvider({ children, screen: Screen = NullScreen }: { childr
     [verifyPin, setLockedBoth, setRecoveredBoth],
   );
 
+  // Biometrics work during a PIN wait and reset the failure count; the device's own biometric throttling applies.
   const unlockWithBiometric = useCallback(async () => {
     if (!recordRef.current?.biometric) return false;
     const ok = await verifyBiometric(t({ ar: 'افتح رفيق', en: 'Unlock Rafiq' }));
     const latest = recordRef.current;
     if (!ok || !latest) return false;
-    setRecord(persistOr(() => recordSuccess(latest), { ...latest, failures: 0, blockedUntil: 0 }));
+    setRecord(
+      persistOr(() => recordSuccess(latest), {
+        ...latest,
+        failures: 0,
+        blockedUntil: 0,
+      }),
+    );
     setRecoveredBoth(false);
     setLockedBoth(false);
     return true;
@@ -221,51 +281,67 @@ export function LockProvider({ children, screen: Screen = NullScreen }: { childr
   );
 
   const setUp = useCallback(
-    async (pin: string, biometric: boolean) => {
-      const normalized = newPin(pin);
-      const code = generateRecoveryCode();
-      const next: LockRecord = {
-        v: 1,
-        pin: await hashSecret(normalized),
-        recovery: await hashSecret(normalizeRecoveryCode(code)),
-        biometric,
-        autoLockMs: DEFAULT_AUTO_LOCK_MS,
-        failures: 0,
-        blockedUntil: 0,
-      };
-      writeLock(next);
-      setRecord(next);
-      setRecoveredBoth(false);
-      setLockedBoth(false);
-      return code;
-    },
-    [setRecord, setLockedBoth, setRecoveredBoth],
+    (pin: string, biometric: boolean) =>
+      enqueue(async () => {
+        const normalized = newPin(pin);
+        if (recordRef.current) throw new Error('The lock is already on.');
+        const code = generateRecoveryCode();
+        const next: LockRecord = {
+          v: 1,
+          pin: await hashSecret(normalized),
+          recovery: await hashSecret(normalizeRecoveryCode(code)),
+          biometric,
+          autoLockMs: DEFAULT_AUTO_LOCK_MS,
+          failures: 0,
+          blockedUntil: 0,
+        };
+        if (recordRef.current) throw new Error('The lock is already on.');
+        writeLock(next);
+        setRecord(next);
+        setRecoveredBoth(false);
+        setLockedBoth(false);
+        return code;
+      }),
+    [enqueue, setRecord, setLockedBoth, setRecoveredBoth],
   );
 
   const changePin = useCallback(
-    async (pin: string) => {
-      const normalized = newPin(pin);
-      if (!recordRef.current) throw new Error('The lock is off.');
-      if (lockedRef.current && !recoveredRef.current) throw new Error('Unlock or recover before changing the PIN.');
-      const code = generateRecoveryCode();
-      const pinHash = await hashSecret(normalized);
-      const recoveryHash = await hashSecret(normalizeRecoveryCode(code));
-      const current = recordRef.current;
-      if (!current) throw new Error('The lock is off.');
-      const next: LockRecord = { ...current, pin: pinHash, recovery: recoveryHash, failures: 0, blockedUntil: 0 };
-      writeLock(next);
-      setRecord(next);
-      setRecoveredBoth(false);
-      setLockedBoth(false);
-      return code;
-    },
-    [setRecord, setLockedBoth, setRecoveredBoth],
+    (pin: string) =>
+      enqueue(async () => {
+        const normalized = newPin(pin);
+        if (!recordRef.current) throw new Error('The lock is off.');
+        if (lockedRef.current && !recoveredRef.current) throw new Error('Unlock or recover before changing the PIN.');
+        // Recovery path: locked with a recovered code; it ends by opening the app. Settings path: open; it changes nothing else.
+        const viaRecovery = lockedRef.current;
+        const code = generateRecoveryCode();
+        const pinHash = await hashSecret(normalized);
+        const recoveryHash = await hashSecret(normalizeRecoveryCode(code));
+        const current = recordRef.current;
+        if (!current) throw new Error('The lock is off.');
+        const stillAllowed = viaRecovery ? lockedRef.current && recoveredRef.current : !lockedRef.current;
+        if (!stillAllowed) throw new Error('The lock state changed while the PIN was being changed.');
+        const next: LockRecord = {
+          ...current,
+          pin: pinHash,
+          recovery: recoveryHash,
+          failures: 0,
+          blockedUntil: 0,
+        };
+        writeLock(next);
+        setRecord(next);
+        if (viaRecovery) {
+          setRecoveredBoth(false);
+          setLockedBoth(false);
+        }
+        return code;
+      }),
+    [enqueue, setRecord, setLockedBoth, setRecoveredBoth],
   );
 
   const update = useCallback(
     (change: Partial<LockRecord>) => {
       const current = recordRef.current;
-      if (!current) return;
+      if (!current || lockedRef.current) return;
       const next = { ...current, ...change };
       try {
         writeLock(next);
@@ -288,6 +364,7 @@ export function LockProvider({ children, screen: Screen = NullScreen }: { childr
   const setBiometric = useCallback((on: boolean) => update({ biometric: on }), [update]);
 
   const turnOff = useCallback(() => {
+    if (lockedRef.current) return;
     clearLock();
     setRecord(null);
     setRecoveredBoth(false);

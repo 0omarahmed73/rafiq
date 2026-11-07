@@ -6,6 +6,7 @@ import { createMemoryRepo } from '../../db/memoryRepo';
 import { LockProvider, useLock, type LockApi } from './LockProvider';
 import { LOCK_STORAGE_KEY, consumeResetNotice, readLock, writeLock, type LockRecord } from './lockStore';
 import { hashSecret, normalizeRecoveryCode } from './pin';
+import { verifyBiometric } from '../../platform/biometric';
 
 const fg = vi.hoisted(() => ({ cb: undefined as ((active: boolean) => void) | undefined }));
 vi.mock('../../platform/appState', () => ({
@@ -331,9 +332,10 @@ describe('LockProvider', () => {
     expect(api.record).toMatchObject({ autoLockMs: 300000, biometric: true });
   });
 
-  it('turnOff removes the record and unlocks', async () => {
+  it('turnOff while open removes the record', async () => {
     await storeRecord();
     renderLock();
+    await call(() => api.unlock('1357'));
     act(() => api.turnOff());
     expect(readLock()).toBeNull();
     expect(api.enabled).toBe(false);
@@ -356,6 +358,121 @@ describe('LockProvider', () => {
     } finally {
       Object.defineProperty(window, 'location', { configurable: true, value: original });
     }
+  });
+
+  it('caps a wait stored while the clock was far ahead at 15 minutes from now', async () => {
+    await storeRecord({ failures: 7, blockedUntil: Date.now() + 10 * 86400000 });
+    renderLock();
+    expect(api.waitMs).toBe(900000);
+    expect(readLock()!.blockedUntil).toBe(Date.now() + 900000);
+    expect(await call(() => api.unlock('1357'))).toBe('blocked');
+    act(() => vi.advanceTimersByTime(900000));
+    expect(api.waitMs).toBe(0);
+    expect(await call(() => api.unlock('1357'))).toBe('ok');
+  });
+
+  it('caps the wait when the clock moves back during a wait', async () => {
+    await storeRecord({ failures: 5, blockedUntil: Date.now() + 30000 });
+    renderLock();
+    vi.setSystemTime(Date.now() - 86400000);
+    expect(await call(() => api.unlock('1357'))).toBe('blocked');
+    expect(api.waitMs).toBe(900000);
+    expect(readLock()!.blockedUntil).toBe(Date.now() + 900000);
+    act(() => vi.advanceTimersByTime(900000));
+    expect(await call(() => api.unlock('1357'))).toBe('ok');
+  });
+
+  it('stays locked and returns false when the biometric prompt fails', async () => {
+    vi.mocked(verifyBiometric).mockResolvedValueOnce(false);
+    await storeRecord({ biometric: true });
+    renderLock();
+    expect(await call(() => api.unlockWithBiometric())).toBe(false);
+    expect(isLocked()).toBe(true);
+  });
+
+  it('a repeated return to the foreground does not lock again', async () => {
+    await storeRecord({ autoLockMs: 0 });
+    renderLock();
+    act(() => fg.cb!(false));
+    act(() => fg.cb!(true));
+    await call(() => api.unlock('1357'));
+    act(() => fg.cb!(true));
+    act(() => fg.cb!(true));
+    expect(isOpen()).toBe(true);
+  });
+
+  it('changePin while open keeps the app open and does not touch recovery state', async () => {
+    await storeRecord();
+    renderLock();
+    await call(() => api.unlock('1357'));
+    const code = await call(() => api.changePin('2468'));
+    expect(isOpen()).toBe(true);
+    expect(api.recovered).toBe(false);
+    expect(await call(() => api.recover(code))).toBe('ok');
+  });
+
+  it('changePin started while open does not unlock or apply if the app locks meanwhile', async () => {
+    await storeRecord();
+    renderLock();
+    await call(() => api.unlock('1357'));
+    let pending!: Promise<string>;
+    act(() => {
+      pending = api.changePin('2468');
+    });
+    act(() => fg.cb!(false));
+    act(() => vi.advanceTimersByTime(61000));
+    act(() => fg.cb!(true));
+    expect(isLocked()).toBe(true);
+    await act(async () => {
+      await expect(pending).rejects.toThrow();
+    });
+    expect(isLocked()).toBe(true);
+    expect(await call(() => api.verifyPin('1357'))).toBe('ok');
+    expect(await call(() => api.recover(CODE))).toBe('ok');
+  });
+
+  it('serializes a double tap on changePin so the last returned code is the valid one', async () => {
+    await storeRecord();
+    renderLock();
+    await call(() => api.recover(CODE));
+    const [first, second] = await call(() => Promise.all([api.changePin('2468'), api.changePin('8642')]));
+    expect(first).not.toBe(second);
+    expect(await call(() => api.verifyPin('8642'))).toBe('ok');
+    expect(await call(() => api.recover(second))).toBe('ok');
+    expect(await call(() => api.recover(first))).toBe('wrong');
+  });
+
+  it('a check whose record is replaced while it runs returns wrong without counting', async () => {
+    await storeRecord();
+    renderLock();
+    await call(() => api.unlock('1357'));
+    let check!: Promise<string>;
+    let setUp!: Promise<string>;
+    act(() => {
+      check = api.verifyPin('0000');
+      api.turnOff();
+      setUp = api.setUp('2468', false);
+    });
+    expect(await call(() => check)).toBe('wrong');
+    await call(() => setUp);
+    expect(readLock()).toMatchObject({ failures: 0, blockedUntil: 0 });
+    expect(await call(() => api.verifyPin('2468'))).toBe('ok');
+  });
+
+  it('turnOff and settings changes do nothing while locked, even after recovery', async () => {
+    const stored = await storeRecord();
+    renderLock();
+    act(() => api.turnOff());
+    act(() => api.setAutoLockMs(0));
+    act(() => api.setBiometric(true));
+    expect(readLock()).toEqual(stored);
+    expect(isLocked()).toBe(true);
+
+    await call(() => api.recover(CODE));
+    act(() => api.turnOff());
+    act(() => api.setAutoLockMs(0));
+    expect(readLock()).toMatchObject({ autoLockMs: 60000 });
+    expect(isLocked()).toBe(true);
   });
 
   it('reports a damaged record once, even under StrictMode', () => {

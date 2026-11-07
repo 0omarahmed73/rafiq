@@ -102,6 +102,15 @@ export function recordSuccess(record: LockRecord): LockRecord {
   return next;
 }
 
+/**
+ * Pulls a blockedUntil that is more than the longest wait away (a clock that was ahead and then
+ * corrected) back to now + the longest wait. Returns the same object when nothing changes.
+ */
+export function clampBlock(record: LockRecord, now: number): LockRecord {
+  if (record.blockedUntil - now <= MAX_WAIT_MS) return record;
+  return { ...record, blockedUntil: now + MAX_WAIT_MS };
+}
+
 export function remainingWaitMs(record: LockRecord, now: number): number {
   return Math.min(Math.max(record.blockedUntil - now, 0), MAX_WAIT_MS);
 }

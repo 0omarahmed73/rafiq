@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   LOCK_STORAGE_KEY,
+  clampBlock,
   clearLock,
   consumeResetNotice,
   readLock,
@@ -72,6 +73,13 @@ describe('lockStore', () => {
     expect(remainingWaitMs({ ...base, blockedUntil: 31000 }, 1000)).toBe(30000);
     expect(remainingWaitMs({ ...base, blockedUntil: 1000 + 10 * 365 * 86400000 }, 1000)).toBe(900000);
     expect(remainingWaitMs({ ...base, blockedUntil: 5 }, 1000)).toBe(0);
+  });
+
+  it('clamps a blockedUntil further away than the longest wait', () => {
+    const near = { ...base, failures: 5, blockedUntil: 31000 };
+    expect(clampBlock(near, 1000)).toBe(near);
+    expect(clampBlock({ ...near, blockedUntil: 1000 + 900000 }, 1000).blockedUntil).toBe(901000);
+    expect(clampBlock({ ...near, blockedUntil: 1000 + 10 * 86400000 }, 1000)).toEqual({ ...near, blockedUntil: 901000 });
   });
 
   it('writeLock throws when storage fails', () => {
