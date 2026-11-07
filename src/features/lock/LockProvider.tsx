@@ -50,6 +50,8 @@ export interface LockApi {
   unlockWithBiometric(): Promise<boolean>;
   recover(code: string): Promise<VerifyResult>;
   recovered: boolean;
+  /** After a new PIN was saved on the recovery path: opens the app and clears `recovered`. */
+  finishRecovery(): void;
   setUp(pin: string, biometric: boolean): Promise<string>;
   changePin(pin: string): Promise<string>;
   setAutoLockMs(ms: number): void;
@@ -131,6 +133,8 @@ export function LockProvider({
   const recordRef = useRef(record);
   const lockedRef = useRef(locked);
   const recoveredRef = useRef(recovered);
+  /** True once a new PIN has been saved on the recovery path; finishRecovery needs it. */
+  const recoveryPinSaved = useRef(false);
   const chain = useRef<Promise<unknown>>(Promise.resolve());
   const hiddenAt = useRef<number | null>(null);
 
@@ -144,6 +148,7 @@ export function LockProvider({
   }, []);
   const setRecoveredBoth = useCallback((next: boolean) => {
     recoveredRef.current = next;
+    if (!next) recoveryPinSaved.current = false;
     setRecovered(next);
   }, []);
 
@@ -311,7 +316,8 @@ export function LockProvider({
         const normalized = newPin(pin);
         if (!recordRef.current) throw new Error('The lock is off.');
         if (lockedRef.current && !recoveredRef.current) throw new Error('Unlock or recover before changing the PIN.');
-        // Recovery path: locked with a recovered code; it ends by opening the app. Settings path: open; it changes nothing else.
+        // Recovery path: locked with a recovered code; it stays locked so the new code can be shown, and
+        // finishRecovery opens the app. Settings path: open; it changes nothing else.
         const viaRecovery = lockedRef.current;
         const code = generateRecoveryCode();
         const pinHash = await hashSecret(normalized);
@@ -329,14 +335,17 @@ export function LockProvider({
         };
         writeLock(next);
         setRecord(next);
-        if (viaRecovery) {
-          setRecoveredBoth(false);
-          setLockedBoth(false);
-        }
+        if (viaRecovery) recoveryPinSaved.current = true;
         return code;
       }),
-    [enqueue, setRecord, setLockedBoth, setRecoveredBoth],
+    [enqueue, setRecord],
   );
+
+  const finishRecovery = useCallback(() => {
+    if (!lockedRef.current || !recoveredRef.current || !recoveryPinSaved.current) return;
+    setRecoveredBoth(false);
+    setLockedBoth(false);
+  }, [setLockedBoth, setRecoveredBoth]);
 
   const update = useCallback(
     (change: Partial<LockRecord>) => {
@@ -392,6 +401,7 @@ export function LockProvider({
       unlockWithBiometric,
       recover,
       recovered,
+      finishRecovery,
       setUp,
       changePin,
       setAutoLockMs,
@@ -410,6 +420,7 @@ export function LockProvider({
       unlockWithBiometric,
       recover,
       recovered,
+      finishRecovery,
       setUp,
       changePin,
       setAutoLockMs,

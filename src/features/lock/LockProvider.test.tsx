@@ -268,7 +268,7 @@ describe('LockProvider', () => {
     });
   });
 
-  it('recovers with the right code, then a new PIN unlocks and replaces the code', async () => {
+  it('recovers with the right code, then a new PIN replaces the code and finishRecovery opens the app', async () => {
     await storeRecord();
     renderLock();
     expect(await call(() => api.recover('abcd efgh jkmn'))).toBe('ok');
@@ -278,12 +278,29 @@ describe('LockProvider', () => {
     const code = await call(() => api.changePin('2468'));
     expect(code).toMatch(/^[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$/);
     expect(code).not.toBe(CODE);
+    // Stays locked so the lock screen can show the new code before the app opens.
+    expect(isLocked()).toBe(true);
+    expect(api.recovered).toBe(true);
+
+    act(() => api.finishRecovery());
     expect(isOpen()).toBe(true);
     expect(api.recovered).toBe(false);
 
     expect(await call(() => api.recover(CODE))).toBe('wrong');
     expect(await call(() => api.verifyPin('2468'))).toBe('ok');
     expect(await call(() => api.verifyPin('1357'))).toBe('wrong');
+  });
+
+  it('finishRecovery does nothing before a new PIN is saved on the recovery path', async () => {
+    await storeRecord();
+    renderLock();
+    act(() => api.finishRecovery());
+    expect(isLocked()).toBe(true);
+
+    await call(() => api.recover(CODE));
+    act(() => api.finishRecovery());
+    expect(isLocked()).toBe(true);
+    expect(api.recovered).toBe(true);
   });
 
   it('counts a wrong recovery code on the shared counter', async () => {
