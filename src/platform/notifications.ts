@@ -2,12 +2,13 @@ import { App } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import type { Repo } from '../db/repo';
+import { t, type Bi } from '../i18n';
 
 const REMINDER_ID = 1;
 const CHANNEL_ID = 'rafiq-daily';
-const TITLE = 'رفيق';
+const TITLE: Bi = { ar: 'رفيق', en: 'Rafiq' };
 /** Generic on purpose: no names, moods or notes ever go into a notification. */
-const BODY = 'آخذ لحظة للاطمئنان على نفسي.';
+const BODY: Bi = { ar: 'آخذ لحظة للاطمئنان على نفسي.', en: 'I take a moment to check in with myself.' };
 
 export type ReminderResult = 'scheduled' | 'disabled' | 'permission-needed';
 
@@ -42,14 +43,14 @@ export async function setDailyReminder(time: string | undefined, requestPermissi
     return 'permission-needed';
   }
 
-  await LocalNotifications.createChannel({ id: CHANNEL_ID, name: 'التذكير اليومي', importance: 3 });
+  await LocalNotifications.createChannel({ id: CHANNEL_ID, name: t({ ar: 'التذكير اليومي', en: 'Daily reminder' }), importance: 3 });
   await LocalNotifications.cancel(only);
   await LocalNotifications.schedule({
     notifications: [
       {
         id: REMINDER_ID,
-        title: TITLE,
-        body: BODY,
+        title: t(TITLE),
+        body: t(BODY),
         channelId: CHANNEL_ID,
         schedule: { on: { hour: Number(match[1]), minute: Number(match[2]) }, allowWhileIdle: true },
         isExactNotification: false,

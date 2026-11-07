@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { t } from '../i18n';
 import { emotionGroups } from './emotions';
 import { practices } from './practices';
 import { EmotionGroupSchema, StepSchema, validatePractice } from './schema';
@@ -10,9 +11,10 @@ export type { EmotionGroup, Step } from './schema';
 
 const labelById = new Map(emotionGroups.flatMap((g) => g.words).map((w) => [w.id, w.label]));
 
-/** Arabic label for an emotion id; an unknown id is returned unchanged. */
+/** The label of an emotion id in the active language; an unknown id is returned unchanged. */
 export function emotionLabel(id: string): string {
-  return labelById.get(id) ?? id;
+  const label = labelById.get(id);
+  return label ? t(label) : id;
 }
 
 /** Throws if the shipped content breaks its schema or its id rules. */

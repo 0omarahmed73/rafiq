@@ -1,22 +1,31 @@
+import { currentLanguage, t, type Bi } from '../i18n';
 import { toArabicDigits } from './digits';
 
 /** `YYYY-MM-DD` in the user's local time zone. */
 export type DayKey = string;
 
-const WEEKDAYS = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
-const MONTHS = [
-  'يناير',
-  'فبراير',
-  'مارس',
-  'أبريل',
-  'مايو',
-  'يونيو',
-  'يوليو',
-  'أغسطس',
-  'سبتمبر',
-  'أكتوبر',
-  'نوفمبر',
-  'ديسمبر',
+const WEEKDAYS: Bi[] = [
+  { ar: 'الأحد', en: 'Sunday' },
+  { ar: 'الاثنين', en: 'Monday' },
+  { ar: 'الثلاثاء', en: 'Tuesday' },
+  { ar: 'الأربعاء', en: 'Wednesday' },
+  { ar: 'الخميس', en: 'Thursday' },
+  { ar: 'الجمعة', en: 'Friday' },
+  { ar: 'السبت', en: 'Saturday' },
+];
+const MONTHS: Bi[] = [
+  { ar: 'يناير', en: 'January' },
+  { ar: 'فبراير', en: 'February' },
+  { ar: 'مارس', en: 'March' },
+  { ar: 'أبريل', en: 'April' },
+  { ar: 'مايو', en: 'May' },
+  { ar: 'يونيو', en: 'June' },
+  { ar: 'يوليو', en: 'July' },
+  { ar: 'أغسطس', en: 'August' },
+  { ar: 'سبتمبر', en: 'September' },
+  { ar: 'أكتوبر', en: 'October' },
+  { ar: 'نوفمبر', en: 'November' },
+  { ar: 'ديسمبر', en: 'December' },
 ];
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -43,24 +52,33 @@ export function weekStartSaturday(d: Date): DayKey {
   return dayKey(day);
 }
 
-/** Local time of an ISO timestamp as `HH:MM` in Arabic-Indic digits. */
-export function formatArabicTime(iso: string): string {
+/** Local time of an ISO timestamp as `HH:MM`, in the digits of the active language. */
+export function formatTime(iso: string): string {
   const d = new Date(iso);
-  return toArabicDigits(`${pad(d.getHours())}:${pad(d.getMinutes())}`);
+  const hours = pad(d.getHours());
+  const minutes = pad(d.getMinutes());
+  return currentLanguage() === 'ar' ? toArabicDigits(`${hours}:${minutes}`) : `${hours}:${minutes}`;
 }
 
-export function formatArabicMonthYear(key: DayKey): string {
+export function formatMonthYear(key: DayKey): string {
   const d = parseKey(key);
-  return `${MONTHS[d.getMonth()]} ${toArabicDigits(d.getFullYear())}`;
+  return t({ ar: '{month} {year}', en: '{month} {year}' }, { month: t(MONTHS[d.getMonth()]), year: d.getFullYear() });
 }
 
-/** `٣١ أكتوبر ٢٠٢٦`: no hyphens, which right-to-left text would reorder. */
-export function formatArabicFullDate(key: DayKey): string {
+/** `31 October 2026` (Arabic: `٣١ أكتوبر ٢٠٢٦`): no hyphens, which right-to-left text would reorder. */
+export function formatFullDate(key: DayKey): string {
   const d = parseKey(key);
-  return `${toArabicDigits(d.getDate())} ${MONTHS[d.getMonth()]} ${toArabicDigits(d.getFullYear())}`;
+  return t(
+    { ar: '{day} {month} {year}', en: '{day} {month} {year}' },
+    { day: d.getDate(), month: t(MONTHS[d.getMonth()]), year: d.getFullYear() },
+  );
 }
 
-export function formatArabicDate(key: DayKey): string {
+/** `Sunday, 31 October` (Arabic: `الأحد ٣١ أكتوبر`). */
+export function formatDayLabel(key: DayKey): string {
   const d = parseKey(key);
-  return `${WEEKDAYS[d.getDay()]} ${toArabicDigits(d.getDate())} ${MONTHS[d.getMonth()]}`;
+  return t(
+    { ar: '{weekday} {day} {month}', en: '{weekday}, {day} {month}' },
+    { weekday: t(WEEKDAYS[d.getDay()]), day: d.getDate(), month: t(MONTHS[d.getMonth()]) },
+  );
 }

@@ -1,3 +1,4 @@
+import { currentLanguage, directionOf, t } from '../../i18n';
 import { accentCss, normalizeAccent } from '../../lib/accents';
 import appCss from '../../styles/tokens.css?inline';
 import printCss from './print.css?inline';
@@ -25,10 +26,11 @@ export function buildPrintDocument(article: HTMLElement, accent: string | undefi
     }
   }
   const id = normalizeAccent(accent);
+  const lang = currentLanguage();
   return (
-    `<!doctype html><html lang="ar" dir="rtl" data-theme="light" data-accent="${id}"><head>` +
+    `<!doctype html><html lang="${lang}" dir="${directionOf(lang)}" data-theme="light" data-accent="${id}"><head>` +
     `<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">` +
-    `<base href="${PRINT_BASE}"><title>ملخّص لمعالجي</title>` +
+    `<base href="${PRINT_BASE}"><title>${t({ ar: 'ملخّص لمعالجي', en: 'Summary for my therapist' })}</title>` +
     `<style>${fontFaces}${appCss}\n${accentCss()}\n${printCss}</style></head>` +
     `<body><div class="print-area">${copy.outerHTML}</div></body></html>`
   );

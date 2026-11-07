@@ -1,9 +1,13 @@
 import '@testing-library/jest-dom/vitest';
 import 'fake-indexeddb/auto';
 import { cleanup } from '@testing-library/react';
-import { afterEach } from 'vitest';
+import { afterEach, beforeEach } from 'vitest';
+import { setActiveLanguage } from '../i18n';
 
 afterEach(() => cleanup());
+
+// Most tests check Arabic copy, so they run in Arabic. English tests set the language themselves.
+beforeEach(() => setActiveLanguage('ar'));
 
 // React Router 6 announces v7 opt-in flags on every router; they are noise in test output.
 const warn = console.warn;

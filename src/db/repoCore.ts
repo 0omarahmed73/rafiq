@@ -229,6 +229,14 @@ export function createRepo(store: Store): Repo {
       if (existing) return existing;
       return create<SoothingItem>('soothingList', { text: clean, source });
     },
+    removeSoothing: (text) =>
+      store.transaction(async () => {
+        const clean = text.trim();
+        for (const item of (await list<SoothingItem>('soothingList')).filter((s) => s.text === clean)) {
+          await store.remove('soothingList', item.id);
+          await markDeleted(store, 'soothingList', item.id, item.updatedAt);
+        }
+      }),
 
     async getSettings() {
       const found = await store.get<Settings>('settings', 'settings');
@@ -354,6 +362,10 @@ export function createRepo(store: Store): Repo {
           await store.clear(t);
           for (const row of d[t] ?? []) await store.put(t, row);
         }
+      }),
+    eraseAll: () =>
+      store.transaction(async () => {
+        for (const table of TABLES) await store.clear(table);
       }),
     mergeAll: (d) =>
       store.transaction(async () => {

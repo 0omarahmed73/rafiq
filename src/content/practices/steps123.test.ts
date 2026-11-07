@@ -38,8 +38,8 @@ describe('validate (step 1)', () => {
   it('offers six fears in part 3 and builds the sentence from the chosen one', () => {
     const v3 = def.prompts[2];
     expect(v3.options).toHaveLength(6);
-    const chosen = v3.options!.find((o) => o.label === 'أن أُهمَل')!;
-    expect(v3.template!.replace('{label}', chosen.label)).toBe('طبعًا يؤلمني هذا، لأنني أخاف أن أُهمَل.');
+    const chosen = v3.options!.find((o) => o.label.ar === 'أن أُهمَل')!;
+    expect(v3.template!.ar.replace('{label}', chosen.label.ar)).toBe('طبعًا يؤلمني هذا، لأنني أخاف أن أُهمَل.');
   });
 
   it('prefills part 5 from the soothing list', () => {
@@ -57,11 +57,11 @@ describe('accept (step 2)', () => {
 
   it('asks what is rejected together with the rights question', () => {
     expect(prompt('a1').kind).toBe('choice');
-    expect(prompt('a1').textLabel).toBe('ما الذي أرفضه؟');
+    expect(prompt('a1').textLabel?.ar).toBe('ما الذي أرفضه؟');
   });
 
   it('classifies the rejection as need, desire, preference or none of these', () => {
-    expect(prompt('a2').options!.map((o) => [o.value, o.label])).toEqual([
+    expect(prompt('a2').options!.map((o) => [o.value, o.label.ar])).toEqual([
       ['need', 'حاجة'],
       ['desire', 'رغبة'],
       ['preference', 'تفضيل'],
@@ -72,7 +72,7 @@ describe('accept (step 2)', () => {
   it('asks which need only after the answer "need"', () => {
     expect(prompt('a3').showWhen).toEqual({ promptId: 'a2', equals: 'need' });
     expect(prompt('a3').multi).toBe(true);
-    expect(prompt('a3').options!.map((o) => o.label)).toEqual([
+    expect(prompt('a3').options!.map((o) => o.label.ar)).toEqual([
       'الاحترام',
       'الوضوح',
       'الأمان',

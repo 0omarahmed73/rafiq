@@ -7,8 +7,8 @@ describe('year plan content', () => {
     expect(YEAR_REVIEW_QUESTIONS).toHaveLength(8);
     expect(YEAR_MONTHS).toHaveLength(12);
     expect(YEAR_MONTHS.every((m) => m.weeks.length === 4 && m.weeks.every((w) => w.tasks.length >= 3))).toBe(true);
-    expect(YEAR_MONTHS[0].name).toBe('أكتوبر 2026');
-    expect(YEAR_MONTHS[11].name).toBe('سبتمبر 2027');
+    expect(YEAR_MONTHS[0].name.ar).toBe('أكتوبر 2026');
+    expect(YEAR_MONTHS[11].name.ar).toBe('سبتمبر 2027');
   });
 });
 

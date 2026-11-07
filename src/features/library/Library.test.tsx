@@ -88,7 +88,7 @@ describe('SymptomsPage', () => {
     const list = screen.getByRole('list', { name: 'الأعراض' });
     const items = within(list).getAllByRole('link');
     expect(items).toHaveLength(9);
-    for (const s of symptoms) expect(screen.getByRole('link', { name: new RegExp(s.title) })).toHaveAttribute('href', `/library/symptoms/${s.id}`);
+    for (const s of symptoms) expect(screen.getByRole('link', { name: new RegExp(s.title.ar) })).toHaveAttribute('href', `/library/symptoms/${s.id}`);
     expect(screen.getByText(/لا اختبار ولا نتيجة/)).toBeInTheDocument();
   });
 });
@@ -97,14 +97,14 @@ describe('SymptomPage', () => {
   it('shows how it can feel, the need behind it, sentences to choose from, and a tool to open', () => {
     renderAt('/library/symptoms/anger');
     const s = symptoms.find((x) => x.id === 'anger')!;
-    expect(screen.getByRole('heading', { level: 1, name: s.title })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: s.title.ar })).toBeInTheDocument();
     expect(screen.getByText('مسودة للمراجعة')).toBeInTheDocument();
-    expect(screen.getByText(s.feels)).toBeInTheDocument();
-    expect(screen.getByText(s.need)).toBeInTheDocument();
+    expect(screen.getByText(s.feels.ar)).toBeInTheDocument();
+    expect(screen.getByText(s.need.ar)).toBeInTheDocument();
     const list = screen.getByRole('list', { name: /جمل/ });
     expect(within(list).getAllByRole('listitem')).toHaveLength(s.selfSentences.length);
     expect(screen.getByText(/أختار ما يناسبني أو لا أختار شيئًا/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: s.tool.label })).toHaveAttribute('href', s.tool.to);
+    expect(screen.getByRole('link', { name: s.tool.label.ar })).toHaveAttribute('href', s.tool.to);
     expect(screen.getByRole('button', { name: /المصادر/ })).toBeInTheDocument();
   });
 

@@ -90,6 +90,8 @@ export interface Repo {
   listSoothing(): Promise<SoothingItem[]>;
   /** A text already in the list is not added again. */
   addSoothing(text: string, source: SoothingItem['source']): Promise<SoothingItem>;
+  /** Removes every row with this text and leaves a deletion marker, so a merged backup cannot bring it back. */
+  removeSoothing(text: string): Promise<void>;
 
   getSettings(): Promise<Settings>;
   saveSettings(s: Draft<Settings>): Promise<void>;
@@ -106,6 +108,8 @@ export interface Repo {
   exportAll(): Promise<AllData>;
   /** Atomic: all or nothing. */
   replaceAll(d: AllData): Promise<void>;
+  /** Atomic: clears every table, tombstones included. The lock's last-resort reset. */
+  eraseAll(): Promise<void>;
   /** Atomic. Keeps the record with the later `updatedAt`. */
   mergeAll(d: AllData): Promise<void>;
 }

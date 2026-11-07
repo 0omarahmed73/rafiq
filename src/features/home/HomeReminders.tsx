@@ -4,11 +4,13 @@ import { Banner } from '../../components/Banner';
 import { useRepo } from '../../db/RepoContext';
 import { dayKey } from '../../lib/dates';
 import { isAndroidPlatform } from '../../platform/documents';
+import { useI18n } from '../../i18n/LanguageProvider';
 import { reminderDue, shouldShowBackupReminder } from '../../lib/reminders';
 
 /** The daily check-in reminder and the 21-day backup reminder, as banners at the top of Home. */
 export function HomeReminders({ now = new Date() }: { now?: Date }) {
   const repo = useRepo();
+  const { t } = useI18n();
   const [backupDue, setBackupDue] = useState(false);
   const [dailyDue, setDailyDue] = useState(false);
 
@@ -23,7 +25,9 @@ export function HomeReminders({ now = new Date() }: { now?: Date }) {
       // The Android app has its own native reminder, so no browser Notification is made there.
       if (due && !isAndroidPlatform() && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
         try {
-          new Notification('رفيق', { body: 'حان وقت تسجيل مشاعري اليوم.' });
+          new Notification(t({ ar: 'رفيق', en: 'Rafiq' }), {
+            body: t({ ar: 'حان وقت تسجيل مشاعري اليوم.', en: 'It is time to record how I feel today.' }),
+          });
           await repo.saveSettings({ ...s, lastReminderDay: dayKey(now) });
         } catch {
           // The banner below still shows.
@@ -49,13 +53,13 @@ export function HomeReminders({ now = new Date() }: { now?: Date }) {
       {dailyDue && (
         <Banner>
           <div className="flex items-center justify-between gap-3">
-            <span>حان وقت تسجيل مشاعري اليوم.</span>
+            <span>{t({ ar: 'حان وقت تسجيل مشاعري اليوم.', en: 'It is time to record how I feel today.' })}</span>
             <button
               type="button"
               onClick={() => void dismissDaily()}
               className="min-h-11 px-3 text-sm font-bold text-teal-ink"
             >
-              حسنًا
+              {t({ ar: 'حسنًا', en: 'OK' })}
             </button>
           </div>
         </Banner>
@@ -63,9 +67,14 @@ export function HomeReminders({ now = new Date() }: { now?: Date }) {
       {backupDue && (
         <Banner>
           <div className="flex items-center justify-between gap-3">
-            <span>مرّت ٢١ يومًا أو أكثر دون نسخة احتياطية. بياناتي على جهازي فقط، فأحتفظ بنسخة منها.</span>
+            <span>
+              {t({
+                ar: 'مرّت ٢١ يومًا أو أكثر دون نسخة احتياطية. بياناتي على جهازي فقط، فأحتفظ بنسخة منها.',
+                en: 'It has been 21 days or more without a backup. My data is only on this device, so I keep a copy of it.',
+              })}
+            </span>
             <Link to="/settings" className="flex min-h-11 shrink-0 items-center px-3 text-sm font-bold">
-              فتح الإعدادات
+              {t({ ar: 'فتح الإعدادات', en: 'Open Settings' })}
             </Link>
           </div>
         </Banner>

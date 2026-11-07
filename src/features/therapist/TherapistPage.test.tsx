@@ -42,7 +42,7 @@ describe('TherapistPage', () => {
     expect(within(list).getByText(/غضب/)).toBeInTheDocument();
   });
 
-  it('adds an agenda point that then appears in the list', async () => {
+  it('adds an agenda point that then appears in the list, and keeps the field ready for the next one', async () => {
     const { repo, user } = setup();
     await user.click(await screen.findByRole('button', { name: '+ إضافة نقطة' }));
     await user.type(screen.getByRole('textbox', { name: 'نقطة جديدة' }), 'غضبي أكبر من الموقف');
@@ -51,6 +51,14 @@ describe('TherapistPage', () => {
     const list = await screen.findByRole('list', { name: 'ما أريد مناقشته' });
     expect(within(list).getByText('غضبي أكبر من الموقف')).toBeInTheDocument();
     expect(await repo.listAgendaPoints()).toHaveLength(1);
+
+    const field = screen.getByRole('textbox', { name: 'نقطة جديدة' });
+    expect(field).toHaveValue('');
+    expect(field).toHaveFocus();
+    await user.type(field, 'نقطة ثانية');
+    await user.click(screen.getByRole('button', { name: 'إضافة' }));
+    expect(await screen.findByText('نقطة ثانية')).toBeInTheDocument();
+    expect(await repo.listAgendaPoints()).toHaveLength(2);
   });
 
   describe('editing and deleting a point', () => {
@@ -72,6 +80,14 @@ describe('TherapistPage', () => {
       expect(await screen.findByText('نقطة جديدة')).toBeInTheDocument();
       expect(screen.queryByText('نقطة قديمة')).not.toBeInTheDocument();
       expect((await repo.listAgendaPoints())[0]).toMatchObject({ id: 'a1', text: 'نقطة جديدة', done: false });
+    });
+
+    it('hides the discussed checkbox while a point is being edited, so the edit field gets the whole row', async () => {
+      const repo = await seed();
+      const { user } = setup(repo);
+      await user.click(await screen.findByRole('button', { name: 'تعديل: نقطة قديمة' }));
+      expect(screen.getByRole('textbox', { name: 'تعديل النقطة' })).toBeInTheDocument();
+      expect(screen.queryByRole('checkbox', { name: /تمت مناقشتها/ })).not.toBeInTheDocument();
     });
 
     it('cancelling an edit changes nothing', async () => {

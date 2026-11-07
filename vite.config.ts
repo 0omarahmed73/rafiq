@@ -9,11 +9,12 @@ export default defineConfig(({ mode }) => ({
       registerType: 'autoUpdate',
       includeAssets: ['icon.svg', 'icons/*.png'],
       manifest: {
-        name: 'رفيق',
-        short_name: 'رفيق',
-        description: 'رفيق يرافقني في رحلة العناية بنفسي، وبياناتي تبقى على جهازي.',
-        lang: 'ar',
-        dir: 'rtl',
+        // A manifest is fixed at build time, so the install name is the English one; the app itself follows the chosen language.
+        name: 'Rafiq',
+        short_name: 'Rafiq',
+        description: 'Rafiq walks with me on the journey of caring for myself. My data stays on my device.',
+        lang: 'en',
+        dir: 'ltr',
         display: 'standalone',
         start_url: '/',
         scope: '/',

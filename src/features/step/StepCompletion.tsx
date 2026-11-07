@@ -1,7 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
+import { useI18n } from '../../i18n/LanguageProvider';
 
 export function StepCompletion({ stepId, animate }: { stepId: number; animate: boolean }) {
+  const { t } = useI18n();
   const next = useRef<HTMLAnchorElement>(null);
   useEffect(() => {
     if (animate) next.current?.focus({ preventScroll: true });
@@ -13,10 +15,18 @@ export function StepCompletion({ stepId, animate }: { stepId: number; animate: b
         <circle cx="24" cy="24" r="20" opacity="0.25" />
         <path className="completion-check" pathLength="1" d="m14 24 7 7 13-15" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
-      <p role="status" className="m-0 text-base font-semibold leading-7 text-teal-ink">أقدّر ما أنجزتُه في هذه الخطوة.</p>
-      <p className="m-0 text-sm leading-7 text-teal-ink">{last ? 'يمكنني العودة إلى ما أحتاجه من رحلتي في أي وقت.' : 'أتابع رحلتي في الوقت الذي يناسبني.'}</p>
+      <p role="status" className="m-0 text-base font-semibold leading-7 text-teal-ink">
+        {t({ ar: 'أقدّر ما أنجزتُه في هذه الخطوة.', en: 'I appreciate what I have done in this step.' })}
+      </p>
+      <p className="m-0 text-sm leading-7 text-teal-ink">
+        {last
+          ? t({ ar: 'يمكنني العودة إلى ما أحتاجه من رحلتي في أي وقت.', en: 'I can come back to what I need from my journey at any time.' })
+          : t({ ar: 'أتابع رحلتي في الوقت الذي يناسبني.', en: 'I continue my journey at a pace that suits me.' })}
+      </p>
       <Link ref={next} to={last ? '/journey' : `/step/${stepId + 1}`} className="flex min-h-12 w-full items-center justify-center rounded-full bg-teal px-5 text-[15px] font-bold text-card focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-teal">
-        {last ? 'أعود إلى رحلتي' : 'أنتقل إلى الخطوة التالية'}
+        {last
+          ? t({ ar: 'أعود إلى رحلتي', en: 'Back to my journey' })
+          : t({ ar: 'أنتقل إلى الخطوة التالية', en: 'Go to the next step' })}
       </Link>
     </div>
   );

@@ -1,10 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-
-async function acceptDisclaimer(page: Page) {
-  await page.goto('/');
-  await page.getByRole('button', { name: 'أفهم، لنبدأ' }).click();
-  await expect(page.getByRole('heading', { name: 'كيف حالك اليوم؟' })).toBeVisible();
-}
+import { acceptDisclaimer, chooseArabicIfAsked } from './helpers';
 
 const next = (page: Page) => page.getByRole('button', { name: 'التالي' }).click();
 
@@ -70,6 +65,7 @@ test('a day with Rafiq: check in, practise, flag, summarise, back up and restore
       }),
   );
   await page.reload();
+  await chooseArabicIfAsked(page);
   await page.getByRole('button', { name: 'أفهم، لنبدأ' }).click();
   // The reload kept the address, so after accepting we are back on the settings page.
   await expect(page.getByRole('heading', { name: 'الإعدادات' })).toBeVisible();

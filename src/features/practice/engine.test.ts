@@ -55,10 +55,10 @@ describe('applySoothing', () => {
   const def: PracticeDef = {
     id: 's',
     stepId: 1,
-    title: 'ت',
+    title: { ar: 'ت', en: 'T' },
     prompts: [
-      { id: 'text', kind: 'text', label: 'نص' },
-      { id: 'soothe', kind: 'list', label: 'ما يريحني', saveToSoothing: 'step1' },
+      { id: 'text', kind: 'text', label: { ar: 'نص', en: 'Text' } },
+      { id: 'soothe', kind: 'list', label: { ar: 'ما يريحني', en: 'What comforts me' }, saveToSoothing: 'step1' },
     ],
   };
 

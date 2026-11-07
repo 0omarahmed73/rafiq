@@ -1,14 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
+import { acceptDisclaimer } from './helpers';
 
 test.use({ viewport: { width: 375, height: 812 } });
 
 const LONG = 'ا'.repeat(300);
-
-async function acceptDisclaimer(page: Page) {
-  await page.goto('/');
-  await page.getByRole('button', { name: 'أفهم، لنبدأ' }).click();
-  await expect(page.getByRole('heading', { name: 'كيف حالك اليوم؟' })).toBeVisible();
-}
 
 async function expectNoSidewaysScroll(page: Page, where: string) {
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);

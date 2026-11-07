@@ -1,3 +1,4 @@
+import { currentLanguage } from '../i18n';
 import { toArabicDigits } from './digits';
 
 const ONES = ['', 'الأول', 'الثاني', 'الثالث', 'الرابع', 'الخامس', 'السادس', 'السابع', 'الثامن', 'التاسع'];
@@ -14,4 +15,13 @@ export function ordinalAr(n: number): string {
   if (ones === 0) return TENS[tens];
   if (tens === 1) return `${TEEN_ONES[ones]} عشر`;
   return `${TEEN_ONES[ones]} و${TENS[tens]}`;
+}
+
+/** `25th` in English; the Arabic ordinal in Arabic. Numbers outside 1–99 are plain digits in English. */
+export function ordinal(n: number): string {
+  if (currentLanguage() === 'ar') return ordinalAr(n);
+  if (!Number.isInteger(n) || n < 1) return String(n);
+  const teen = n % 100 >= 11 && n % 100 <= 13;
+  const suffix = teen ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] ?? 'th';
+  return `${n}${suffix}`;
 }

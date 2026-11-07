@@ -1,18 +1,19 @@
 import { z } from 'zod';
+import { DEFAULT_LANGUAGE, t, type Bi } from '../i18n';
 import { MAX_PHOTOS } from '../lib/image';
 import type { Repo } from './repo';
 import { legacyHomework } from './legacyHomework';
 import type { AllData } from './schema';
 
 export class BackupError extends Error {
-  constructor(message: string) {
-    super(message);
+  constructor(text: Bi) {
+    super(t(text));
     this.name = 'BackupError';
   }
 }
 
-const INVALID = 'الملف غير صالح';
-const UNSUPPORTED = 'إصدار الملف غير مدعوم';
+const INVALID: Bi = { ar: 'الملف غير صالح', en: 'This file is not a valid backup' };
+const UNSUPPORTED: Bi = { ar: 'إصدار الملف غير مدعوم', en: 'This backup version is not supported' };
 
 const str = z.string();
 const id = z.string().min(1);
@@ -110,6 +111,8 @@ const SoothingItem = z.object({
 
 const Settings = z.object({
   id: z.literal('settings'),
+  // Backups made before the language choice have no language: they import as English.
+  language: z.enum(['ar', 'en']).optional(),
   reminderTime: str.optional(),
   theme: z.enum(['system', 'light', 'dark']),
   accent: str.optional(),
@@ -218,11 +221,13 @@ export function parseBackupFile(file: unknown): BackupFile {
   if (!parsed.success) throw new BackupError(INVALID);
 
   const parsedData = parsed.data.data as AllData;
+  const settings = parsedData.settings.map((row) => ({ ...row, language: row.language ?? DEFAULT_LANGUAGE }));
   // Backups made before homework had its own records keep it inside the sessions: convert it here.
   const known = new Set(parsedData.homework.map((h) => h.id));
   const converted = parsedData.sessions.flatMap(legacyHomework).filter((h) => !known.has(h.id));
   const data: AllData = {
     ...parsedData,
+    settings,
     syncTombstones: parsedData.syncTombstones ?? [],
     sessions: parsedData.sessions.map((s) => (s.homework.length ? { ...s, homework: [] } : s)),
     homework: [...parsedData.homework, ...converted],

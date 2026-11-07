@@ -8,6 +8,9 @@ import { dayKey } from '../../lib/dates';
 import { PracticeRunner } from './PracticeRunner';
 import { branchingDef } from './testDefs';
 
+/** Bilingual text for fixtures; the English is not used here. */
+const bi = (ar: string) => ({ ar, en: ar });
+
 function renderRunner(repo: Repo, def: PracticeDef = branchingDef, onFinished = vi.fn()) {
   const view = render(
     <RepoProvider repo={repo}>
@@ -24,9 +27,9 @@ describe('PracticeRunner safety', () => {
   const letterDef: PracticeDef = {
     id: 'letter2',
     stepId: 5,
-    title: 'رسالة',
+    title: bi('رسالة'),
     sink: 'letter:self',
-    prompts: [{ id: 'l1', kind: 'text', label: 'اكتب رسالة' }],
+    prompts: [{ id: 'l1', kind: 'text', label: bi('اكتب رسالة') }],
   };
 
   async function toFinish(user: ReturnType<typeof userEvent.setup>) {
@@ -211,8 +214,8 @@ describe('PracticeRunner', () => {
     const def: PracticeDef = {
       id: 'soothe1',
       stepId: 1,
-      title: 'تهدئة',
-      prompts: [{ id: 'soothe', kind: 'list', label: 'ماذا يريحني؟', saveToSoothing: 'step1' }],
+      title: bi('تهدئة'),
+      prompts: [{ id: 'soothe', kind: 'list', label: bi('ماذا يريحني؟'), saveToSoothing: 'step1' }],
     };
     const { user } = renderRunner(repo, def);
     await user.type(await screen.findByRole('textbox', { name: 'إضافة' }), 'مشي قصير');
@@ -229,9 +232,9 @@ describe('PracticeRunner', () => {
     const def: PracticeDef = {
       id: 'letter1',
       stepId: 5,
-      title: 'رسالة',
+      title: bi('رسالة'),
       sink: 'letter:self',
-      prompts: [{ id: 'l1', kind: 'text', label: 'اكتب رسالة' }],
+      prompts: [{ id: 'l1', kind: 'text', label: bi('اكتب رسالة') }],
     };
     const { user } = renderRunner(repo, def);
     await user.type(await screen.findByRole('textbox', { name: 'اكتب رسالة' }), 'عزيزي أنا');

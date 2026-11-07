@@ -5,6 +5,7 @@ import type { PracticeDef, Prompt } from '../../content/schema';
 import { newId } from '../../db/repo';
 import { useRepo } from '../../db/RepoContext';
 import type { PracticeRecord } from '../../db/schema';
+import { useI18n } from '../../i18n/LanguageProvider';
 import { dayKey } from '../../lib/dates';
 import { markPracticed } from '../step/stepStatus';
 import { applySink, applySoothing, nextPromptId, POSITION_KEY, previousPromptId, visiblePrompts, type Answers } from './engine';
@@ -39,6 +40,7 @@ export function PracticeRunner({
   onFinished: (record: PracticeRecord) => void;
 }) {
   const repo = useRepo();
+  const { t } = useI18n();
   const [ready, setReady] = useState(false);
   const [answers, setAnswers] = useState<Answers>({});
   const [position, setPosition] = useState(def.prompts[0].id);
@@ -150,7 +152,7 @@ export function PracticeRunner({
     } catch {
       busy.current = false;
       finished.current = false;
-      setError('تعذّر حفظ التمرين، يمكنني المحاولة مرة أخرى.');
+      setError(t({ ar: 'تعذّر حفظ التمرين، يمكنني المحاولة مرة أخرى.', en: 'Could not save the practice. I can try again.' }));
       return;
     }
     onFinished(record);
@@ -160,12 +162,19 @@ export function PracticeRunner({
     const last = visible[visible.length - 1];
     return (
       <div className="flex flex-col gap-5">
-        <h1 className="text-2xl font-bold leading-snug">قبل أن أنهي</h1>
+        <h1 className="text-2xl font-bold leading-snug">{t({ ar: 'قبل أن أنهي', en: 'Before I finish' })}</h1>
         <p className="text-[15px] leading-8 text-ink">
-          ما أكتبه خاص بي. أختار هنا ما يصل إلى معالجي.
+          {t({
+            ar: 'ما أكتبه خاص بي. أختار هنا ما يصل إلى معالجي.',
+            en: 'What I write is private. Here I choose what reaches my therapist.',
+          })}
         </p>
-        <Switch label="للنقاش في الجلسة القادمة" checked={forNextSession} onChange={setForNextSession} />
-        <Switch label="مشاركة مع معالجي" checked={share} onChange={setShare} />
+        <Switch
+          label={t({ ar: 'للنقاش في الجلسة القادمة', en: 'To discuss at the next session' })}
+          checked={forNextSession}
+          onChange={setForNextSession}
+        />
+        <Switch label={t({ ar: 'مشاركة مع معالجي', en: 'Share with my therapist' })} checked={share} onChange={setShare} />
         {error && (
           <p role="alert" className="text-sm font-semibold text-ink">
             {error}
@@ -177,10 +186,10 @@ export function PracticeRunner({
             onClick={() => goTo(last.id)}
             className={`${navButton} flex-1 border-[1.5px] border-line bg-card text-ink`}
           >
-            السابق
+            {t({ ar: 'السابق', en: 'Previous' })}
           </button>
           <button type="button" onClick={finish} className={`${navButton} flex-[2] bg-teal text-card`}>
-            إنهاء التمرين
+            {t({ ar: 'إنهاء التمرين', en: 'Finish practice' })}
           </button>
         </div>
       </div>
@@ -196,15 +205,15 @@ export function PracticeRunner({
   return (
     <div className="flex flex-col gap-4">
       <ProgressSegments total={visible.length} current={index + 1} />
-      <h1 className="text-2xl font-bold leading-snug">{prompt.label}</h1>
+      <h1 className="text-2xl font-bold leading-snug">{t(prompt.label)}</h1>
       {prompt.hint && prompt.kind !== 'summary' && (
-        <p className="text-[15px] leading-8 text-muted">{prompt.hint}</p>
+        <p className="text-[15px] leading-8 text-muted">{t(prompt.hint)}</p>
       )}
       <Component prompt={prompt} value={answers[prompt.id]} onChange={(v) => setAnswer(prompt.id, v)} />
       {prompt.example && (
         <section className="rounded-2xl border border-dashed border-line bg-card p-3.5">
-          <div className="mb-1 text-xs font-semibold text-muted">مثال</div>
-          <p className="text-sm leading-7">{prompt.example}</p>
+          <div className="mb-1 text-xs font-semibold text-muted">{t({ ar: 'مثال', en: 'Example' })}</div>
+          <p className="text-sm leading-7">{t(prompt.example)}</p>
         </section>
       )}
       <div className="flex gap-2.5 pt-2">
@@ -214,7 +223,7 @@ export function PracticeRunner({
             onClick={() => goTo(previous)}
             className={`${navButton} flex-1 border-[1.5px] border-line bg-card text-ink`}
           >
-            السابق
+            {t({ ar: 'السابق', en: 'Previous' })}
           </button>
         )}
         <button
@@ -222,7 +231,7 @@ export function PracticeRunner({
           onClick={() => goTo(next ?? FINISH)}
           className={`${navButton} flex-[2] bg-teal text-card`}
         >
-          التالي
+          {t({ ar: 'التالي', en: 'Next' })}
         </button>
       </div>
     </div>

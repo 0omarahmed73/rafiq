@@ -1,3 +1,4 @@
+import type { Lang } from '../i18n';
 import type { DayKey } from '../lib/dates';
 
 /** Every stored record carries the time of its last write (ISO). Backup merge uses it. */
@@ -134,6 +135,8 @@ export interface SoothingItem extends Stamped {
 
 export interface Settings extends Stamped {
   id: 'settings';
+  /** The language the person chose. Absent until they choose: the language screen shows meanwhile. */
+  language?: Lang;
   reminderTime?: string;
   theme: 'system' | 'light' | 'dark';
   /** Favourite accent colour id (see lib/accents); an unknown value reads as teal. */

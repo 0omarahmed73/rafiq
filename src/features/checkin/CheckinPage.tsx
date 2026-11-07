@@ -5,9 +5,18 @@ import { Chip } from '../../components/Chip';
 import { IntensitySlider } from '../../components/IntensitySlider';
 import { emotionGroups } from '../../content';
 import { useRepo } from '../../db/RepoContext';
+import { type Bi } from '../../i18n';
+import { useI18n } from '../../i18n/LanguageProvider';
 import { saveCheckin, ValidationError } from './saveCheckin';
 
-const TAGS = ['النوم', 'العمل', 'العلاقات', 'الجسد', 'الوحدة'];
+/** Stored as these values, so they stay the same in every language; only the labels are translated. */
+const TAGS: { value: string; label: Bi }[] = [
+  { value: 'النوم', label: { ar: 'النوم', en: 'Sleep' } },
+  { value: 'العمل', label: { ar: 'العمل', en: 'Work' } },
+  { value: 'العلاقات', label: { ar: 'العلاقات', en: 'Relationships' } },
+  { value: 'الجسد', label: { ar: 'الجسد', en: 'Body' } },
+  { value: 'الوحدة', label: { ar: 'الوحدة', en: 'Loneliness' } },
+];
 
 function toggle<T>(list: T[], item: T): T[] {
   return list.includes(item) ? list.filter((x) => x !== item) : [...list, item];
@@ -16,6 +25,7 @@ function toggle<T>(list: T[], item: T): T[] {
 export function CheckinPage() {
   const repo = useRepo();
   const navigate = useNavigate();
+  const { t } = useI18n();
   const [emotions, setEmotions] = useState<string[]>([]);
   const [intensity, setIntensity] = useState(5);
   const [tags, setTags] = useState<string[]>([]);
@@ -35,18 +45,20 @@ export function CheckinPage() {
 
   return (
     <div className="flex flex-col gap-5 pb-4">
-      <BackLink fallback="/">الرجوع</BackLink>
-      <h1 className="text-2xl font-bold">ما الذي أشعر به الآن؟</h1>
-      <p className="text-sm leading-7 text-muted">أختار كلمة أو أكثر. لا توجد مشاعر خاطئة.</p>
+      <BackLink fallback="/">{t({ ar: 'الرجوع', en: 'Back' })}</BackLink>
+      <h1 className="text-2xl font-bold">{t({ ar: 'ما الذي أشعر به الآن؟', en: 'What am I feeling right now?' })}</h1>
+      <p className="text-sm leading-7 text-muted">
+        {t({ ar: 'أختار كلمة أو أكثر. لا توجد مشاعر خاطئة.', en: 'I choose one or more words. There are no wrong feelings.' })}
+      </p>
 
       {emotionGroups.map((group) => (
         <fieldset key={group.id} className="flex flex-col gap-2 border-0 p-0">
-          <legend className="mb-2 text-[13px] font-semibold text-muted">{group.label}</legend>
+          <legend className="mb-2 text-[13px] font-semibold text-muted">{t(group.label)}</legend>
           <div className="flex flex-wrap gap-2">
             {group.words.map((w) => (
               <Chip
                 key={w.id}
-                label={w.label}
+                label={t(w.label)}
                 selected={emotions.includes(w.id)}
                 onToggle={() => setEmotions(toggle(emotions, w.id))}
               />
@@ -55,27 +67,38 @@ export function CheckinPage() {
         </fieldset>
       ))}
 
-      <IntensitySlider label="ما شدّة هذا الشعور؟" value={intensity} onChange={setIntensity} />
+      <IntensitySlider
+        label={t({ ar: 'ما شدّة هذا الشعور؟', en: 'How strong is this feeling?' })}
+        value={intensity}
+        onChange={setIntensity}
+      />
 
       <fieldset className="flex flex-col gap-2 border-0 p-0">
-        <legend className="mb-2 text-[13px] font-semibold text-muted">ما الذي حرّكه؟ (اختياري)</legend>
+        <legend className="mb-2 text-[13px] font-semibold text-muted">
+          {t({ ar: 'ما الذي حرّكه؟ (اختياري)', en: 'What set it off? (optional)' })}
+        </legend>
         <div className="flex flex-wrap gap-2">
-          {TAGS.map((t) => (
-            <Chip key={t} label={t} selected={tags.includes(t)} onToggle={() => setTags(toggle(tags, t))} />
+          {TAGS.map((tag) => (
+            <Chip
+              key={tag.value}
+              label={t(tag.label)}
+              selected={tags.includes(tag.value)}
+              onToggle={() => setTags(toggle(tags, tag.value))}
+            />
           ))}
         </div>
       </fieldset>
 
       <div className="flex flex-col gap-1">
         <label htmlFor="checkin-note" className="text-[13px] font-semibold text-muted">
-          ملاحظة قصيرة
+          {t({ ar: 'ملاحظة قصيرة', en: 'Short note' })}
         </label>
         <textarea
           id="checkin-note"
           rows={2}
           value={note}
           onChange={(e) => setNote(e.target.value)}
-          placeholder="ماذا حدث؟ وماذا أحتاج الآن؟"
+          placeholder={t({ ar: 'ماذا حدث؟ وماذا أحتاج الآن؟', en: 'What happened? What do I need now?' })}
           className="rounded-2xl border border-line bg-card p-3 text-base leading-7"
         />
       </div>
@@ -87,7 +110,7 @@ export function CheckinPage() {
           onChange={(e) => setForNextSession(e.target.checked)}
           className="h-[22px] w-[22px] accent-teal"
         />
-        للنقاش في الجلسة القادمة
+        {t({ ar: 'للنقاش في الجلسة القادمة', en: 'To discuss at the next session' })}
       </label>
 
       {error && (
@@ -101,9 +124,9 @@ export function CheckinPage() {
         onClick={save}
         className="min-h-12 rounded-full bg-teal px-6 text-base font-bold text-card"
       >
-        حفظ
+        {t({ ar: 'حفظ', en: 'Save' })}
       </button>
-      <p className="text-center text-xs text-muted">يُحفظ على جهازك فقط</p>
+      <p className="text-center text-xs text-muted">{t({ ar: 'يُحفظ على جهازك فقط', en: 'Saved on this device only' })}</p>
     </div>
   );
 }

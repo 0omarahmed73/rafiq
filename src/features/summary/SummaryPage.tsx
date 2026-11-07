@@ -5,17 +5,19 @@ import { dayKey } from '../../lib/dates';
 import { buildSummary, type SummaryModel, type SummarySwitches } from './buildSummary';
 import { isAndroidPlatform, printSummaryDocument } from '../../platform/documents';
 import { buildPrintDocument } from './printDocument';
+import { type Bi } from '../../i18n';
 import { SummaryPrint } from './SummaryPrint';
 import './print.css';
+import { useI18n } from '../../i18n/LanguageProvider';
 
-const OPTIONS: { key: keyof SummarySwitches; label: string }[] = [
-  { key: 'checkins', label: 'تسجيلات المشاعر' },
-  { key: 'curve', label: 'منحنى الشدّة' },
-  { key: 'weeklyReviews', label: 'مراجعات الأسبوع' },
-  { key: 'practices', label: 'الممارسات الموجّهة' },
-  { key: 'tagged', label: 'ما وسمتُه «للنقاش في الجلسة»' },
-  { key: 'homework', label: 'إجابات الواجبات' },
-  { key: 'notes', label: 'ملاحظاتي' },
+const OPTIONS: { key: keyof SummarySwitches; label: Bi }[] = [
+  { key: 'checkins', label: { ar: 'تسجيلات المشاعر', en: 'Feeling check-ins' } },
+  { key: 'curve', label: { ar: 'منحنى الشدّة', en: 'Intensity curve' } },
+  { key: 'weeklyReviews', label: { ar: 'مراجعات الأسبوع', en: 'Weekly reviews' } },
+  { key: 'practices', label: { ar: 'الممارسات الموجّهة', en: 'Guided practices' } },
+  { key: 'tagged', label: { ar: 'ما وسمتُه «للنقاش في الجلسة»', en: 'What I marked "to discuss at the session"' } },
+  { key: 'homework', label: { ar: 'إجابات الواجبات', en: 'Homework answers' } },
+  { key: 'notes', label: { ar: 'ملاحظاتي', en: 'My notes' } },
 ];
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -30,6 +32,7 @@ function monthRange(today: Date) {
 
 export function SummaryPage({ today = new Date() }: { today?: Date }) {
   const repo = useRepo();
+  const { t } = useI18n();
   const [range, setRange] = useState(() => monthRange(today));
   const [switches, setSwitches] = useState<SummarySwitches>({
     checkins: true,
@@ -101,23 +104,23 @@ export function SummaryPage({ today = new Date() }: { today?: Date }) {
     }
   }
 
-  const dateInput = 'min-h-12 w-full rounded-2xl border border-line bg-card px-3.5 text-base text-ink';
+  const dateInput = 'min-h-12 w-full min-w-0 rounded-2xl border border-line bg-card px-3.5 text-base text-ink';
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-4 print:hidden">
         <Link to="/therapist" className="flex min-h-11 items-center text-[15px] font-semibold text-teal">
-          ‹ جلسات المعالج
+          {t({ ar: '‹ جلسات المعالج', en: '‹ My therapist sessions' })}
         </Link>
         <div>
-          <h1 className="mb-1 text-[28px] font-bold leading-snug">ملخّص لمعالجي</h1>
-          <p className="text-sm leading-7 text-muted">لا يُرسل شيء تلقائيًا، وأنا أختار ما يدخل في الملخّص.</p>
+          <h1 className="mb-1 text-[28px] font-bold leading-snug">{t({ ar: 'ملخّص لمعالجي', en: 'A summary for my therapist' })}</h1>
+          <p className="text-sm leading-7 text-muted">{t({ ar: 'لا يُرسل شيء تلقائيًا، وأنا أختار ما يدخل في الملخّص.', en: 'Nothing is sent automatically. I choose what goes into the summary.' })}</p>
         </div>
 
         <div className="flex gap-3">
-          <div className="flex flex-1 flex-col gap-1.5">
+          <div className="flex min-w-0 flex-1 flex-col gap-1.5">
             <label htmlFor="summary-from" className="text-[13px] font-semibold text-muted">
-              من
+              {t({ ar: 'من', en: 'From' })}
             </label>
             <input
               id="summary-from"
@@ -127,9 +130,9 @@ export function SummaryPage({ today = new Date() }: { today?: Date }) {
               className={dateInput}
             />
           </div>
-          <div className="flex flex-1 flex-col gap-1.5">
+          <div className="flex min-w-0 flex-1 flex-col gap-1.5">
             <label htmlFor="summary-to" className="text-[13px] font-semibold text-muted">
-              إلى
+              {t({ ar: 'إلى', en: 'To' })}
             </label>
             <input
               id="summary-to"
@@ -142,7 +145,7 @@ export function SummaryPage({ today = new Date() }: { today?: Date }) {
         </div>
 
         <fieldset className="m-0 rounded-2xl border border-line bg-card p-0">
-          <legend className="sr-only">ما الذي يتضمّنه الملخّص؟</legend>
+          <legend className="sr-only">{t({ ar: 'ما الذي يتضمّنه الملخّص؟', en: 'What the summary includes' })}</legend>
           {OPTIONS.map((o) => (
             <label
               key={o.key}
@@ -154,12 +157,12 @@ export function SummaryPage({ today = new Date() }: { today?: Date }) {
                 onChange={(e) => setSwitches((s) => ({ ...s, [o.key]: e.target.checked }))}
                 className="h-[22px] w-[22px] accent-teal"
               />
-              {o.label}
+              {t(o.label)}
             </label>
           ))}
         </fieldset>
 
-        <h2 className="text-[13px] font-semibold text-muted">معاينة</h2>
+        <h2 className="text-[13px] font-semibold text-muted">{t({ ar: 'معاينة', en: 'Preview' })}</h2>
       </div>
 
       <div ref={printArea} className="print-area rounded-2xl border border-line bg-card p-4">
@@ -173,14 +176,14 @@ export function SummaryPage({ today = new Date() }: { today?: Date }) {
           disabled={printing}
           className="min-h-12 rounded-full bg-teal px-6 text-base font-bold text-card disabled:opacity-60"
         >
-          حفظ كملف PDF
+          {t({ ar: 'حفظ كملف PDF', en: 'Save as a PDF file' })}
         </button>
         {printError && (
           <p role="alert" className="text-center text-sm font-semibold text-ink">
-            تعذّرت الطباعة، يمكنني المحاولة مرة أخرى.
+            {t({ ar: 'تعذّرت الطباعة، يمكنني المحاولة مرة أخرى.', en: 'Printing failed. I can try again.' })}
           </p>
         )}
-        <p className="text-center text-xs text-muted">يُنشأ على جهازي. أرسله بالطريقة التي أفضّلها.</p>
+        <p className="text-center text-xs text-muted">{t({ ar: 'يُنشأ على جهازي. أرسله بالطريقة التي أفضّلها.', en: 'It is created on my device. I send it the way I prefer.' })}</p>
       </div>
     </div>
   );

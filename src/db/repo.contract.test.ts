@@ -96,6 +96,14 @@ describe.each(factories)('Repo contract (%s)', (_name, makeStore) => {
     expect(await repo.listSoothing()).toHaveLength(1);
   });
 
+  it('removes a soothing text, keeps the others, and leaves a deletion marker', async () => {
+    await repo.addSoothing('الرسم', 'user');
+    await repo.addSoothing('سماع ألبوم', 'step1');
+    await repo.removeSoothing(' الرسم ');
+    expect((await repo.listSoothing()).map((s) => s.text)).toEqual(['سماع ألبوم']);
+    expect((await repo.exportAll()).syncTombstones.map((t) => t.table)).toContain('soothingList');
+  });
+
   it('round-trips every table through exportAll and replaceAll, dropping extra rows', async () => {
     await repo.addCheckin(checkin());
     await repo.savePractice(practice());
@@ -109,6 +117,23 @@ describe.each(factories)('Repo contract (%s)', (_name, makeStore) => {
     await repo.replaceAll(snapshot);
 
     expect(await repo.exportAll()).toEqual(snapshot);
+  });
+
+  it('erases every table including tombstones, and the repo still accepts new writes', async () => {
+    await repo.addCheckin(checkin());
+    await repo.saveNote({ id: 'n1', text: 'ملاحظة', createdAt: '2026-11-02T10:00:00.000Z' });
+    await repo.saveSettings({ id: 'settings', theme: 'dark' });
+    await repo.addSoothing('الرسم', 'user');
+    await repo.addSoothing('سماع ألبوم', 'user');
+    await repo.removeSoothing('سماع ألبوم');
+    expect((await repo.exportAll()).syncTombstones).toHaveLength(1);
+
+    await repo.eraseAll();
+
+    const all = await repo.exportAll();
+    for (const rows of Object.values(all)) expect(rows).toHaveLength(0);
+    await repo.addCheckin(checkin());
+    expect(await repo.listCheckins({ from: '2026-10-31', to: '2026-10-31' })).toHaveLength(1);
   });
 
   it('merges by keeping the record with the later updatedAt and records only present locally', async () => {

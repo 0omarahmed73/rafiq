@@ -1,3 +1,7 @@
+import { IDBFactory } from 'fake-indexeddb';
+import { readLockDb } from '../features/lock/lockDb';
+import { loadLock, readLock, resetLockStoreForTests, writeLock } from '../features/lock/lockStore';
+import { hashSecret } from '../features/lock/pin';
 import { BackupError, exportBackup, importBackup, type BackupFile } from './backup';
 import { createMemoryRepo } from './memoryRepo';
 import type { Repo } from './repo';
@@ -55,7 +59,7 @@ async function populated(): Promise<Repo> {
     decision: { acceptanceChoice: 'change', reasons: ['سبب'] },
   });
   await repo.addSoothing('الرسم', 'step1');
-  await repo.saveSettings({ id: 'settings', theme: 'dark', accent: 'rose' });
+  await repo.saveSettings({ id: 'settings', theme: 'dark', accent: 'rose', language: 'ar' });
   await repo.saveAgendaPoint({ id: 'a1', text: 'نقطة', day: '2026-10-30', done: false });
   await repo.saveNote({ id: 'n1', text: 'ملاحظة الأسبوع', createdAt: '2026-10-28T10:00:00.000Z' });
   await repo.saveNote({ id: 'n2', text: 'ملاحظة قديمة', createdAt: '2026-10-20T10:00:00.000Z', archivedAt: '2026-10-27T08:00:00.000Z' });
@@ -124,6 +128,31 @@ describe('importBackup', () => {
     const bad = structuredClone(file);
     (bad.data.notes[0] as unknown as Record<string, unknown>).text = 5;
     await expect(importBackup(createMemoryRepo(), bad, 'replace')).rejects.toThrow('الملف غير صالح');
+  });
+
+  it('keeps the language the backup was made with', async () => {
+    const file = await exportBackup(await populated());
+    expect(file.data.settings[0].language).toBe('ar');
+    const target = createMemoryRepo();
+    await importBackup(target, file, 'replace');
+    expect((await target.getSettings()).language).toBe('ar');
+  });
+
+  it('imports a backup made before the language choice as English', async () => {
+    const old = structuredClone(await exportBackup(await populated()));
+    delete (old.data.settings[0] as unknown as { language?: string }).language;
+    const target = createMemoryRepo();
+    await importBackup(target, old, 'replace');
+    expect((await target.getSettings()).language).toBe('en');
+  });
+
+  it('rejects a language the app does not speak, without changing anything', async () => {
+    const bad = structuredClone(await exportBackup(await populated())) as unknown as { data: { settings: { language: string }[] } };
+    bad.data.settings[0].language = 'fr';
+    const target = createMemoryRepo();
+    await target.saveSettings({ id: 'settings', theme: 'light', language: 'en' });
+    await expect(importBackup(target, bad, 'replace')).rejects.toThrow('الملف غير صالح');
+    expect((await target.getSettings()).language).toBe('en');
   });
 
   it('reads old homework backups without photo kind, sync markers, or country choice', async () => {
@@ -259,5 +288,33 @@ describe('importBackup', () => {
       expect((error as BackupError).message).toBe('إصدار الملف غير مدعوم');
       expect(await repo.exportAll()).toEqual(before);
     });
+  });
+});
+
+describe('backup and the app lock', () => {
+  beforeEach(async () => {
+    globalThis.indexedDB = new IDBFactory();
+    resetLockStoreForTests();
+    await loadLock();
+  });
+  afterEach(() => resetLockStoreForTests());
+
+  it('never puts the lock in a backup and leaves it untouched on import', async () => {
+    const pin = await hashSecret('2468', 1000);
+    const recovery = await hashSecret('ABCDEFGHJKMN', 1000);
+    await writeLock({ v: 1, pin, recovery, biometric: false, autoLockMs: 60000, failures: 2, blockedUntil: 0 });
+    const before = readLock();
+    expect(await readLockDb()).toEqual({ initialized: true, record: before });
+
+    const repo = await populated();
+    const text = JSON.stringify(await exportBackup(repo));
+    expect(text).not.toContain('rafiq.lock');
+    for (const secret of [pin.salt, pin.hash, recovery.salt, recovery.hash]) expect(text).not.toContain(secret);
+
+    await importBackup(createMemoryRepo(), text, 'replace');
+    await importBackup(repo, text, 'merge');
+    expect(readLock()).toEqual(before);
+    // The lock database itself is untouched by the export and both imports.
+    expect(await readLockDb()).toEqual({ initialized: true, record: before });
   });
 });

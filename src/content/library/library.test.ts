@@ -6,6 +6,9 @@ const AR = '\\u0621-\\u064A';
 const hasWord = (text: string, word: string) =>
   new RegExp(`(?<![${AR}])${word}(?![${AR}])`).test(normalize(text));
 
+/** Every reader-facing text in both languages, as plain strings. */
+const texts = () => allTexts().flatMap((text) => [text.ar, text.en]);
+
 describe('library content structure', () => {
   it('has the nine symptoms, the two reading pages and a source for each citation', () => {
     expect(symptoms).toHaveLength(9);
@@ -13,12 +16,13 @@ describe('library content structure', () => {
     expect(sources.length).toBeGreaterThan(5);
   });
 
-  it('gives every source an unique id, a title, an Arabic description and a plain address', () => {
+  it('gives every source an unique id, a title, a description in both languages and a plain address', () => {
     const ids = sources.map((s) => s.id);
     expect(new Set(ids).size).toBe(ids.length);
     for (const s of sources) {
       expect(s.title.trim(), s.id).not.toBe('');
-      expect(s.about.trim(), s.id).not.toBe('');
+      expect(s.about.ar.trim(), s.id).not.toBe('');
+      expect(s.about.en.trim(), s.id).not.toBe('');
       expect(s.address ?? '', s.id).toMatch(/^$|^[a-z0-9.\-/_:?=%#&]+$/i);
     }
   });
@@ -37,9 +41,12 @@ describe('library content structure', () => {
     }
   });
 
-  it('keeps every symptom complete: title, kind summary, feeling, need, two or three sentences and a tool inside the app', () => {
+  it('keeps every symptom complete in both languages: title, kind summary, feeling, need, two or three sentences and a tool inside the app', () => {
     for (const s of symptoms) {
-      for (const field of [s.title, s.summary, s.feels, s.need, s.tool.label]) expect(field.trim(), s.id).not.toBe('');
+      for (const field of [s.title, s.summary, s.feels, s.need, s.tool.label]) {
+        expect(field.ar.trim(), s.id).not.toBe('');
+        expect(field.en.trim(), s.id).not.toBe('');
+      }
       expect(s.selfSentences.length, s.id).toBeGreaterThanOrEqual(2);
       expect(s.selfSentences.length, s.id).toBeLessThanOrEqual(3);
       expect(s.tool.to, s.id).toMatch(/^\/(calm|checkin|step\/\d+|practice\/[a-z-]+|journey|triggers)?$/);
@@ -54,7 +61,7 @@ describe('library content structure', () => {
   });
 
   it('has no placeholder text', () => {
-    for (const text of allTexts()) expect(text).not.toMatch(/TODO|TBD|lorem|XXX|\?\?\?/i);
+    for (const text of texts()) expect(text).not.toMatch(/TODO|TBD|lorem|XXX|\?\?\?/i);
   });
 
   it('reports how many texts are still drafts', () => {
@@ -65,8 +72,6 @@ describe('library content structure', () => {
 });
 
 describe('language guard for people in pain', () => {
-  const texts = () => allTexts();
-
   it('never tells the reader they have the disorder or hands them a diagnosis', () => {
     const banned = [
       /أنت\s+(تعاني|مصاب|لديك)/,
@@ -77,6 +82,13 @@ describe('language guard for people in pain', () => {
       /هل\s+أنت\s+حدي/,
     ];
     for (const text of texts()) for (const rx of banned) expect(normalize(text), text).not.toMatch(rx);
+    const bannedEnglish = [
+      /\byou (have|are living with|suffer from) (borderline|bpd)\b/i,
+      /\byour diagnosis\b/i,
+      /\byou are (a )?borderline\b/i,
+      /\bborderlines?\b(?! personality| disorder| features| symptoms| traits)/i,
+    ];
+    for (const text of texts()) for (const rx of bannedEnglish) expect(text, text).not.toMatch(rx);
   });
 
   it('never uses «حدّي» as a noun for a person', () => {
@@ -94,17 +106,27 @@ describe('language guard for people in pain', () => {
       /(إيذاء|جرح|قطع)\s+(نفسي|النفس)\s+(يريحني|يساعدني|حل)/,
     ];
     for (const text of texts()) for (const rx of banned) expect(normalize(text), text).not.toMatch(rx);
+    const bannedEnglish = [
+      /\b(illness|disorder|pain|condition) is a (gift|blessing|superpower)\b/i,
+      /\bself-harm (helps|works|is a solution|is a relief)\b/i,
+      /\bcutting (helps|works|is a relief)\b/i,
+    ];
+    for (const text of texts()) for (const rx of bannedEnglish) expect(text, text).not.toMatch(rx);
   });
 
   it('shows no suicide figures or methods', () => {
     const banned = [/(نسبة|معدل|معدّل)\s+(الانتحار|الوفاة)/, /يموت/, /طريقة\s+(للانتحار|للإيذاء)/, /٪[^.\n]*انتحار|انتحار[^.\n]*٪/];
     for (const text of texts()) for (const rx of banned) expect(normalize(text), text).not.toMatch(rx);
+    const bannedEnglish = [/\bsuicide rate\b/i, /\bmethods? (of|for) (suicide|self-harm)\b/i, /\bdie by\b/i];
+    for (const text of texts()) for (const rx of bannedEnglish) expect(text, text).not.toMatch(rx);
   });
 
   it('keeps every symptom page from saying the card is a test of the reader', () => {
     for (const s of symptoms) {
-      const all = normalize([s.summary, s.feels, s.need, ...s.selfSentences].join(' '));
+      const all = normalize([s.summary.ar, s.feels.ar, s.need.ar, ...s.selfSentences.map((x) => x.ar)].join(' '));
       expect(all).not.toMatch(/اختبر\s+نفسك|درجتك|نتيجتك/);
+      const english = [s.summary.en, s.feels.en, s.need.en, ...s.selfSentences.map((x) => x.en)].join(' ');
+      expect(english).not.toMatch(/\b(take (a|the|this) test|your score|your result)\b/i);
     }
   });
 });

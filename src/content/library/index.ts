@@ -4,6 +4,8 @@ import type { ReadingPage, Symptom } from './schema';
 import { sourceById, sources } from './sources';
 import { symptoms } from './symptoms';
 
+import type { Bi } from '../../i18n';
+
 export { about, hope, sourceById, sources, symptoms };
 export type { LibrarySource, PageSection, ReadingPage, ReviewStatus, Symptom } from './schema';
 
@@ -12,11 +14,11 @@ export const readingPages: ReadingPage[] = [about, hope];
 export const symptomById = (id: string): Symptom | undefined => symptoms.find((s) => s.id === id);
 export const readingPageById = (id: ReadingPage['id']): ReadingPage => (id === 'about' ? about : hope);
 
-/** Every piece of text a reader can see, for the language guard test. */
-export function allTexts(): string[] {
+/** Every piece of text a reader can see, in both languages, for the language guard test. */
+export function allTexts(): Bi[] {
   const pages = readingPages.flatMap((p) => [p.title, p.intro, ...p.sections.flatMap((s) => [s.heading, ...s.paragraphs])]);
-  const cards = symptoms.flatMap((s) => [s.title, s.summary, s.feels, s.need, ...s.selfSentences, s.tool.label, s.note ?? '']);
-  return [...pages, ...cards].filter(Boolean);
+  const cards = symptoms.flatMap((s) => [s.title, s.summary, s.feels, s.need, ...s.selfSentences, s.tool.label, ...(s.note ? [s.note] : [])]);
+  return [...pages, ...cards];
 }
 
 export function libraryStats() {

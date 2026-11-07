@@ -1,6 +1,6 @@
 import { emotionLabel } from '../../content';
 import type { Checkin } from '../../db/schema';
-import { toArabicDigits } from '../../lib/digits';
+import { digits, t } from '../../i18n';
 
 export function topEmotions(checkins: Checkin[], limit = 3): { id: string; count: number }[] {
   const counts = new Map<string, number>();
@@ -16,7 +16,7 @@ export function TopEmotions({ checkins }: { checkins: Checkin[] }) {
   if (top.length === 0) return null;
   const max = top[0].count;
   return (
-    <ul aria-label="أكثر المشاعر حضورًا" className="m-0 flex list-none flex-col gap-2.5 p-0">
+    <ul aria-label={t({ ar: 'أكثر المشاعر حضورًا', en: 'Most frequent feelings' })} className="m-0 flex list-none flex-col gap-2.5 p-0">
       {top.map((e) => (
         <li key={e.id} className="flex items-center gap-2.5 text-sm">
           <span className="w-16 shrink-0">{emotionLabel(e.id)}</span>
@@ -26,7 +26,7 @@ export function TopEmotions({ checkins }: { checkins: Checkin[] }) {
               style={{ width: `${(e.count / max) * 100}%` }}
             />
           </span>
-          <span className="w-5 text-end text-muted">{toArabicDigits(e.count)}</span>
+          <span className="w-5 text-end text-muted">{digits(e.count)}</span>
         </li>
       ))}
     </ul>

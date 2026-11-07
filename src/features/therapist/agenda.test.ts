@@ -75,12 +75,13 @@ describe('agendaItems', () => {
     expect(items.map((i) => [i.kind, i.label])).toEqual([['point', 'نقطة مفتوحة']]);
   });
 
-  it('leaves out agenda points written before the latest session', async () => {
+  it('keeps open agenda points written before the latest session until they are discussed or deleted', async () => {
     const repo = createMemoryRepo();
     await session(repo, '2026-10-27');
-    await repo.saveAgendaPoint({ id: 'a1', text: 'قديمة', day: '2026-10-26', done: false });
+    await repo.saveAgendaPoint({ id: 'a1', text: 'مفتوحة من قبل', day: '2026-10-26', done: false });
     await repo.saveAgendaPoint({ id: 'a2', text: 'جديدة', day: '2026-10-29', done: false });
-    expect((await agendaItems(repo)).map((i) => i.label)).toEqual(['جديدة']);
+    await repo.saveAgendaPoint({ id: 'a3', text: 'تمت مناقشتها', day: '2026-10-26', done: true });
+    expect((await agendaItems(repo)).map((i) => i.label)).toEqual(['جديدة', 'مفتوحة من قبل']);
   });
 
   it('lists the newest first', async () => {

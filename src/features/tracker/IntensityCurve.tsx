@@ -1,3 +1,4 @@
+import { t } from '../../i18n';
 import { trendOf } from '../../lib/trend';
 
 const PAD = 6;
@@ -13,18 +14,20 @@ export function curvePoints(values: number[], width: number, height: number): { 
 }
 
 const LABELS = {
-  up: 'تميل الشدّة إلى الارتفاع في آخر الأيام المسجّلة',
-  down: 'تميل الشدّة إلى الانخفاض في آخر الأيام المسجّلة',
-  flat: 'الشدّة مستقرة في آخر الأيام المسجّلة',
+  up: { ar: 'تميل الشدّة إلى الارتفاع في آخر الأيام المسجّلة', en: 'Intensity is trending up over the last logged days' },
+  down: { ar: 'تميل الشدّة إلى الانخفاض في آخر الأيام المسجّلة', en: 'Intensity is trending down over the last logged days' },
+  flat: { ar: 'الشدّة مستقرة في آخر الأيام المسجّلة', en: 'Intensity is steady over the last logged days' },
 } as const;
 
 export function IntensityCurve({ values }: { values: number[] }) {
   if (values.length < 2) {
-    return <p className="text-sm text-muted">أسجّل يومين على الأقل لأرى المنحنى.</p>;
+    return (
+      <p className="text-sm text-muted">{t({ ar: 'أسجّل يومين على الأقل لأرى المنحنى.', en: 'I need to log at least two days to see the curve.' })}</p>
+    );
   }
   const points = curvePoints(values, 300, 60);
   return (
-    <svg viewBox="0 0 300 60" role="img" aria-label={LABELS[trendOf(values)]} className="block w-full">
+    <svg viewBox="0 0 300 60" role="img" aria-label={t(LABELS[trendOf(values)])} className="block w-full">
       <line x1="0" y1="56" x2="300" y2="56" className="stroke-line" strokeWidth="1" />
       <polyline
         points={points.map((p) => `${p.x},${p.y}`).join(' ')}

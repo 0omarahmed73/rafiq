@@ -1,4 +1,6 @@
-/** ISO 3166-1 alpha-2 codes; labels come from the browser's localized region names. */
+import { currentLanguage, type Lang } from '../i18n';
+
+/** ISO 3166-1 alpha-2 codes; labels come from the browser's localized region names, in the active language. */
 const COUNTRY_CODES = [
   'AW', 'AF', 'AO', 'AI', 'AX', 'AL', 'AD', 'AE', 'AR', 'AM', 'AS', 'AQ', 'TF', 'AG', 'AU', 'AT',
   'AZ', 'BI', 'BE', 'BJ', 'BQ', 'BF', 'BD', 'BG', 'BH', 'BS', 'BA', 'BL', 'BY', 'BZ', 'BM', 'BO',
@@ -32,6 +34,8 @@ function localizedCountryName(code: CountryCode, locale: string, names?: Intl.Di
     if (code === 'PS') return 'فلسطين';
     // Keep an existing local selection from showing Israel after it is removed from the picker.
     if (code === 'IL') return 'بلد غير متاح';
+  } else if (code === 'IL') {
+    return 'Country not available';
   }
   return names?.of(code) ?? code;
 }
@@ -40,13 +44,13 @@ function displayNames(locale: string): Intl.DisplayNames | undefined {
   return typeof Intl.DisplayNames === 'undefined' ? undefined : new Intl.DisplayNames([locale], { type: 'region' });
 }
 
-export function countryLabel(code: string, locale = 'ar'): string {
+export function countryLabel(code: string, locale: Lang = currentLanguage()): string {
   const normalized = code.toUpperCase();
   if (!COUNTRY_CODES.includes(normalized as CountryCode)) return normalized;
   return localizedCountryName(normalized as CountryCode, locale, displayNames(locale));
 }
 
-export function countryOptions(locale = 'ar'): CountryOption[] {
+export function countryOptions(locale: Lang = currentLanguage()): CountryOption[] {
   const names = displayNames(locale);
   const collator = new Intl.Collator(locale);
   return COUNTRY_CODES.filter((code) => !HIDDEN_COUNTRY_CODES.has(code))

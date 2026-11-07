@@ -2,7 +2,7 @@ import { emotionLabel } from '../../content';
 import { practiceById } from '../../content/practices';
 import type { Repo } from '../../db/repo';
 import { dayKey, type DayKey } from '../../lib/dates';
-import { toArabicDigits } from '../../lib/digits';
+import { t } from '../../i18n';
 
 export interface AgendaItem {
   kind: 'checkin' | 'practice' | 'point';
@@ -14,8 +14,8 @@ export interface AgendaItem {
 }
 
 /**
- * What the user wants to discuss at the next session: check-ins and practices flagged for it,
- * plus open agenda points, all dated after the latest session (everything when there is none).
+ * What the user wants to discuss at the next session: check-ins and practices flagged for it and dated after
+ * the latest session (everything when there is none), plus every open agenda point until it is discussed or deleted.
  */
 export async function agendaItems(repo: Repo): Promise<AgendaItem[]> {
   const sessions = await repo.listSessions();
@@ -31,7 +31,10 @@ export async function agendaItems(repo: Repo): Promise<AgendaItem[]> {
       id: c.id,
       day: c.day,
       at: c.at,
-      label: `${c.emotions.map(emotionLabel).join('، ')} · ${toArabicDigits(c.intensity)} / ${toArabicDigits(10)}`,
+      label: t(
+        { ar: '{emotions} · {intensity} / {max}', en: '{emotions} · {intensity} / {max}' },
+        { emotions: c.emotions.map(emotionLabel).join(t({ ar: '، ', en: ', ' })), intensity: c.intensity, max: 10 },
+      ),
     });
   }
 
@@ -44,12 +47,12 @@ export async function agendaItems(repo: Repo): Promise<AgendaItem[]> {
       id: p.id,
       day,
       at: p.completedAt,
-      label: practiceById(p.practiceId)?.title ?? p.practiceId,
+      label: t(practiceById(p.practiceId)?.title ?? { ar: p.practiceId, en: p.practiceId }),
     });
   }
 
   for (const point of await repo.listAgendaPoints()) {
-    if (point.done || !after(point.day)) continue;
+    if (point.done) continue;
     items.push({ kind: 'point', id: point.id, day: point.day, at: `${point.day}T23:59:59.999Z`, label: point.text });
   }
 
