@@ -131,7 +131,9 @@ function PinView({ bioReady, onForgot }: { bioReady: boolean; onForgot: () => vo
           ref={input}
           id="lock-pin"
           type="password"
-          inputMode="numeric"
+          // The on-screen pad is the input method: no soft keyboard on focus (it would cover the pad).
+          // Hardware keyboards still type here and Enter still submits.
+          inputMode="none"
           autoComplete="off"
           maxLength={MAX_PIN}
           value={value}

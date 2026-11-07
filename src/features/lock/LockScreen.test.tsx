@@ -88,7 +88,7 @@ describe('LockScreen', () => {
     for (let d = 0; d <= 9; d += 1) {
       expect(screen.getByRole('button', { name: String(d) })).toHaveTextContent('٠١٢٣٤٥٦٧٨٩'[d]);
     }
-    expect(screen.getByLabelText('الرمز')).toHaveAttribute('inputmode', 'numeric');
+    expect(screen.getByLabelText('الرمز')).toHaveAttribute('inputmode', 'none');
     expect(screen.getByRole('button', { name: 'نسيت الرمز؟' })).toBeInTheDocument();
     expect(container).not.toHaveTextContent('Mona');
     expect(container).not.toHaveTextContent('Dr Salma');
@@ -231,6 +231,8 @@ describe('LockScreen', () => {
     await user.click(unlockButton());
     expect(await screen.findByText('الرمز غير صحيح', undefined, SLOW)).toBeInTheDocument();
     expect(screen.getByLabelText('الرمز')).toHaveFocus();
+    // Focus comes back without raising the soft keyboard over the pad.
+    expect(screen.getByLabelText('الرمز')).toHaveAttribute('inputmode', 'none');
 
     await pressDigits(user, '0000');
     await user.click(unlockButton());
@@ -341,12 +343,15 @@ describe('LockScreen', () => {
 
       await user.click(screen.getByRole('button', { name: 'نسيت الرمز؟' }));
       await user.click(screen.getByRole('button', { name: 'لدي رمز الاسترداد' }));
+      // The recovery code is typed, so its field keeps the normal text keyboard.
+      expect(screen.getByLabelText('رمز الاسترداد')).not.toHaveAttribute('inputmode');
       await user.type(screen.getByLabelText('رمز الاسترداد'), 'abcdefghjkmn');
       await user.click(screen.getByRole('button', { name: 'أتحقق' }));
 
       const first = await screen.findByLabelText('الرمز الجديد', undefined, SLOW);
       const again = screen.getByLabelText('أعيد كتابة الرمز الجديد');
       expect(first).toHaveAttribute('inputmode', 'numeric');
+      expect(again).toHaveAttribute('inputmode', 'numeric');
       await user.type(first, '٢٤٦٨');
       expect(first).toHaveValue('2468');
       await user.type(again, '2468');
@@ -464,6 +469,7 @@ describe('LockScreen', () => {
 
         const confirm = screen.getByRole('button', { name: 'احذف كل شيء' });
         const field = screen.getByLabelText('أكتب كلمة «حذف» للتأكيد');
+        expect(field).not.toHaveAttribute('inputmode');
         expect(confirm).toBeDisabled();
         await user.type(field, 'حذ');
         expect(confirm).toBeDisabled();
