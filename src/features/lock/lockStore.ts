@@ -3,8 +3,9 @@ import { waitMs, type SecretRecord } from './pin';
 
 /**
  * The lock record is kept in its own IndexedDB database (see lockDb), because Android WebView writes localStorage to
- * disk late and a force-stop can lose recent writes. localStorage is used only when IndexedDB is unavailable, and
- * this key is where older versions kept the record (it is moved into IndexedDB on the first start).
+ * disk late and a force-stop can lose recent writes. This localStorage key (where older versions kept the record) is
+ * a best-effort mirror of it, so that a start where IndexedDB is slow or unavailable stays locked (fail closed).
+ * IndexedDB wins whenever it answers at load, and the mirror is then rewritten to match it.
  */
 export const LOCK_STORAGE_KEY = 'rafiq.lock.v1';
 export const AUTO_LOCK_OPTIONS = [0, 60000, 300000, 900000] as const;
@@ -96,6 +97,21 @@ function removeLocal(): void {
   }
 }
 
+/** Sets the localStorage mirror; never throws. */
+function mirror(record: LockRecord): void {
+  try {
+    localStorage.setItem(LOCK_STORAGE_KEY, JSON.stringify(record));
+  } catch {
+    // storage unavailable: IndexedDB still holds the record
+  }
+}
+
+/** In local mode, writes are also tried in IndexedDB, in order and without waiting; failures are ignored. */
+let idbAttempts: Promise<unknown> = Promise.resolve();
+function tryInDb(write: () => Promise<void>): void {
+  idbAttempts = idbAttempts.then(write).catch(() => undefined);
+}
+
 /** The localStorage record: a valid record, null when there is none, or 'damaged' (removed, notice set). */
 function readLocal(): LockRecord | null | 'damaged' {
   let raw: string | null;
@@ -123,17 +139,21 @@ function localRecord(): LockRecord | null {
 }
 
 /**
- * Loads from IndexedDB. Once the database is initialized it is the only authority and a localStorage record is
- * stale (an erase or change whose removal never reached the disk), so it is removed. Before that, a localStorage
- * record is moved in. `abandoned` turns true when the load gave up waiting; nothing is changed after that.
+ * Loads from IndexedDB. Once the database is initialized it is the only authority: a different localStorage
+ * mirror is stale (an erase or change whose localStorage write never reached the disk) and is rewritten to match.
+ * Before that, a localStorage record is moved in (and stays as the mirror). `abandoned` turns true when the load
+ * gave up waiting; the mirror is not touched after that.
  */
 async function loadFromDb(timeoutMs: number, abandoned: () => boolean): Promise<LockRecord | null> {
   const state = await readLockDb(timeoutMs);
   if (abandoned()) throw new Error('The lock load timed out.');
   if (state.initialized || state.record !== undefined) {
+    if (isLockRecord(state.record)) {
+      mirror(state.record);
+      return state.record;
+    }
     removeLocal();
     if (state.record === undefined) return null;
-    if (isLockRecord(state.record)) return state.record;
     resetNotice = true;
     await clearLockDb(timeoutMs).catch(() => undefined);
     return null;
@@ -141,8 +161,6 @@ async function loadFromDb(timeoutMs: number, abandoned: () => boolean): Promise<
   const local = localRecord();
   if (local) {
     await writeLockDb(local, timeoutMs);
-    if (abandoned()) throw new Error('The lock load timed out.');
-    removeLocal();
     return local;
   }
   await clearLockDb(timeoutMs);
@@ -151,8 +169,11 @@ async function loadFromDb(timeoutMs: number, abandoned: () => boolean): Promise<
 
 /**
  * Loads the lock record into memory once, before the first render. Never rejects and never waits longer than
- * `timeoutMs`: when IndexedDB is missing, fails or does not answer in time, the store keeps the record in
- * localStorage as before (whose writes Android may lose on a force-stop).
+ * `timeoutMs`. When IndexedDB is missing, fails or does not answer in time ("local mode"), the record is read from
+ * the localStorage mirror, so a lock that was set stays on. In local mode writes go to the mirror and are also
+ * tried in IndexedDB. Accepted limits: a change that only reached the mirror is overwritten by IndexedDB at the
+ * next healthy start, and a stale mirror (an erase whose removal was lost) makes such a start locked with the old
+ * PIN.
  */
 export function loadLock(timeoutMs: number = LOAD_TIMEOUT_MS): Promise<void> {
   if (loading) return loading;
@@ -210,34 +231,45 @@ export function readLockFresh(): Promise<LockRecord | null> {
     if (record === undefined) return null;
     if (isLockRecord(record)) {
       cache = record;
+      mirror(record);
       return record;
     }
     resetNotice = true;
     await clearLockDb().catch(() => undefined);
+    removeLocal();
     cache = null;
     return null;
   });
 }
 
-/** Saves the record; resolves once it is stored (in IndexedDB, committed), and only then updates the cache. */
+/**
+ * Saves the record; resolves once it is stored (in IndexedDB, committed; in local mode, in localStorage), and only
+ * then updates the cache. The other store is updated best effort and never changes the result.
+ */
 export function writeLock(record: LockRecord): Promise<void> {
   return serial(async () => {
     await loadLock();
-    if (mode === 'idb') await writeLockDb(record);
-    else localStorage.setItem(LOCK_STORAGE_KEY, JSON.stringify(record));
+    if (mode === 'idb') {
+      await writeLockDb(record);
+      mirror(record);
+    } else {
+      localStorage.setItem(LOCK_STORAGE_KEY, JSON.stringify(record));
+      tryInDb(() => writeLockDb(record));
+    }
     cache = record;
   });
 }
 
-/** Removes the record (and any localStorage copy); resolves once that is stored, and only then clears the cache. */
+/** Removes the record, the same way as writeLock stores one; only then clears the cache. */
 export function clearLock(): Promise<void> {
   return serial(async () => {
     await loadLock();
     if (mode === 'idb') {
-      removeLocal();
       await clearLockDb();
+      removeLocal();
     } else {
       localStorage.removeItem(LOCK_STORAGE_KEY);
+      tryInDb(() => clearLockDb());
     }
     cache = null;
   });
@@ -268,6 +300,7 @@ export function resetLockStoreForTests(): void {
   mode = 'local';
   loading = null;
   queue = Promise.resolve();
+  idbAttempts = Promise.resolve();
   resetNotice = false;
 }
 

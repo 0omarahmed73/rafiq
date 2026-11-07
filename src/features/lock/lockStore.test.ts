@@ -65,6 +65,9 @@ const DAMAGED: Array<[string, Record<string, unknown>]> = [
 
 const original = globalThis.indexedDB;
 
+/** The localStorage mirror, parsed (null when absent). */
+const mirrored = (): unknown => JSON.parse(localStorage.getItem(LOCK_STORAGE_KEY) ?? 'null');
+
 /** What the lock database holds, read straight from IndexedDB. */
 const stored = () => lockDb.readLockDb();
 
@@ -116,7 +119,25 @@ describe('lockStore in IndexedDB', () => {
     await pending;
     expect(readLock()).toEqual(base);
     expect((await stored()).record).toEqual(base);
-    expect(localStorage.getItem(LOCK_STORAGE_KEY)).toBeNull();
+    expect(mirrored()).toEqual(base);
+  });
+
+  it('a mirror that cannot be written does not fail the durable write or clear', async () => {
+    await loadLock();
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('full');
+    });
+    const removeItem = vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => {
+      throw new Error('denied');
+    });
+    await writeLock(base);
+    expect(readLock()).toEqual(base);
+    expect((await stored()).record).toEqual(base);
+    await clearLock();
+    expect(readLock()).toBeNull();
+    expect(await stored()).toEqual({ initialized: true, record: undefined });
+    expect(setItem).toHaveBeenCalled();
+    expect(removeItem).toHaveBeenCalled();
   });
 
   it('a write that IndexedDB does not confirm rejects and leaves the cache', async () => {
@@ -126,11 +147,13 @@ describe('lockStore in IndexedDB', () => {
     await expect(writeLock({ ...base, failures: 3 })).rejects.toThrow();
     expect(readLock()).toEqual(base);
     expect((await stored()).record).toEqual(base);
+    expect(mirrored()).toEqual(base);
   });
 
-  it('a cold start reads the stored record', async () => {
+  it('a cold start reads the stored record and rewrites a missing mirror', async () => {
     await bootWith({ ...base, failures: 5, blockedUntil: 31000 });
     expect(readLock()).toEqual({ ...base, failures: 5, blockedUntil: 31000 });
+    expect(mirrored()).toEqual({ ...base, failures: 5, blockedUntil: 31000 });
     expect(consumeResetNotice()).toBe(false);
   });
 
@@ -149,7 +172,9 @@ describe('lockStore in IndexedDB', () => {
   });
 
   it.each(DAMAGED)('drops a stored record with %s, clears it and flags a reset notice once', async (_name, over) => {
+    localStorage.setItem(LOCK_STORAGE_KEY, JSON.stringify(base));
     await bootWith({ ...base, ...over });
+    expect(mirrored()).toBeNull();
     expect(readLock()).toBeNull();
     expect(await stored()).toEqual({ initialized: true, record: undefined });
     expect(consumeResetNotice()).toBe(true);
@@ -169,7 +194,7 @@ describe('lockStore in IndexedDB', () => {
     await clearLock();
     expect(readLock()).toBeNull();
     expect(await stored()).toEqual({ initialized: true, record: undefined });
-    expect(localStorage.getItem(LOCK_STORAGE_KEY)).toBeNull();
+    expect(mirrored()).toBeNull();
   });
 
   it('a clear that IndexedDB does not confirm rejects and leaves the cache', async () => {
@@ -178,6 +203,8 @@ describe('lockStore in IndexedDB', () => {
     vi.mocked(lockDb.clearLockDb).mockRejectedValueOnce(new Error('aborted'));
     await expect(clearLock()).rejects.toThrow();
     expect(readLock()).toEqual(base);
+    // IndexedDB still holds the lock, so the mirror keeps it too (fail closed).
+    expect(mirrored()).toEqual(base);
   });
 
   it('applies writes in the order they were made', async () => {
@@ -195,6 +222,7 @@ describe('lockStore in IndexedDB', () => {
     for (let i = 0; i < 5; i += 1) record = await recordFailure(record, 1000);
     expect(readLock()).toMatchObject({ failures: 5, blockedUntil: 31000 });
     expect((await stored()).record).toMatchObject({ failures: 5, blockedUntil: 31000 });
+    expect(mirrored()).toMatchObject({ failures: 5, blockedUntil: 31000 });
     record = await recordFailure(record, 40000);
     expect(record.blockedUntil).toBe(100000);
   });
@@ -216,12 +244,12 @@ describe('lockStore in IndexedDB', () => {
 });
 
 describe('moving a localStorage record into IndexedDB', () => {
-  it('moves a valid record and removes the localStorage key', async () => {
+  it('moves a valid record and keeps the localStorage key as the mirror', async () => {
     localStorage.setItem(LOCK_STORAGE_KEY, JSON.stringify({ ...base, failures: 2 }));
     await loadLock();
     expect(readLock()).toEqual({ ...base, failures: 2 });
     expect(await stored()).toEqual({ initialized: true, record: { ...base, failures: 2 } });
-    expect(localStorage.getItem(LOCK_STORAGE_KEY)).toBeNull();
+    expect(mirrored()).toEqual({ ...base, failures: 2 });
     expect(consumeResetNotice()).toBe(false);
   });
 
@@ -248,12 +276,12 @@ describe('moving a localStorage record into IndexedDB', () => {
     expect(consumeResetNotice()).toBe(false);
   });
 
-  it('once IndexedDB is initialized, its record wins over a different localStorage record', async () => {
+  it('once IndexedDB is initialized, its record wins over a stale mirror, which is rewritten', async () => {
     await lockDb.writeLockDb({ ...base, failures: 4 });
     localStorage.setItem(LOCK_STORAGE_KEY, JSON.stringify(base));
     await loadLock();
     expect(readLock()).toEqual({ ...base, failures: 4 });
-    expect(localStorage.getItem(LOCK_STORAGE_KEY)).toBeNull();
+    expect(mirrored()).toEqual({ ...base, failures: 4 });
   });
 
   it('keeps the record in memory and in localStorage when the move cannot be written', async () => {
@@ -272,6 +300,7 @@ describe('readLockFresh', () => {
     await lockDb.writeLockDb({ ...base, autoLockMs: 300000 });
     expect(await readLockFresh()).toEqual({ ...base, autoLockMs: 300000 });
     expect(readLock()).toEqual({ ...base, autoLockMs: 300000 });
+    expect(mirrored()).toEqual({ ...base, autoLockMs: 300000 });
   });
 
   it('returns null without changing the cache when nothing is stored', async () => {
@@ -352,13 +381,34 @@ describe('lockStore without IndexedDB (local mode)', () => {
     expect(consumeResetNotice()).toBe(true);
   });
 
-  it('falls back when the load read fails', async () => {
-    vi.mocked(lockDb.readLockDb).mockRejectedValueOnce(new Error('blocked'));
+  it('falls back to the mirror when the load read fails, and still tries IndexedDB for writes', async () => {
+    await lockDb.writeLockDb(base);
     localStorage.setItem(LOCK_STORAGE_KEY, JSON.stringify(base));
+    vi.mocked(lockDb.readLockDb).mockRejectedValueOnce(new Error('blocked'));
     await loadLock();
     expect(readLock()).toEqual(base);
     await writeLock({ ...base, failures: 1 });
-    expect(JSON.parse(localStorage.getItem(LOCK_STORAGE_KEY)!)).toMatchObject({ failures: 1 });
+    expect(mirrored()).toMatchObject({ failures: 1 });
+    await vi.waitFor(async () => expect((await stored()).record).toMatchObject({ failures: 1 }));
+    await clearLock();
+    expect(mirrored()).toBeNull();
+    await vi.waitFor(async () => expect(await stored()).toEqual({ initialized: true, record: undefined }));
+  });
+
+  it('a local write still succeeds when the IndexedDB attempt fails', async () => {
+    vi.mocked(lockDb.readLockDb).mockRejectedValueOnce(new Error('blocked'));
+    await loadLock();
+    vi.mocked(lockDb.writeLockDb).mockRejectedValueOnce(new Error('aborted'));
+    await writeLock(base);
+    expect(readLock()).toEqual(base);
+    expect(mirrored()).toEqual(base);
+  });
+
+  it('starts with no lock when the load fails and there is no mirror', async () => {
+    await lockDb.writeLockDb(base);
+    vi.mocked(lockDb.readLockDb).mockRejectedValueOnce(new Error('blocked'));
+    await loadLock();
+    expect(readLock()).toBeNull();
   });
 
   it('falls back when IndexedDB never answers, within the 2 s cap', async () => {

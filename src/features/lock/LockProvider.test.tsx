@@ -149,6 +149,29 @@ describe('LockProvider', () => {
     expect(effects).not.toHaveBeenCalled();
   });
 
+  it('starts locked from the localStorage mirror when IndexedDB fails at start', async () => {
+    const record = await storeRecord();
+    expect(JSON.parse(localStorage.getItem(LOCK_STORAGE_KEY)!)).toEqual(record);
+    resetLockStoreForTests();
+    vi.mocked(readLockDb).mockRejectedValueOnce(new Error('blocked'));
+    await loadLock();
+    renderLock();
+    expect(isLocked()).toBe(true);
+    expect(mounts).not.toHaveBeenCalled();
+    expect(await call(() => api.unlock('1357'))).toBe('ok');
+  });
+
+  it('starts open when IndexedDB fails at start and there is no mirror', async () => {
+    await storeRecord();
+    localStorage.clear();
+    resetLockStoreForTests();
+    vi.mocked(readLockDb).mockRejectedValueOnce(new Error('blocked'));
+    await loadLock();
+    renderLock();
+    expect(isOpen()).toBe(true);
+    expect(api.enabled).toBe(false);
+  });
+
   it('throws when useLock is used outside a provider', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     expect(() => render(<Capture />)).toThrow(/LockProvider/);
@@ -682,7 +705,7 @@ describe('LockProvider', () => {
     expect(await call(() => api.recover(first))).toBe('wrong');
   });
 
-  it('a check whose record is replaced while it runs returns wrong without counting', async () => {
+  it('turnOff and setUp queued behind a running check apply after it, and the new lock starts clean', async () => {
     await storeRecord();
     renderLock();
     await call(() => api.unlock('1357'));
