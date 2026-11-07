@@ -1,16 +1,12 @@
-import { parseBackupFile } from "../../db/backup";
-import { stableStringify } from "../../db/repoCore";
-import type { AllData, Settings } from "../../db/schema";
+import { parseBackupFile } from '../../db/backup';
+import { stableStringify } from '../../db/repoCore';
+import type { AllData, Settings } from '../../db/schema';
 
 /** Everything that syncs: a full backup without the photos. */
-export type SyncData = Omit<AllData, "homeworkImages">;
+export type SyncData = Omit<AllData, 'homeworkImages'>;
 
 /** Settings that belong to this device only; they never leave it and are never overwritten by a remote copy. */
-export const LOCAL_ONLY_SETTINGS = [
-  "reminderTime",
-  "lastReminderDay",
-  "lastBackupAt",
-] as const;
+export const LOCAL_ONLY_SETTINGS = ['reminderTime', 'lastReminderDay', 'lastBackupAt'] as const;
 
 function withoutLocalOnly(row: Settings): Settings {
   const copy: Settings = { ...row };
@@ -24,9 +20,7 @@ export function toSyncData(all: AllData): SyncData {
   return {
     ...rest,
     settings: all.settings.map(withoutLocalOnly),
-    syncTombstones: all.syncTombstones.filter(
-      (tombstone) => tombstone.table !== "homeworkImages",
-    ),
+    syncTombstones: all.syncTombstones.filter((tombstone) => tombstone.table !== 'homeworkImages'),
   };
 }
 
@@ -37,10 +31,40 @@ export function toPlaintext(
   return { version: 1, exportedAt, data };
 }
 
-/** Validates a decrypted snapshot with the backup parser; throws BackupError when it is not valid. */
+/**
+ * Validates a decrypted snapshot with the backup parser; throws BackupError when it is not valid. Photos never sync,
+ * so they are dropped before parsing, and a settings row without a language stays without one (the parser would
+ * otherwise default it, which means "not chosen yet" is lost).
+ */
 export function parseRemote(plaintext: unknown): SyncData {
-  const { homeworkImages: _photos, ...data } = parseBackupFile(plaintext).data;
-  return data;
+  let raw: unknown = plaintext;
+  if (typeof raw === 'string') {
+    try {
+      raw = JSON.parse(raw);
+    } catch {
+      return parseBackupFile(raw).data; // throws BackupError
+    }
+  }
+  const rawData = (raw as { data?: Record<string, unknown> } | null)?.data;
+  if (raw && typeof raw === 'object' && rawData && typeof rawData === 'object' && !Array.isArray(rawData)) {
+    const { homeworkImages: _dropped, ...noPhotos } = rawData;
+    raw = { ...(raw as object), data: noPhotos };
+  }
+  const { homeworkImages: _photos, ...data } = parseBackupFile(raw).data;
+  const rawSettings = (rawData as { settings?: unknown } | undefined)?.settings;
+  const noLanguage = new Set(
+    Array.isArray(rawSettings)
+      ? rawSettings.filter((row) => row && typeof row === 'object' && !('language' in row)).map((row) => row.id)
+      : [],
+  );
+  return {
+    ...data,
+    settings: data.settings.map((row) => {
+      if (!noLanguage.has(row.id)) return row;
+      const { language: _language, ...rest } = row;
+      return rest;
+    }),
+  };
 }
 
 /**
@@ -61,14 +85,24 @@ export function prepareRemote(remote: SyncData, local: AllData): AllData {
   return { ...remote, settings, homeworkImages: [] };
 }
 
+function canonical(data: SyncData): SyncData {
+  const out: Record<string, unknown> = {};
+  for (const [table, rows] of Object.entries(data)) {
+    const key = (row: { id?: string; stepId?: number }) => String(table === 'stepProgress' ? row.stepId : row.id);
+    out[table] = [...(rows as { id?: string; stepId?: number }[])].sort((x, y) =>
+      key(x) < key(y) ? -1 : key(x) > key(y) ? 1 : 0,
+    );
+  }
+  return out as unknown as SyncData;
+}
+
+/** Equal content, whatever the key order or row order. */
 export function sameSyncData(a: SyncData, b: SyncData): boolean {
-  return stableStringify(a) === stableStringify(b);
+  return stableStringify(canonical(a)) === stableStringify(canonical(b));
 }
 
 /** Ids of photos whose homework no longer exists. */
 export function orphanPhotoIds(all: AllData): string[] {
   const homeworkIds = new Set(all.homework.map((homework) => homework.id));
-  return all.homeworkImages
-    .filter((photo) => !homeworkIds.has(photo.homeworkId))
-    .map((photo) => photo.id);
+  return all.homeworkImages.filter((photo) => !homeworkIds.has(photo.homeworkId)).map((photo) => photo.id);
 }

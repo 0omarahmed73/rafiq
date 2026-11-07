@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { BackupError } from "../../db/backup";
-import type { AllData, HomeworkImage, Settings } from "../../db/schema";
+import { describe, expect, it } from 'vitest';
+import { BackupError } from '../../db/backup';
+import type { AllData, HomeworkImage, Settings } from '../../db/schema';
 import {
   LOCAL_ONLY_SETTINGS,
   orphanPhotoIds,
@@ -9,9 +9,9 @@ import {
   sameSyncData,
   toPlaintext,
   toSyncData,
-} from "./syncData";
+} from './syncData';
 
-const T = "2026-10-31T10:00:00.000Z";
+const T = '2026-10-31T10:00:00.000Z';
 
 function empty(): AllData {
   return {
@@ -37,8 +37,8 @@ function photo(id: string, homeworkId: string): HomeworkImage {
   return {
     id,
     homeworkId,
-    kind: "prompt",
-    dataUrl: "data:image/jpeg;base64,AAAA",
+    kind: 'prompt',
+    dataUrl: 'data:image/jpeg;base64,AAAA',
     createdAt: T,
     updatedAt: T,
   };
@@ -46,10 +46,10 @@ function photo(id: string, homeworkId: string): HomeworkImage {
 
 function settings(extra: Partial<Settings> = {}): Settings {
   return {
-    id: "settings",
-    theme: "dark",
-    accent: "rose",
-    language: "ar",
+    id: 'settings',
+    theme: 'dark',
+    accent: 'rose',
+    language: 'ar',
     updatedAt: T,
     ...extra,
   };
@@ -60,10 +60,10 @@ function sample(): AllData {
     ...empty(),
     checkins: [
       {
-        id: "c1",
+        id: 'c1',
         at: T,
-        day: "2026-10-31",
-        emotions: ["sadness"],
+        day: '2026-10-31',
+        emotions: ['sadness'],
         intensity: 5,
         tags: [],
         forNextSession: false,
@@ -72,34 +72,34 @@ function sample(): AllData {
     ],
     homework: [
       {
-        id: "h1",
-        sessionId: "s1",
-        text: "اقرأ",
+        id: 'h1',
+        sessionId: 's1',
+        text: 'اقرأ',
         done: false,
         createdAt: T,
         updatedAt: T,
       },
     ],
-    homeworkImages: [photo("i1", "h1")],
+    homeworkImages: [photo('i1', 'h1')],
     settings: [
       settings({
-        reminderTime: "20:00",
-        lastReminderDay: "2026-10-30",
-        lastBackupAt: "2026-10-29T00:00:00.000Z",
+        reminderTime: '20:00',
+        lastReminderDay: '2026-10-30',
+        lastBackupAt: '2026-10-29T00:00:00.000Z',
       }),
     ],
     syncTombstones: [
       {
-        id: "homeworkImages:i9",
-        table: "homeworkImages",
-        recordId: "i9",
+        id: 'homeworkImages:i9',
+        table: 'homeworkImages',
+        recordId: 'i9',
         deletedAt: T,
         updatedAt: T,
       },
       {
-        id: "checkins:c9",
-        table: "checkins",
-        recordId: "c9",
+        id: 'checkins:c9',
+        table: 'checkins',
+        recordId: 'c9',
         deletedAt: T,
         updatedAt: T,
       },
@@ -107,14 +107,13 @@ function sample(): AllData {
   };
 }
 
-describe("toSyncData", () => {
-  it("drops photos and photo tombstones, keeps other tombstones, strips device-only settings", () => {
+describe('toSyncData', () => {
+  it('drops photos and photo tombstones, keeps other tombstones, strips device-only settings', () => {
     const all = sample();
     const data = toSyncData(all);
-    expect("homeworkImages" in data).toBe(false);
-    expect(data.syncTombstones.map((t) => t.table)).toEqual(["checkins"]);
-    for (const key of LOCAL_ONLY_SETTINGS)
-      expect(key in data.settings[0]).toBe(false);
+    expect('homeworkImages' in data).toBe(false);
+    expect(data.syncTombstones.map((t) => t.table)).toEqual(['checkins']);
+    for (const key of LOCAL_ONLY_SETTINGS) expect(key in data.settings[0]).toBe(false);
     const { homeworkImages: _photos, ...rest } = all;
     expect({ ...data, settings: all.settings }).toEqual({
       ...rest,
@@ -124,33 +123,29 @@ describe("toSyncData", () => {
   });
 });
 
-describe("prepareRemote", () => {
-  it("copies this device local-only settings without touching updatedAt", () => {
+describe('prepareRemote', () => {
+  it('copies this device local-only settings without touching updatedAt', () => {
     const remote = toSyncData({
       ...sample(),
-      settings: [
-        settings({ theme: "light", updatedAt: "2026-11-01T00:00:00.000Z" }),
-      ],
+      settings: [settings({ theme: 'light', updatedAt: '2026-11-01T00:00:00.000Z' })],
     });
     const out = prepareRemote(remote, sample());
     expect(out.settings[0]).toEqual({
       ...remote.settings[0],
-      reminderTime: "20:00",
-      lastReminderDay: "2026-10-30",
-      lastBackupAt: "2026-10-29T00:00:00.000Z",
+      reminderTime: '20:00',
+      lastReminderDay: '2026-10-30',
+      lastBackupAt: '2026-10-29T00:00:00.000Z',
     });
-    expect(out.settings[0].updatedAt).toBe("2026-11-01T00:00:00.000Z");
+    expect(out.settings[0].updatedAt).toBe('2026-11-01T00:00:00.000Z');
     expect(out.homeworkImages).toEqual([]);
   });
 
-  it("returns the remote row unchanged when there is no local settings row", () => {
+  it('returns the remote row unchanged when there is no local settings row', () => {
     const remote = toSyncData(sample());
-    expect(
-      prepareRemote(remote, { ...sample(), settings: [] }).settings,
-    ).toEqual(remote.settings);
+    expect(prepareRemote(remote, { ...sample(), settings: [] }).settings).toEqual(remote.settings);
   });
 
-  it("does not change a settings row that round-trips through sync", () => {
+  it('does not change a settings row that round-trips through sync', () => {
     const local = sample();
     const out = prepareRemote(toSyncData(local), local);
     expect(out.settings).toEqual(local.settings);
@@ -158,53 +153,74 @@ describe("prepareRemote", () => {
   });
 });
 
-describe("parseRemote", () => {
-  it("round-trips toPlaintext", () => {
+describe('parseRemote', () => {
+  it('round-trips toPlaintext', () => {
     const data = toSyncData(sample());
     expect(parseRemote(toPlaintext(data))).toEqual(data);
   });
 
-  it("stamps the snapshot shape", () => {
-    const plain = toPlaintext(toSyncData(sample()), "2026-11-08T00:00:00.000Z");
+  it('stamps the snapshot shape', () => {
+    const plain = toPlaintext(toSyncData(sample()), '2026-11-08T00:00:00.000Z');
     expect(plain.version).toBe(1);
-    expect(plain.exportedAt).toBe("2026-11-08T00:00:00.000Z");
+    expect(plain.exportedAt).toBe('2026-11-08T00:00:00.000Z');
   });
 
-  it("throws BackupError on invalid shapes", () => {
+  it('throws BackupError on invalid shapes', () => {
     const good = toPlaintext(toSyncData(sample()));
-    expect(() => parseRemote({ version: 1, exportedAt: T })).toThrow(
-      BackupError,
-    );
+    expect(() => parseRemote({ version: 1, exportedAt: T })).toThrow(BackupError);
     expect(() => parseRemote({ ...good, version: 2 })).toThrow(BackupError);
-    expect(() =>
-      parseRemote({ ...good, data: { ...good.data, checkins: [{ id: "x" }] } }),
-    ).toThrow(BackupError);
+    expect(() => parseRemote({ ...good, data: { ...good.data, checkins: [{ id: 'x' }] } })).toThrow(BackupError);
     expect(() => parseRemote(null)).toThrow(BackupError);
   });
 });
 
-describe("sameSyncData", () => {
-  it("ignores key order and notices a difference", () => {
-    const a = toSyncData(sample());
-    const b = JSON.parse(JSON.stringify(a), (_k, v) =>
-      v && typeof v === "object" && !Array.isArray(v)
-        ? Object.fromEntries(Object.entries(v).reverse())
-        : v,
-    );
-    expect(sameSyncData(a, b)).toBe(true);
-    expect(
-      sameSyncData(a, { ...a, checkins: [{ ...a.checkins[0], intensity: 6 }] }),
-    ).toBe(false);
+describe('fix round', () => {
+  it('keeps a missing language missing and leaves a present one', () => {
+    const { language: _l, ...noLang } = settings();
+    const data = { ...toSyncData(sample()), settings: [noLang] };
+    expect('language' in parseRemote(toPlaintext(data)).settings[0]).toBe(false);
+    expect(parseRemote(toPlaintext(toSyncData(sample()))).settings[0].language).toBe('ar');
+    expect(sameSyncData(data, parseRemote(toPlaintext(data)))).toBe(true);
+  });
+
+  it('ignores row order when comparing', () => {
+    const base = toSyncData(sample());
+    const a = { ...base, checkins: [{ ...base.checkins[0], id: 'c0' }, ...base.checkins] };
+    expect(sameSyncData(a, { ...a, checkins: [...a.checkins].reverse() })).toBe(true);
+  });
+
+  it('keeps this device absent reminderTime', () => {
+    const local = { ...sample(), settings: [settings()] };
+    const remote = toSyncData(local);
+    remote.settings[0] = { ...remote.settings[0], reminderTime: '07:00' };
+    expect('reminderTime' in prepareRemote(remote, local).settings[0]).toBe(false);
+  });
+
+  it('drops photos from the raw remote snapshot without throwing', () => {
+    const plain = toPlaintext(toSyncData(sample()));
+    const withPhoto = { ...plain, data: { ...plain.data, homeworkImages: [photo('x', 'nope')] } };
+    expect('homeworkImages' in parseRemote(withPhoto)).toBe(false);
   });
 });
 
-describe("orphanPhotoIds", () => {
-  it("returns only photos without a homework", () => {
+describe('sameSyncData', () => {
+  it('ignores key order and notices a difference', () => {
+    const a = toSyncData(sample());
+    const b = JSON.parse(JSON.stringify(a), (_k, v) =>
+      v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).reverse()) : v,
+    );
+    expect(sameSyncData(a, b)).toBe(true);
+    expect(sameSyncData(a, { ...a, checkins: [{ ...a.checkins[0], intensity: 6 }] })).toBe(false);
+  });
+});
+
+describe('orphanPhotoIds', () => {
+  it('returns only photos without a homework', () => {
     const all = {
       ...sample(),
-      homeworkImages: [photo("i1", "h1"), photo("i2", "gone")],
+      homeworkImages: [photo('i1', 'h1'), photo('i2', 'gone')],
     };
-    expect(orphanPhotoIds(all)).toEqual(["i2"]);
+    expect(orphanPhotoIds(all)).toEqual(['i2']);
     expect(orphanPhotoIds(sample())).toEqual([]);
   });
 });
