@@ -597,6 +597,27 @@ describe('sync engine: never overwriting local data', () => {
     expect(getVault).not.toHaveBeenCalled();
   });
 
+  it('stopActiveSync() resolves at once and never rejects when no engine exists', async () => {
+    vi.resetModules();
+    const fresh = await import('./syncEngine');
+    await expect(fresh.stopActiveSync(10_000)).resolves.toBeUndefined();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('a run stopped in flight keeps the attention state it started from', async () => {
+    const { b } = await seeded();
+    b.server.setEnvelope({ ...b.server.vault()!.envelope, v: 2 });
+    await b.engine.syncNow();
+    const attention = b.engine.getState();
+    expect(attention).toMatchObject({ status: 'attention', issue: 'newerVersion' });
+    const seen: SyncState[] = [];
+    b.engine.subscribe((s) => seen.push(s));
+    b.server.beforeNextGet(() => b.engine.stop());
+    await b.engine.syncNow();
+    expect(seen.map((s) => s.status)).toEqual(['syncing', 'attention']);
+    expect(b.engine.getState()).toEqual(attention);
+  });
+
   it('stopActiveSync() resolves within its timeout when a run hangs', async () => {
     const { server, engine } = await device();
     await cacheKey();

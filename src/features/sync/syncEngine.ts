@@ -37,7 +37,11 @@ export interface SyncEngine {
   start(): void;
   /**
    * Final: clears every timer, cancels a pending follow-up and makes every later call a no-op. A run in flight
-   * stops before its next write, push or key-store write. Create a new engine to sync again.
+   * stops before its next write, push or key-store write. There is no restart: create a new engine to sync again,
+   * so a React unmount/remount must never call this.
+   *
+   * It cannot interrupt a `repo.mergeAll` that is already running (the merge is one atomic transaction), and it does
+   * not wait: use `stopActiveSync()`, which also waits for the run in flight, before erasing data.
    */
   stop(): void;
   /** 'change' is debounced 5 s; 'manual' runs now and resets the backoff; the others run now. */
@@ -84,7 +88,16 @@ let latest: SyncEngine | null = null;
 
 /**
  * Stops the most recently created engine and waits until its run in flight has finished, or `timeoutMs` passed.
- * For sign-out and erase, before they touch the key store or the data. Never rejects; a no-op without an engine.
+ * Never rejects; resolves at once when no engine exists. Only the latest engine is stopped (see createSyncEngine).
+ *
+ * REQUIRED ORDER for erasing everything: `await stopActiveSync()` BEFORE `repo.eraseAll()` and before clearing the
+ * key store. The caller is the erase flow in the lock provider (Task 8). Sign-out must NOT call this (stop is final):
+ * it clears the sync identity and then calls `engine.refresh()`; a run in flight notices the missing identity before
+ * its next write or push and ends as `off`.
+ *
+ * Limits: stop() cannot interrupt a `repo.mergeAll` already running, so waiting here is what keeps that merge from
+ * landing after the erase. After the timeout this resolves even if a run is still inside `pushVault`; such a late
+ * push carries data exported before the stop (pre-erase data), never an empty snapshot.
  */
 export function stopActiveSync(timeoutMs: number = STOP_TIMEOUT_MS): Promise<void> {
   const engine = latest;
@@ -99,6 +112,13 @@ export function stopActiveSync(timeoutMs: number = STOP_TIMEOUT_MS): Promise<voi
   });
 }
 
+/**
+ * Creates the sync engine. Contract for the app:
+ * - Create it ONCE, outside React (e.g. in main.tsx), with the raw repo. `stop()` is final, so a React
+ *   unmount/remount (StrictMode) must never call it, and UI components must not create engines.
+ * - Only ONE live engine is supported: `stopActiveSync()` stops only the most recently created one; an older engine
+ *   still running would keep syncing and could race an erase.
+ */
 export function createSyncEngine(deps: SyncEngineDeps): SyncEngine {
   const { repo, server, onMerged } = deps;
   let state: SyncState = { status: 'off' };
@@ -144,7 +164,11 @@ export function createSyncEngine(deps: SyncEngineDeps): SyncEngine {
 
   /**
    * Throws unless the engine is still running with the session and key this run started with (not stopped, signed
-   * out, erased or reset). Synchronous on its last step, so the write that follows starts in the same tick.
+   * out, erased or reset). The last checks run synchronously, but the caller resumes one microtask later (the
+   * `await guard()` hop). Only microtasks run in that gap, never IndexedDB events or timers, and the push re-checks
+   * `stopped` synchronously right before calling the server. Whatever is written or pushed after the guard was read
+   * before it, so a stop landing in the gap can at worst let pre-stop data through, never an erased snapshot; the
+   * erase itself waits for the run (stopActiveSync).
    */
   async function guard(session: SyncSession, key: SyncKey): Promise<void> {
     if (stopped) throw new Halt('stopped');
@@ -200,6 +224,7 @@ export function createSyncEngine(deps: SyncEngineDeps): SyncEngine {
       if (row && remote && sameSyncData(mine, remote)) return row.version;
       const envelope = await encryptEnvelope(key.key, key.salt, session.userId, toPlaintext(mine), key.iter);
       await guard(session, key);
+      if (stopped) throw new Halt('stopped');
       const result = await server.pushVault(row?.version ?? 0, envelope);
       if (result.ok) return result.version;
     }
@@ -235,6 +260,7 @@ export function createSyncEngine(deps: SyncEngineDeps): SyncEngine {
     const { session, key } = who;
     const meta = await loadSyncMeta();
     if (stopped) return;
+    const settled = state;
     publish({ status: 'syncing', email: session.email, lastSyncedAt: meta.lastSyncedAt ?? state.lastSyncedAt });
     const run = { merged: false };
     try {
@@ -246,8 +272,12 @@ export function createSyncEngine(deps: SyncEngineDeps): SyncEngine {
       publish({ status: 'idle', email: session.email, lastSyncedAt });
     } catch (error) {
       if (stopped || (error instanceof Halt && error.issue === 'stopped')) {
-        // stop() is final: leave the last settled state (never 'syncing') and schedule nothing.
-        if (state.status === 'syncing') publish({ ...state, status: 'idle' });
+        // stop() is final: go back to the state before this run (never 'syncing') and schedule nothing.
+        if (state.status === 'syncing') {
+          publish(
+            settled.status === 'attention' || settled.status === 'offline' ? settled : { ...state, status: 'idle' },
+          );
+        }
       } else if (error instanceof Halt) {
         if (error.issue === 'off') goOff();
         else fail(error.issue as SyncIssue, session.email);
