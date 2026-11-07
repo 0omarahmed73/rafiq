@@ -5,6 +5,7 @@ import type { Repo } from './db/repo';
 import { type Lang } from './i18n';
 import { LanguageProvider, useLanguage } from './i18n/LanguageProvider';
 import { LockProvider } from './features/lock/LockProvider';
+import { LockScreen } from './features/lock/LockScreen';
 
 type AppRouter = ReturnType<typeof createBrowserRouter>;
 
@@ -23,7 +24,7 @@ export function App({
   return (
     <RepoProvider repo={repo}>
       <LanguageProvider initial={language}>
-        <LockProvider>
+        <LockProvider screen={LockScreen}>
           <div className="mx-auto max-w-xl px-4 pt-4 empty:hidden">
             <StorageBanner persistent={persistent} />
           </div>

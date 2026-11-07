@@ -1,3 +1,5 @@
+import { LOCK_STORAGE_KEY, readLock, writeLock } from '../features/lock/lockStore';
+import { hashSecret } from '../features/lock/pin';
 import { BackupError, exportBackup, importBackup, type BackupFile } from './backup';
 import { createMemoryRepo } from './memoryRepo';
 import type { Repo } from './repo';
@@ -284,5 +286,25 @@ describe('importBackup', () => {
       expect((error as BackupError).message).toBe('إصدار الملف غير مدعوم');
       expect(await repo.exportAll()).toEqual(before);
     });
+  });
+});
+
+describe('backup and the app lock', () => {
+  afterEach(() => localStorage.removeItem(LOCK_STORAGE_KEY));
+
+  it('never puts the lock in a backup and leaves it untouched on import', async () => {
+    const pin = await hashSecret('2468', 1000);
+    const recovery = await hashSecret('ABCDEFGHJKMN', 1000);
+    writeLock({ v: 1, pin, recovery, biometric: false, autoLockMs: 60000, failures: 2, blockedUntil: 0 });
+    const before = readLock();
+
+    const repo = await populated();
+    const text = JSON.stringify(await exportBackup(repo));
+    expect(text).not.toContain('rafiq.lock');
+    for (const secret of [pin.salt, pin.hash, recovery.salt, recovery.hash]) expect(text).not.toContain(secret);
+
+    await importBackup(createMemoryRepo(), text, 'replace');
+    await importBackup(repo, text, 'merge');
+    expect(readLock()).toEqual(before);
   });
 });
