@@ -114,8 +114,7 @@ export function LockSettings() {
     setError(null);
     if (next && !(await confirmBiometric())) return;
     if (!next) setStatus(null);
-    lock.setBiometric(next);
-    if (readLock()?.biometric !== next) setError(t(SAVE_FAILED));
+    if (!(await lock.setBiometric(next))) setError(t(SAVE_FAILED));
   }
 
   /** A new auto-lock time is only applied after the current PIN is checked. */
@@ -189,12 +188,12 @@ export function LockSettings() {
       } else if (action === 'timeout') {
         go(IDLE);
         if (pending === undefined) return;
-        lock.setAutoLockMs(pending);
-        if (readLock()?.autoLockMs !== pending) setError(t(SAVE_FAILED));
+        if (!(await lock.setAutoLockMs(pending))) setError(t(SAVE_FAILED));
       } else {
-        lock.turnOff();
+        const saved = await lock.turnOff();
         go(IDLE);
-        setStatus(t({ ar: 'أوقفت القفل.', en: 'I turned off the lock.' }));
+        if (saved) setStatus(t({ ar: 'أوقفت القفل.', en: 'I turned off the lock.' }));
+        else setError(t(SAVE_FAILED));
       }
     } else if (result === 'wrong') {
       setError(t({ ar: 'الرمز غير صحيح', en: 'That PIN is not right' }));

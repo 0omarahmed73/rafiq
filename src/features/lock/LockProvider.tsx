@@ -20,13 +20,13 @@ import {
   clearLock,
   consumeResetNotice,
   readLock,
+  readLockFresh,
   recordFailure,
   recordSuccess,
   remainingWaitMs,
   writeLock,
   type LockRecord,
 } from './lockStore';
-import { noteLock, rememberErased, wasErased } from './erasedLocks';
 import {
   generateRecoveryCode,
   hashSecret,
@@ -55,11 +55,13 @@ export interface LockApi {
   finishRecovery(): void;
   setUp(pin: string, biometric: boolean): Promise<string>;
   changePin(pin: string): Promise<string>;
-  setAutoLockMs(ms: number): void;
-  setBiometric(on: boolean): void;
+  /** Resolves true once the change is stored, false when storing failed (it still applies for this session). */
+  setAutoLockMs(ms: number): Promise<boolean>;
+  setBiometric(on: boolean): Promise<boolean>;
   /** While true (a recovery code is on screen), leaving and returning to the app does not lock it. */
   setAutoLockPaused(paused: boolean): void;
-  turnOff(): void;
+  /** Resolves true once the removal is stored, false when storing failed (the lock is still off for this session). */
+  turnOff(): Promise<boolean>;
   eraseEverything(): Promise<void>;
 }
 
@@ -73,10 +75,10 @@ function takeResetNotice(): boolean {
   return pendingResetNotice;
 }
 
-/** Persists with lockStore's helper; when storage throws, keeps the same change in memory only. */
-function persistOr(write: () => LockRecord, fallback: LockRecord): LockRecord {
+/** Persists with lockStore's helper; when storing fails, keeps the same change in memory only. */
+async function persistOr(write: () => Promise<LockRecord>, fallback: LockRecord): Promise<LockRecord> {
   try {
-    return write();
+    return await write();
   } catch {
     return fallback;
   }
@@ -99,13 +101,8 @@ function newPin(pin: string): string {
 /** Clamps a far-away blockedUntil to the longest wait from now and tries to persist the clamped value. */
 function clampAndPersist(record: LockRecord, now: number): LockRecord {
   const clamped = clampBlock(record, now);
-  if (clamped !== record) {
-    try {
-      writeLock(clamped);
-    } catch {
-      // storage unavailable: the clamp still applies in memory
-    }
-  }
+  // Not awaited: the clamp applies in memory at once, and a failed write leaves it in memory only.
+  if (clamped !== record) writeLock(clamped).catch(() => undefined);
   return clamped;
 }
 
@@ -134,8 +131,8 @@ function readClamped(): LockRecord | null {
   return record ? clampAndPersist(record, Date.now()) : null;
 }
 
-/** Longest wait for the durable erase mark before the lock is cleared and the app reloads anyway. */
-const ERASE_MARK_TIMEOUT_MS = 1500;
+/** Longest wait for the lock removal after an erase before the app reloads anyway. */
+const ERASE_CLEAR_TIMEOUT_MS = 1500;
 
 const NullScreen: ComponentType = () => null;
 
@@ -185,37 +182,13 @@ export function LockProvider({
     pendingResetNotice = false;
   }, []);
 
-  // A record that an earlier erase removed can come back from disk (see erasedLocks); it is no lock.
-  useEffect(() => {
-    const start = initial.record;
-    if (!start) return;
-    let live = true;
-    void wasErased(start).then((erased) => {
-      const current = recordRef.current;
-      if (!live || !erased || !current || !sameSecret(current.pin, start.pin)) return;
-      clearLock();
-      setRecord(null);
-      setRecoveredBoth(false);
-      setLockedBoth(false);
-    });
-    return () => {
-      live = false;
-    };
-  }, [initial.record, setRecord, setLockedBoth, setRecoveredBoth]);
-
-  // Every PIN held here is noted durably (by its salt only), so an erase also covers an older PIN still on disk.
-  const pinKey = record ? record.pin.salt : null;
-  useEffect(() => {
-    if (pinKey && recordRef.current) void noteLock(recordRef.current);
-  }, [pinKey]);
-
   /**
    * Adopts the stored record when it is valid and differs from memory (another tab changed it), so this tab
    * never writes an old PIN or recovery back over a newer one. A read that finds nothing keeps the in-memory
    * record: a transient storage failure must never turn the lock off.
    */
-  const syncFromStorage = useCallback((): LockRecord | null => {
-    const stored = readLock();
+  const syncFromStorage = useCallback(async (): Promise<LockRecord | null> => {
+    const stored = await readLockFresh();
     const mine = recordRef.current;
     if (stored && (!mine || !sameRecord(stored, mine))) {
       setRecord(stored);
@@ -285,17 +258,17 @@ export function LockProvider({
   const check = useCallback(
     (secret: string, pick: (rec: LockRecord) => SecretRecord): Promise<VerifyResult> => {
       const run = async (): Promise<VerifyResult> => {
-        syncFromStorage();
+        await syncFromStorage();
         const rec = currentClamped();
         if (!rec) return 'wrong';
         if (remainingWaitMs(rec, Date.now()) > 0) return 'blocked';
         const target = pick(rec);
         const ok = await safeVerify(secret, target);
-        const latest = syncFromStorage();
+        const latest = await syncFromStorage();
         if (!latest || !sameSecret(pick(latest), target)) return 'wrong';
         if (ok) {
           setRecord(
-            persistOr(() => recordSuccess(latest), {
+            await persistOr(() => recordSuccess(latest), {
               ...latest,
               failures: 0,
               blockedUntil: 0,
@@ -306,7 +279,7 @@ export function LockProvider({
         const now = Date.now();
         const failures = latest.failures + 1;
         setRecord(
-          persistOr(() => recordFailure(latest, now), {
+          await persistOr(() => recordFailure(latest, now), {
             ...latest,
             failures,
             blockedUntil: now + waitForFailures(failures),
@@ -340,7 +313,7 @@ export function LockProvider({
     const latest = recordRef.current;
     if (!ok || !latest) return false;
     setRecord(
-      persistOr(() => recordSuccess(latest), {
+      await persistOr(() => recordSuccess(latest), {
         ...latest,
         failures: 0,
         blockedUntil: 0,
@@ -364,7 +337,7 @@ export function LockProvider({
     (pin: string, biometric: boolean) =>
       enqueue(async () => {
         const normalized = newPin(pin);
-        if (syncFromStorage()) throw new Error('The lock is already on.');
+        if (await syncFromStorage()) throw new Error('The lock is already on.');
         const code = generateRecoveryCode();
         const next: LockRecord = {
           v: 1,
@@ -375,8 +348,8 @@ export function LockProvider({
           failures: 0,
           blockedUntil: 0,
         };
-        if (syncFromStorage()) throw new Error('The lock is already on.');
-        writeLock(next);
+        if (await syncFromStorage()) throw new Error('The lock is already on.');
+        await writeLock(next);
         setRecord(next);
         setRecoveredBoth(false);
         setLockedBoth(false);
@@ -389,7 +362,7 @@ export function LockProvider({
     (pin: string) =>
       enqueue(async () => {
         const normalized = newPin(pin);
-        if (!syncFromStorage()) throw new Error('The lock is off.');
+        if (!(await syncFromStorage())) throw new Error('The lock is off.');
         if (lockedRef.current && !recoveredRef.current) throw new Error('Unlock or recover before changing the PIN.');
         // Recovery path: locked with a recovered code; it stays locked so the new code can be shown, and
         // finishRecovery opens the app. Settings path: open; it changes nothing else.
@@ -397,7 +370,7 @@ export function LockProvider({
         const code = generateRecoveryCode();
         const pinHash = await hashSecret(normalized);
         const recoveryHash = await hashSecret(normalizeRecoveryCode(code));
-        const current = syncFromStorage();
+        const current = await syncFromStorage();
         if (!current) throw new Error('The lock is off.');
         const stillAllowed = viaRecovery ? lockedRef.current && recoveredRef.current : !lockedRef.current;
         if (!stillAllowed) throw new Error('The lock state changed while the PIN was being changed.');
@@ -408,7 +381,7 @@ export function LockProvider({
           failures: 0,
           blockedUntil: 0,
         };
-        writeLock(next);
+        await writeLock(next);
         setRecord(next);
         if (viaRecovery) recoveryPinSaved.current = true;
         return code;
@@ -422,26 +395,35 @@ export function LockProvider({
     setLockedBoth(false);
   }, [setLockedBoth, setRecoveredBoth]);
 
+  /**
+   * A settings change while open. It runs in the check queue, so it never interleaves with a check or a PIN
+   * change writing the same record. Resolves false when it changed nothing or could not be stored.
+   */
   const update = useCallback(
-    (change: Partial<LockRecord>) => {
-      if (lockedRef.current) return;
-      const current = syncFromStorage();
-      if (!current) return;
-      const next = { ...current, ...change };
-      try {
-        writeLock(next);
-      } catch {
-        // storage unavailable: keep the choice for this session
-      }
-      setRecord(next);
+    (change: Partial<LockRecord>): Promise<boolean> => {
+      if (lockedRef.current) return Promise.resolve(false);
+      return enqueue(async () => {
+        const current = await syncFromStorage();
+        if (!current || lockedRef.current) return false;
+        const next = { ...current, ...change };
+        let saved = true;
+        try {
+          await writeLock(next);
+        } catch {
+          // storage unavailable: keep the choice for this session
+          saved = false;
+        }
+        setRecord(next);
+        return saved;
+      });
     },
-    [syncFromStorage, setRecord],
+    [enqueue, syncFromStorage, setRecord],
   );
 
   const setAutoLockMs = useCallback(
     (ms: number) => {
-      if (!(AUTO_LOCK_OPTIONS as readonly number[]).includes(ms)) return;
-      update({ autoLockMs: ms });
+      if (!(AUTO_LOCK_OPTIONS as readonly number[]).includes(ms)) return Promise.resolve(false);
+      return update({ autoLockMs: ms });
     },
     [update],
   );
@@ -455,28 +437,33 @@ export function LockProvider({
     hiddenAt.current = !paused && isHidden.current ? stamp() : null;
   }, []);
 
-  const turnOff = useCallback(() => {
-    if (lockedRef.current) return;
-    syncFromStorage();
-    clearLock();
-    setRecord(null);
-    setRecoveredBoth(false);
-    setLockedBoth(false);
-  }, [syncFromStorage, setRecord, setLockedBoth, setRecoveredBoth]);
+  const turnOff = useCallback((): Promise<boolean> => {
+    if (lockedRef.current) return Promise.resolve(false);
+    return enqueue(async () => {
+      if (lockedRef.current) return false;
+      await syncFromStorage();
+      let saved = true;
+      try {
+        await clearLock();
+      } catch {
+        // storage unavailable: the lock is off for this session
+        saved = false;
+      }
+      setRecord(null);
+      setRecoveredBoth(false);
+      setLockedBoth(false);
+      return saved;
+    });
+  }, [enqueue, syncFromStorage, setRecord, setLockedBoth, setRecoveredBoth]);
 
   const eraseEverything = useCallback(async () => {
+    // The data goes first, so a crash in between never leaves data without its lock. The removal is durable
+    // (IndexedDB) and its wait is capped, so the app always reloads even if IndexedDB hangs.
     await repo.eraseAll();
-    // Durably mark the record erased before removing it: on Android the localStorage removal may never reach the
-    // disk before a force-stop (see erasedLocks). Only the erase is covered this way; any other lock write
-    // (set-up, PIN change, turning off, failure count) can still be lost on a force-stop, and moving the record
-    // to durable storage is an open owner decision recorded in HANDOFF. The wait is capped so that, with the
-    // data already gone, the lock is always cleared and the app reloads even if IndexedDB hangs.
-    const erased = [recordRef.current, readLock()].filter((r): r is LockRecord => r !== null);
     await Promise.race([
-      rememberErased(erased),
-      new Promise<void>((resolve) => setTimeout(resolve, ERASE_MARK_TIMEOUT_MS)),
+      clearLock().catch(() => undefined),
+      new Promise<void>((resolve) => setTimeout(resolve, ERASE_CLEAR_TIMEOUT_MS)),
     ]);
-    clearLock();
     window.location.reload();
   }, [repo]);
 

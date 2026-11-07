@@ -8,7 +8,9 @@ import { setActiveLanguage } from '../../i18n';
 import { isBiometricAvailable, verifyBiometric } from '../../platform/biometric';
 import { LockProvider, type LockApi } from './LockProvider';
 import { LockScreen } from './LockScreen';
-import { consumeResetNotice, readLock, writeLock, type LockRecord } from './lockStore';
+import { IDBFactory } from 'fake-indexeddb';
+import { readLockDb, writeLockDb } from './lockDb';
+import { loadLock, readLock, resetLockStoreForTests, type LockRecord } from './lockStore';
 import { hashSecret, normalizeRecoveryCode } from './pin';
 
 vi.mock('../../platform/appState', () => ({
@@ -29,8 +31,14 @@ vi.mock('./LockProvider', async (importOriginal) => {
 const CODE = 'ABCD-EFGH-JKMN';
 const SLOW = { timeout: 5000 };
 
+/** The record in the lock database, read straight from IndexedDB. */
+async function stored(): Promise<LockRecord | undefined> {
+  return (await readLockDb()).record as LockRecord | undefined;
+}
+
+/** A cold start with this record on disk. */
 async function storeRecord(over: Partial<LockRecord> = {}): Promise<void> {
-  writeLock({
+  await writeLockDb({
     v: 1,
     pin: await hashSecret('1357', 1000),
     recovery: await hashSecret(normalizeRecoveryCode(CODE), 1000),
@@ -40,6 +48,8 @@ async function storeRecord(over: Partial<LockRecord> = {}): Promise<void> {
     blockedUntil: 0,
     ...over,
   });
+  resetLockStoreForTests();
+  await loadLock();
 }
 
 function renderScreen(repo: Repo = createMemoryRepo()) {
@@ -60,7 +70,8 @@ const unlockButton = (name = 'فتح') => screen.getByRole('button', { name });
 
 beforeEach(() => {
   localStorage.clear();
-  consumeResetNotice();
+  globalThis.indexedDB = new IDBFactory();
+  resetLockStoreForTests();
   overrides.api = {};
   vi.mocked(isBiometricAvailable).mockReset().mockResolvedValue(false);
   vi.mocked(verifyBiometric).mockReset().mockResolvedValue(false);
@@ -144,7 +155,7 @@ describe('LockScreen', () => {
     await user.click(unlockButton());
     expect(screen.getByRole('alert')).toHaveTextContent('أدخل ٤ إلى ٦ أرقام');
     expect(derive).not.toHaveBeenCalled();
-    expect(readLock()?.failures).toBe(0);
+    expect((await stored())?.failures).toBe(0);
     expect(screen.queryByText('app content')).toBeNull();
   });
 
@@ -158,7 +169,7 @@ describe('LockScreen', () => {
     await user.click(unlockButton('Unlock'));
     expect(screen.getByRole('alert')).toHaveTextContent('Enter 4 to 6 digits');
     expect(derive).not.toHaveBeenCalled();
-    expect(readLock()?.failures).toBe(0);
+    expect((await stored())?.failures).toBe(0);
   });
 
   it('says a wrong PIN is not right and clears the entry', async () => {
@@ -169,7 +180,7 @@ describe('LockScreen', () => {
     await user.click(unlockButton());
     expect(await screen.findByText('الرمز غير صحيح', undefined, SLOW)).toBeInTheDocument();
     expect(screen.getByLabelText('الرمز')).toHaveValue('');
-    expect(readLock()?.failures).toBe(1);
+    expect((await stored())?.failures).toBe(1);
   });
 
   it('after the 5th wrong PIN disables Unlock, shows the seconds left and ignores submits', async () => {
@@ -191,7 +202,7 @@ describe('LockScreen', () => {
     await user.type(screen.getByLabelText('الرمز'), '1357{Enter}');
     expect(derive).not.toHaveBeenCalled();
     expect(screen.queryByText('app content')).toBeNull();
-    expect(readLock()?.failures).toBe(5);
+    expect((await stored())?.failures).toBe(5);
 
     derive.mockRestore();
     act(() => vi.advanceTimersByTime(29000));
@@ -372,7 +383,7 @@ describe('LockScreen', () => {
       expect(await screen.findByText('app content')).toBeInTheDocument();
       expect(erase).not.toHaveBeenCalled();
       expect((await repo.getSettings()).displayName).toBe('Mona');
-      expect(readLock()).toMatchObject({ failures: 0, blockedUntil: 0 });
+      expect(await stored()).toMatchObject({ failures: 0, blockedUntil: 0 });
     });
 
     it('refuses an easy-to-guess or mismatched new PIN', async () => {
@@ -418,7 +429,7 @@ describe('LockScreen', () => {
       await user.type(screen.getByLabelText('رمز الاسترداد'), 'ZZZZ-ZZZZ-ZZZZ');
       await user.click(screen.getByRole('button', { name: 'أتحقق' }));
       expect(await screen.findByText('رمز الاسترداد غير صحيح', undefined, SLOW)).toBeInTheDocument();
-      expect(readLock()?.failures).toBe(5);
+      expect((await stored())?.failures).toBe(5);
       expect(screen.getByRole('button', { name: 'أتحقق' })).toBeDisabled();
       expect(screen.getByRole('status')).toHaveTextContent('٣٠');
 
@@ -435,11 +446,12 @@ describe('LockScreen', () => {
         configurable: true,
         value: { ...original, reload },
       });
-      return () =>
+      const restore = () =>
         Object.defineProperty(window, 'location', {
           configurable: true,
           value: original,
         });
+      return Object.assign(restore, { reload });
     }
 
     async function openErase(user: ReturnType<typeof userEvent.setup>, forgot = 'نسيت الرمز؟', none = 'ليس لدي الرمز') {
@@ -479,8 +491,10 @@ describe('LockScreen', () => {
         expect(confirm).toBeEnabled();
         await user.click(confirm);
         expect(erase).toHaveBeenCalledTimes(1);
-        // The erase marks the record in IndexedDB before removing it, so the removal comes a little later.
-        await vi.waitFor(() => expect(readLock()).toBeNull());
+        // The data is erased first and the lock removal is stored after it, so it comes a little later.
+        await vi.waitFor(() => expect(restore.reload).toHaveBeenCalledTimes(1));
+        expect(readLock()).toBeNull();
+        expect(await stored()).toBeUndefined();
       } finally {
         restore();
       }
@@ -511,6 +525,8 @@ describe('LockScreen', () => {
         expect(confirm).toBeEnabled();
         await user.click(confirm);
         expect(erase).toHaveBeenCalledTimes(1);
+        // The reload comes after the lock removal; it must reach the stand-in, not jsdom.
+        await vi.waitFor(() => expect(restore.reload).toHaveBeenCalledTimes(1));
       } finally {
         restore();
       }

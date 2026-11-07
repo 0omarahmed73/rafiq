@@ -7,7 +7,9 @@ import { setActiveLanguage } from '../../i18n';
 import { isBiometricAvailable, verifyBiometric } from '../../platform/biometric';
 import { LockProvider, useLock, type LockApi } from './LockProvider';
 import { LockSettings } from './LockSettings';
-import { consumeResetNotice, readLock, writeLock, LOCK_STORAGE_KEY, type LockRecord } from './lockStore';
+import { IDBFactory } from 'fake-indexeddb';
+import { clearLockDb, readLockDb, writeLockDb } from './lockDb';
+import { LOCK_STORAGE_KEY, loadLock, resetLockStoreForTests, type LockRecord } from './lockStore';
 import { hashSecret, normalizeRecoveryCode, verifySecret } from './pin';
 
 const fg = vi.hoisted(() => ({
@@ -35,6 +37,11 @@ vi.mock('./LockProvider', async (importOriginal) => {
     },
   };
 });
+// The real lock database, wrapped so tests can make its writes fail.
+vi.mock('./lockDb', async (importOriginal) => {
+  const real = await importOriginal<typeof import('./lockDb')>();
+  return { ...real, writeLockDb: vi.fn(real.writeLockDb), clearLockDb: vi.fn(real.clearLockDb) };
+});
 vi.mock('../../platform/biometric', () => ({
   isBiometricAvailable: vi.fn(async () => false),
   verifyBiometric: vi.fn(async () => false),
@@ -47,8 +54,20 @@ const SLOW = { timeout: 10000 };
 const HONEST_AR = 'القفل يخفي التطبيق لكنه لا يشفّر بياناتي على هذا الجهاز';
 const SAVE_FAILED_AR = 'تعذّر حفظ القفل على هذا الجهاز';
 
+/** The record in the lock database, read straight from IndexedDB. */
+async function onDisk(): Promise<LockRecord | undefined> {
+  return (await readLockDb()).record as LockRecord | undefined;
+}
+
+/** Makes every lock database write fail from now on in this test. */
+function failWrites() {
+  vi.mocked(writeLockDb).mockRejectedValue(new Error('quota'));
+  vi.mocked(clearLockDb).mockRejectedValue(new Error('quota'));
+}
+
+/** A cold start with this record on disk. */
 async function storeRecord(over: Partial<LockRecord> = {}): Promise<void> {
-  writeLock({
+  await writeLockDb({
     v: 1,
     pin: await hashSecret(PIN, 1000),
     recovery: await hashSecret(normalizeRecoveryCode(CODE), 1000),
@@ -58,6 +77,8 @@ async function storeRecord(over: Partial<LockRecord> = {}): Promise<void> {
     blockedUntil: 0,
     ...over,
   });
+  resetLockStoreForTests();
+  await loadLock();
 }
 
 /** Stands in for the lock screen: opens the app with the stored test PIN. */
@@ -111,17 +132,21 @@ function backgroundFor(ms: number) {
   act(() => fg.cb!(true));
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   lockPatch.fn = null;
   localStorage.clear();
-  consumeResetNotice();
+  globalThis.indexedDB = new IDBFactory();
+  resetLockStoreForTests();
   vi.mocked(isBiometricAvailable).mockReset().mockResolvedValue(false);
   vi.mocked(verifyBiometric).mockReset().mockResolvedValue(false);
+  // As at boot: the (empty) lock store is loaded before anything renders.
+  await loadLock();
 });
 
 afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
+  for (const fn of [writeLockDb, clearLockDb]) vi.mocked(fn).mockRestore();
 });
 
 describe('LockSettings off', () => {
@@ -141,7 +166,9 @@ describe('LockSettings off', () => {
   });
 
   it('shows the one-time reset notice when the stored lock was damaged', async () => {
-    localStorage.setItem(LOCK_STORAGE_KEY, '{broken');
+    await writeLockDb('{broken');
+    resetLockStoreForTests();
+    await loadLock();
     renderCard();
     expect(await screen.findByText('أُعيد ضبط القفل لأن بياناته تالفة')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'تفعيل القفل' })).toBeInTheDocument();
@@ -178,7 +205,7 @@ describe('LockSettings set up', () => {
     await user.click(await screen.findByRole('button', { name: 'تفعيل القفل' }));
     await choosePin(user, '2468', '2469');
     expect(screen.getByRole('alert')).toHaveTextContent('الرمزان غير متطابقين');
-    expect(readLock()).toBeNull();
+    expect(await onDisk()).toBeUndefined();
   });
 
   it(
@@ -190,8 +217,8 @@ describe('LockSettings set up', () => {
 
       const code = await screen.findByTestId('recovery-code', {}, SLOW);
       expect(code.textContent).toMatch(/^[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$/);
-      const stored = readLock();
-      expect(stored).not.toBeNull();
+      const stored = await onDisk();
+      expect(stored).toBeDefined();
       expect(await verifySecret('2468', stored!.pin)).toBe(true);
       expect(await verifySecret(normalizeRecoveryCode(code.textContent!), stored!.recovery)).toBe(true);
       expect(JSON.stringify(stored)).not.toContain(code.textContent!);
@@ -216,16 +243,14 @@ describe('LockSettings set up', () => {
     async () => {
       const user = renderCard();
       await user.click(await screen.findByRole('button', { name: 'تفعيل القفل' }));
-      vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
-        throw new Error('quota');
-      });
+      failWrites();
       await choosePin(user, '2468');
 
       expect(await screen.findByText(SAVE_FAILED_AR, {}, SLOW)).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'تفعيل القفل' })).toBeInTheDocument();
       expect(screen.queryByTestId('recovery-code')).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'أوقف القفل' })).not.toBeInTheDocument();
-      expect(readLock()).toBeNull();
+      expect(await onDisk()).toBeUndefined();
     },
     SLOW,
   );
@@ -251,7 +276,7 @@ describe('LockSettings set up', () => {
       await waitFor(() => expect(bio).toBeChecked());
       await choosePin(user, '2468');
       await screen.findByTestId('recovery-code', {}, SLOW);
-      expect(readLock()?.biometric).toBe(true);
+      expect((await onDisk())?.biometric).toBe(true);
       expect(verifyBiometric).toHaveBeenCalledTimes(1);
     },
     SLOW,
@@ -273,7 +298,7 @@ describe('LockSettings set up', () => {
       expect(bio).not.toBeChecked();
       await choosePin(user, '2468');
       await screen.findByTestId('recovery-code', {}, SLOW);
-      expect(readLock()?.biometric).toBe(false);
+      expect((await onDisk())?.biometric).toBe(false);
     },
     SLOW,
   );
@@ -335,11 +360,11 @@ describe('LockSettings on', () => {
   it('asks for the current PIN before saving a new auto-lock time', async () => {
     const user = await renderOn();
     await user.selectOptions(autoLockSelect(), '300000');
-    expect(readLock()?.autoLockMs).toBe(60000);
+    expect((await onDisk())?.autoLockMs).toBe(60000);
     expect(screen.getByRole('heading', { name: 'أكتب رمزي الحالي لتغيير وقت القفل' })).toBeInTheDocument();
     await enterCurrent(user, PIN);
-    expect(await screen.findByRole('combobox', { name: 'أقفل التطبيق بعد مغادرته' })).toHaveValue('300000');
-    expect(readLock()?.autoLockMs).toBe(300000);
+    await waitFor(() => expect(autoLockSelect()).toHaveValue('300000'));
+    expect((await onDisk())?.autoLockMs).toBe(300000);
     expect(screen.queryByText(SAVE_FAILED_AR)).not.toBeInTheDocument();
   });
 
@@ -348,10 +373,10 @@ describe('LockSettings on', () => {
     await user.selectOptions(autoLockSelect(), '0');
     await enterCurrent(user, '2468');
     expect(await screen.findByRole('alert')).toHaveTextContent('الرمز غير صحيح');
-    expect(readLock()?.autoLockMs).toBe(60000);
+    expect((await onDisk())?.autoLockMs).toBe(60000);
     await user.click(screen.getByRole('button', { name: 'رجوع' }));
     expect(autoLockSelect()).toHaveValue('60000');
-    expect(readLock()?.autoLockMs).toBe(60000);
+    expect((await onDisk())?.autoLockMs).toBe(60000);
   });
 
   it('keeps the auto-lock time when I go back without the PIN', async () => {
@@ -359,18 +384,16 @@ describe('LockSettings on', () => {
     await user.selectOptions(autoLockSelect(), '900000');
     await user.click(screen.getByRole('button', { name: 'رجوع' }));
     expect(autoLockSelect()).toHaveValue('60000');
-    expect(readLock()?.autoLockMs).toBe(60000);
+    expect((await onDisk())?.autoLockMs).toBe(60000);
   });
 
   it('says so when the auto-lock time cannot be saved', async () => {
     const user = await renderOn();
-    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
-      throw new Error('quota');
-    });
+    failWrites();
     await user.selectOptions(autoLockSelect(), '0');
     await enterCurrent(user, PIN);
     expect(await screen.findByText(SAVE_FAILED_AR)).toBeInTheDocument();
-    expect(readLock()?.autoLockMs).toBe(60000);
+    expect((await onDisk())?.autoLockMs).toBe(60000);
   });
 
   it('shows a generic error and stays usable when the PIN check fails unexpectedly', async () => {
@@ -383,7 +406,7 @@ describe('LockSettings on', () => {
     await enterCurrent(user, PIN);
     expect(await screen.findByRole('alert')).toHaveTextContent('تعذّر التحقق من الرمز');
     expect(screen.getByRole('button', { name: 'متابعة' })).toBeEnabled();
-    expect(readLock()).not.toBeNull();
+    expect(await onDisk()).toBeDefined();
   });
 
   it('shows a biometric switch only when biometrics are available, and turning it on needs one prompt', async () => {
@@ -397,29 +420,29 @@ describe('LockSettings on', () => {
 
     await user.click(toggle);
     expect(await screen.findByText('لم أتحقق بالبصمة، فبقيت متوقفة')).toBeInTheDocument();
-    expect(readLock()?.biometric).toBe(false);
+    expect((await onDisk())?.biometric).toBe(false);
     expect(toggle).toHaveAttribute('aria-checked', 'false');
 
     await user.click(toggle);
     await waitFor(() => expect(toggle).toHaveAttribute('aria-checked', 'true'));
-    expect(readLock()?.biometric).toBe(true);
+    expect((await onDisk())?.biometric).toBe(true);
     expect(verifyBiometric).toHaveBeenCalledTimes(2);
 
     await user.click(toggle);
-    expect(toggle).toHaveAttribute('aria-checked', 'false');
-    expect(readLock()?.biometric).toBe(false);
+    await waitFor(() => expect(toggle).toHaveAttribute('aria-checked', 'false'));
+    expect((await onDisk())?.biometric).toBe(false);
     expect(verifyBiometric).toHaveBeenCalledTimes(2);
   });
 
   it('turning off asks for the current PIN; a wrong PIN changes nothing', async () => {
     vi.mocked(isBiometricAvailable).mockResolvedValue(true);
     const user = await renderOn({ biometric: true });
-    const before = readLock();
+    const before = await onDisk();
     await user.click(screen.getByRole('button', { name: 'أوقف القفل' }));
     expect(screen.queryByRole('button', { name: /البصمة/ })).not.toBeInTheDocument();
     await enterCurrent(user, '2468');
     expect(await screen.findByRole('alert')).toHaveTextContent('الرمز غير صحيح');
-    expect(readLock()?.pin).toEqual(before?.pin);
+    expect((await onDisk())?.pin).toEqual(before?.pin);
     expect(screen.getByLabelText('الرمز الحالي')).toBeInTheDocument();
     expect(verifyBiometric).not.toHaveBeenCalled();
   });
@@ -429,7 +452,29 @@ describe('LockSettings on', () => {
     await user.click(screen.getByRole('button', { name: 'أوقف القفل' }));
     await enterCurrent(user, PIN);
     expect(await screen.findByRole('button', { name: 'تفعيل القفل' })).toBeInTheDocument();
+    expect(screen.getByText('أوقفت القفل.')).toBeInTheDocument();
+    expect(await readLockDb()).toEqual({ initialized: true, record: undefined });
     expect(localStorage.getItem(LOCK_STORAGE_KEY)).toBeNull();
+  });
+
+  it('says so when turning the lock off cannot be saved', async () => {
+    const user = await renderOn();
+    failWrites();
+    await user.click(screen.getByRole('button', { name: 'أوقف القفل' }));
+    await enterCurrent(user, PIN);
+    expect(await screen.findByText(SAVE_FAILED_AR)).toBeInTheDocument();
+    expect(screen.queryByText('أوقفت القفل.')).not.toBeInTheDocument();
+    expect(await onDisk()).toBeDefined();
+  });
+
+  it('says so when the biometric choice cannot be saved', async () => {
+    vi.mocked(isBiometricAvailable).mockResolvedValue(true);
+    vi.mocked(verifyBiometric).mockResolvedValue(true);
+    const user = await renderOn();
+    failWrites();
+    await user.click(await screen.findByRole('switch', { name: 'استخدم البصمة أيضًا' }));
+    expect(await screen.findByText(SAVE_FAILED_AR)).toBeInTheDocument();
+    expect((await onDisk())?.biometric).toBe(false);
   });
 
   it('can go back from the PIN check without changing anything', async () => {
@@ -437,20 +482,20 @@ describe('LockSettings on', () => {
     await user.click(screen.getByRole('button', { name: 'أوقف القفل' }));
     await user.click(screen.getByRole('button', { name: 'رجوع' }));
     expect(screen.getByRole('button', { name: 'أوقف القفل' })).toBeInTheDocument();
-    expect(readLock()).not.toBeNull();
+    expect(await onDisk()).toBeDefined();
   });
 
   it('changing the PIN asks for the current PIN; a wrong PIN changes nothing', async () => {
     vi.mocked(isBiometricAvailable).mockResolvedValue(true);
     const user = await renderOn({ biometric: true });
-    const before = readLock();
+    const before = await onDisk();
     await user.click(screen.getByRole('button', { name: 'غيّر الرمز' }));
     expect(screen.queryByRole('button', { name: /البصمة/ })).not.toBeInTheDocument();
     await enterCurrent(user, '9753');
     expect(await screen.findByRole('alert')).toHaveTextContent('الرمز غير صحيح');
     expect(screen.queryByLabelText('الرمز الجديد')).not.toBeInTheDocument();
-    expect(readLock()?.pin).toEqual(before?.pin);
-    expect(readLock()?.recovery).toEqual(before?.recovery);
+    expect((await onDisk())?.pin).toEqual(before?.pin);
+    expect((await onDisk())?.recovery).toEqual(before?.recovery);
     expect(verifyBiometric).not.toHaveBeenCalled();
   });
 
@@ -468,7 +513,7 @@ describe('LockSettings on', () => {
       await choosePin(user, '2468');
 
       const code = await screen.findByTestId('recovery-code', {}, SLOW);
-      const stored = readLock()!;
+      const stored = (await onDisk())!;
       expect(await verifySecret('2468', stored.pin)).toBe(true);
       expect(await verifySecret(PIN, stored.pin)).toBe(false);
       expect(await verifySecret(normalizeRecoveryCode(code.textContent!), stored.recovery)).toBe(true);
@@ -494,6 +539,6 @@ describe('LockSettings on', () => {
     }
     expect(await screen.findByText(/يمكنني المحاولة مرة أخرى بعد/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'متابعة' })).toBeDisabled();
-    expect(readLock()).not.toBeNull();
+    expect(await onDisk()).toBeDefined();
   });
 });

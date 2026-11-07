@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { createBrowserRouter } from 'react-router-dom';
 import { App } from './App';
 import { openDb } from './db/open';
+import { loadLock } from './features/lock/lockStore';
 import { installAccents } from './lib/accents';
 import { applyTheme } from './lib/theme';
 import { installAndroidLifecycle } from './platform/lifecycle';
@@ -14,7 +15,8 @@ import { routes } from './routes';
 const splashStartedAt = performance.now();
 
 async function boot() {
-  const { repo, persistent } = await openDb();
+  // The lock record is loaded before the first render, so a locked app is locked from the first frame.
+  const [{ repo, persistent }] = await Promise.all([openDb(), loadLock()]);
   const settings = await repo.getSettings();
   applyTheme(settings.theme);
   installAccents(settings.accent);

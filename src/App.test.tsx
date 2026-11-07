@@ -3,7 +3,9 @@ import userEvent from '@testing-library/user-event';
 import { createMemoryRouter } from 'react-router-dom';
 import { App } from './App';
 import { createMemoryRepo } from './db/memoryRepo';
-import { LOCK_STORAGE_KEY, writeLock } from './features/lock/lockStore';
+import { IDBFactory } from 'fake-indexeddb';
+import { writeLockDb } from './features/lock/lockDb';
+import { loadLock, resetLockStoreForTests } from './features/lock/lockStore';
 import { hashSecret } from './features/lock/pin';
 import type { Lang } from './i18n';
 import { routes } from './routes';
@@ -71,7 +73,10 @@ describe('app lock', () => {
   beforeEach(async () => {
     // Opening a screen after unlock restores the scroll position, which jsdom does not implement.
     vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
-    writeLock({
+    // A cold start with a lock on disk, loaded before the first render as at boot.
+    globalThis.indexedDB = new IDBFactory();
+    resetLockStoreForTests();
+    await writeLockDb({
       v: 1,
       pin: await hashSecret('2468', 1000),
       recovery: await hashSecret('ABCDEFGHJKMN', 1000),
@@ -80,9 +85,10 @@ describe('app lock', () => {
       failures: 0,
       blockedUntil: 0,
     });
+    await loadLock();
   });
   afterEach(() => {
-    localStorage.removeItem(LOCK_STORAGE_KEY);
+    resetLockStoreForTests();
     vi.restoreAllMocks();
   });
 

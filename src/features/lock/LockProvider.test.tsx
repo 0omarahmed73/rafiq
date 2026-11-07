@@ -4,11 +4,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RepoProvider } from '../../db/RepoContext';
 import { createMemoryRepo } from '../../db/memoryRepo';
 import { LockProvider, useLock, type LockApi } from './LockProvider';
-import { LOCK_STORAGE_KEY, consumeResetNotice, readLock, writeLock, type LockRecord } from './lockStore';
+import { clearLockDb, readLockDb, writeLockDb } from './lockDb';
+import {
+  LOCK_STORAGE_KEY,
+  loadLock,
+  readLock,
+  readLockFresh,
+  resetLockStoreForTests,
+  type LockRecord,
+} from './lockStore';
 import { hashSecret, normalizeRecoveryCode } from './pin';
 import { verifyBiometric } from '../../platform/biometric';
 import { IDBFactory } from 'fake-indexeddb';
-import { noteLock, rememberErased, wasErased } from './erasedLocks';
 
 const fg = vi.hoisted(() => ({ cb: undefined as ((active: boolean) => void) | undefined }));
 vi.mock('../../platform/appState', () => ({
@@ -24,50 +31,26 @@ vi.mock('../../platform/biometric', () => ({
   verifyBiometric: vi.fn(async () => true),
 }));
 
-// The real erased-lock store, wrapped so tests can wait for its work or make it hang.
-vi.mock('./erasedLocks', async (importOriginal) => {
-  const real = await importOriginal<typeof import('./erasedLocks')>();
+// The real lock database, wrapped so tests can make it fail or hang.
+vi.mock('./lockDb', async (importOriginal) => {
+  const real = await importOriginal<typeof import('./lockDb')>();
   return {
-    noteLock: vi.fn(real.noteLock),
-    rememberErased: vi.fn(real.rememberErased),
-    wasErased: vi.fn(real.wasErased),
+    ...real,
+    readLockDb: vi.fn(real.readLockDb),
+    writeLockDb: vi.fn(real.writeLockDb),
+    clearLockDb: vi.fn(real.clearLockDb),
   };
 });
 
-/** Every key and value in the erased-lock IndexedDB store, as stored. */
-function rawErasedStore(): Promise<Record<string, unknown>> {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open('rafiq.lock.erased', 1);
-    req.onupgradeneeded = () => req.result.createObjectStore('erased');
-    req.onerror = () => reject(req.error);
-    req.onsuccess = () => {
-      const db = req.result;
-      const store = db.transaction('erased', 'readonly').objectStore('erased');
-      const keys = store.getAllKeys();
-      const values = store.getAll();
-      values.onsuccess = () => {
-        db.close();
-        resolve(Object.fromEntries(keys.result.map((k, i) => [String(k), values.result[i]])));
-      };
-    };
-  });
+/** The record in the lock database, read straight from IndexedDB. */
+async function stored(): Promise<LockRecord | undefined> {
+  return (await readLockDb()).record as LockRecord | undefined;
 }
 
-function seedErasedStore(lists: Record<string, string[]>): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open('rafiq.lock.erased', 1);
-    req.onupgradeneeded = () => req.result.createObjectStore('erased');
-    req.onerror = () => reject(req.error);
-    req.onsuccess = () => {
-      const db = req.result;
-      const tx = db.transaction('erased', 'readwrite');
-      for (const [k, v] of Object.entries(lists)) tx.objectStore('erased').put(v, k);
-      tx.oncomplete = () => {
-        db.close();
-        resolve();
-      };
-    };
-  });
+/** Makes every lock database write fail from now on in this test. */
+function failWrites() {
+  vi.mocked(writeLockDb).mockRejectedValue(new Error('QuotaExceededError'));
+  vi.mocked(clearLockDb).mockRejectedValue(new Error('QuotaExceededError'));
 }
 
 const CODE = 'ABCD-EFGH-JKMN';
@@ -83,7 +66,10 @@ async function storeRecord(over: Partial<LockRecord> = {}): Promise<LockRecord> 
     blockedUntil: 0,
     ...over,
   };
-  writeLock(record);
+  // A cold start with this record on disk.
+  await writeLockDb(record);
+  resetLockStoreForTests();
+  await loadLock();
   return record;
 }
 
@@ -132,10 +118,7 @@ async function call<T>(fn: () => Promise<T>): Promise<T> {
 beforeEach(() => {
   localStorage.clear();
   globalThis.indexedDB = new IDBFactory();
-  vi.mocked(noteLock).mockClear();
-  vi.mocked(rememberErased).mockClear();
-  vi.mocked(wasErased).mockClear();
-  consumeResetNotice();
+  resetLockStoreForTests();
   mounts.mockClear();
   effects.mockClear();
   vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
@@ -145,6 +128,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
+  for (const fn of [readLockDb, writeLockDb, clearLockDb]) vi.mocked(fn).mockRestore();
 });
 
 describe('LockProvider', () => {
@@ -190,7 +174,7 @@ describe('LockProvider', () => {
     renderLock();
     expect(await call(() => api.unlock('0000'))).toBe('wrong');
     expect(isLocked()).toBe(true);
-    expect(readLock()?.failures).toBe(1);
+    expect((await stored())?.failures).toBe(1);
     expect(api.record?.failures).toBe(1);
   });
 
@@ -205,14 +189,14 @@ describe('LockProvider', () => {
     await storeRecord();
     renderLock();
     for (let i = 0; i < 5; i += 1) expect(await call(() => api.unlock('0000'))).toBe('wrong');
-    const blockedUntil = readLock()!.blockedUntil;
+    const blockedUntil = (await stored())!.blockedUntil;
     expect(blockedUntil).toBe(Date.now() + 30000);
     expect(api.waitMs).toBe(30000);
 
     const derive = vi.spyOn(crypto.subtle, 'deriveBits');
     expect(await call(() => api.unlock('1357'))).toBe('blocked');
     expect(derive).not.toHaveBeenCalled();
-    expect(readLock()!.blockedUntil).toBe(blockedUntil);
+    expect((await stored())!.blockedUntil).toBe(blockedUntil);
 
     act(() => vi.advanceTimersByTime(1000));
     expect(api.waitMs).toBe(29000);
@@ -223,7 +207,7 @@ describe('LockProvider', () => {
     derive.mockRestore();
     expect(await call(() => api.unlock('1357'))).toBe('ok');
     expect(isOpen()).toBe(true);
-    expect(readLock()).toMatchObject({ failures: 0, blockedUntil: 0 });
+    expect(await stored()).toMatchObject({ failures: 0, blockedUntil: 0 });
   });
 
   it('shows a stored wait at cold start', async () => {
@@ -238,7 +222,7 @@ describe('LockProvider', () => {
     renderLock();
     const results = await call(() => Promise.all([api.verifyPin('0000'), api.verifyPin('1357')]));
     expect(results).toEqual(['wrong', 'blocked']);
-    expect(readLock()?.failures).toBe(5);
+    expect((await stored())?.failures).toBe(5);
   });
 
   it('treats a verification that throws as a wrong PIN', async () => {
@@ -260,9 +244,7 @@ describe('LockProvider', () => {
   it('still unlocks, and still reports wrong, when storage cannot be written', async () => {
     await storeRecord();
     renderLock();
-    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
-      throw new Error('QuotaExceededError');
-    });
+    failWrites();
     expect(await call(() => api.unlock('0000'))).toBe('wrong');
     expect(api.record?.failures).toBe(1);
     expect(await call(() => api.unlock('1357'))).toBe('ok');
@@ -448,7 +430,7 @@ describe('LockProvider', () => {
     await storeRecord({ failures: 4 });
     renderLock();
     expect(await call(() => api.recover('ZZZZ-ZZZZ-ZZZZ'))).toBe('wrong');
-    expect(readLock()?.failures).toBe(5);
+    expect((await stored())?.failures).toBe(5);
     expect(await call(() => api.recover(CODE))).toBe('blocked');
     expect(api.recovered).toBe(false);
   });
@@ -467,60 +449,68 @@ describe('LockProvider', () => {
     expect(api.enabled).toBe(true);
     expect(api.locked).toBe(false);
     expect(isOpen()).toBe(true);
-    expect(readLock()).toMatchObject({ biometric: true, autoLockMs: 60000, failures: 0, blockedUntil: 0 });
+    expect(await stored()).toMatchObject({ biometric: true, autoLockMs: 60000, failures: 0, blockedUntil: 0 });
     expect(await call(() => api.verifyPin('٢٤٦٨'))).toBe('ok');
   });
 
   it('setUp throws and stays off when storage fails', async () => {
+    await loadLock();
     renderLock();
-    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
-      throw new Error('QuotaExceededError');
-    });
+    failWrites();
     await expect(call(() => api.setUp('2468', false))).rejects.toThrow();
     expect(api.enabled).toBe(false);
+    expect(readLock()).toBeNull();
+    expect(await stored()).toBeUndefined();
+  });
+
+  it('changePin throws and keeps the old PIN when storage fails', async () => {
+    const before = await storeRecord();
+    renderLock();
+    await call(() => api.unlock('1357'));
+    failWrites();
+    await expect(call(() => api.changePin('2468'))).rejects.toThrow();
+    expect(api.record?.pin).toEqual(before.pin);
+    expect(await call(() => api.verifyPin('1357'))).toBe('ok');
+    expect((await stored())?.pin).toEqual(before.pin);
   });
 
   it('changes the auto-lock time and the biometric choice', async () => {
     await storeRecord();
     renderLock();
     await call(() => api.unlock('1357'));
-    act(() => api.setAutoLockMs(300000));
-    act(() => api.setBiometric(true));
+    expect(await call(() => api.setAutoLockMs(300000))).toBe(true);
+    expect(await call(() => api.setBiometric(true))).toBe(true);
+    expect(await stored()).toMatchObject({ autoLockMs: 300000, biometric: true });
     expect(readLock()).toMatchObject({ autoLockMs: 300000, biometric: true });
     expect(api.record).toMatchObject({ autoLockMs: 300000, biometric: true });
+  });
+
+  it('settings changes and turnOff resolve false when storage fails, and still apply for this session', async () => {
+    const before = await storeRecord();
+    renderLock();
+    await call(() => api.unlock('1357'));
+    failWrites();
+    expect(await call(() => api.setAutoLockMs(300000))).toBe(false);
+    expect(api.record).toMatchObject({ autoLockMs: 300000 });
+    expect(await call(() => api.setBiometric(true))).toBe(false);
+    expect(api.record).toMatchObject({ biometric: true });
+    expect(await call(() => api.turnOff())).toBe(false);
+    expect(api.enabled).toBe(false);
+    expect(await stored()).toEqual({ ...before, failures: 0, blockedUntil: 0 });
   });
 
   it('turnOff while open removes the record', async () => {
     await storeRecord();
     renderLock();
     await call(() => api.unlock('1357'));
-    act(() => api.turnOff());
+    expect(await call(() => api.turnOff())).toBe(true);
     expect(readLock()).toBeNull();
+    expect(await readLockDb()).toEqual({ initialized: true, record: undefined });
     expect(api.enabled).toBe(false);
     expect(isOpen()).toBe(true);
   });
 
-  it('eraseEverything erases the repo, clears the record and reloads', async () => {
-    await storeRecord();
-    const repo = createMemoryRepo();
-    const erase = vi.spyOn(repo, 'eraseAll');
-    const reload = vi.fn();
-    const original = window.location;
-    Object.defineProperty(window, 'location', { configurable: true, value: { ...original, reload } });
-    try {
-      renderLock(repo);
-      await call(() => api.eraseEverything());
-      expect(erase).toHaveBeenCalledTimes(1);
-      expect(readLock()).toBeNull();
-      expect(reload).toHaveBeenCalledTimes(1);
-    } finally {
-      Object.defineProperty(window, 'location', { configurable: true, value: original });
-    }
-  });
-
-  describe('after an erase whose localStorage removal never reached the disk', () => {
-    // Android WebView commits localStorage to disk late, so a force-stop soon after an erase can bring the old
-    // record back. These tests put it back by hand, then cold start.
+  describe('erase', () => {
     async function withReload(run: (reload: ReturnType<typeof vi.fn>) => Promise<void>) {
       const reload = vi.fn();
       const original = window.location;
@@ -532,128 +522,77 @@ describe('LockProvider', () => {
       }
     }
 
-    /** Waits until every noteLock and start-up check the provider began has finished. */
-    async function settle() {
-      await act(async () => {
-        await Promise.all([
-          ...vi.mocked(noteLock).mock.results.map((r) => r.value),
-          ...vi.mocked(wasErased).mock.results.map((r) => r.value),
-        ]);
-      });
-    }
-
-    async function eraseThenLoseTheRemoval(): Promise<{ old: LockRecord; reload: ReturnType<typeof vi.fn> }> {
-      const old = await storeRecord();
-      let reload!: ReturnType<typeof vi.fn>;
-      await withReload(async (r) => {
-        reload = r;
-        const view = renderLock();
-        await settle();
-        await call(() => api.eraseEverything());
-        expect(readLock()).toBeNull();
-        view.unmount();
-      });
-      writeLock(old);
-      return { old, reload };
-    }
-
-    it('the next start treats the erased record as no lock and removes it again', async () => {
-      const { reload } = await eraseThenLoseTheRemoval();
-      expect(reload).toHaveBeenCalledTimes(1);
-      renderLock();
-      await vi.waitFor(() => expect(isOpen()).toBe(true));
-      expect(api.enabled).toBe(false);
-      expect(localStorage.getItem(LOCK_STORAGE_KEY)).toBeNull();
-    });
-
-    it('an older PIN still on disk (changed but never written out) also counts as erased', async () => {
-      const older = await storeRecord();
-      await withReload(async () => {
-        const view = renderLock();
-        await settle();
-        await call(() => api.unlock('1357'));
-        await call(() => api.changePin('2468'));
-        expect(readLock()!.pin.salt).not.toBe(older.pin.salt);
-        await call(() => api.eraseEverything());
-        view.unmount();
-      });
-      writeLock(older);
-      renderLock();
-      await vi.waitFor(() => expect(isOpen()).toBe(true));
-      expect(localStorage.getItem(LOCK_STORAGE_KEY)).toBeNull();
-    });
-
-    it('a lock set up after the erase is kept', async () => {
-      await eraseThenLoseTheRemoval();
-      localStorage.clear();
+    it('erases the repo first, then clears the record durably, then reloads', async () => {
       await storeRecord();
-      vi.mocked(wasErased).mockClear();
-      renderLock();
-      expect(isLocked()).toBe(true);
-      expect(wasErased).toHaveBeenCalledTimes(1);
-      await settle();
-      expect(isLocked()).toBe(true);
-      expect(readLock()).not.toBeNull();
-    });
-
-    it('stores only salts, never a PIN or recovery hash', async () => {
-      const first = await storeRecord();
-      await withReload(async () => {
-        renderLock();
-        await settle();
-        await call(() => api.unlock('1357'));
-        await call(() => api.changePin('2468'));
-        await settle();
-        const second = readLock()!;
-        await call(() => api.eraseEverything());
-        const stored = await rawErasedStore();
-        const raw = JSON.stringify(stored);
-        for (const rec of [first, second]) {
-          expect(raw).not.toContain(rec.pin.hash);
-          expect(raw).not.toContain(rec.recovery.hash);
-          expect(raw).toContain(rec.pin.salt);
-        }
-        for (const list of Object.values(stored)) {
-          for (const entry of list as string[]) expect(entry).not.toContain(':');
-        }
-      });
-    });
-
-    it('reads a legacy salt:hash entry as its salt and rewrites the lists as salts', async () => {
-      const old = await storeRecord();
-      const legacy = `${old.pin.salt}:${old.pin.hash}`;
-      await seedErasedStore({ pins: [legacy], seen: [legacy] });
-      await withReload(async () => {
-        renderLock();
-        await vi.waitFor(() => expect(isOpen()).toBe(true));
-        expect(localStorage.getItem(LOCK_STORAGE_KEY)).toBeNull();
-        await settle();
-        await call(() => api.eraseEverything());
-      });
-      const raw = await rawErasedStore();
-      expect(raw).toEqual({ pins: [old.pin.salt], seen: [old.pin.salt] });
-    });
-
-    it('clears the lock and reloads even when marking the erase never finishes', async () => {
-      await storeRecord();
-      vi.mocked(rememberErased).mockImplementationOnce(() => new Promise(() => {}));
+      const repo = createMemoryRepo();
+      const erase = vi.spyOn(repo, 'eraseAll');
       await withReload(async (reload) => {
-        renderLock();
+        renderLock(repo);
         await call(() => api.eraseEverything());
+        expect(erase).toHaveBeenCalledTimes(1);
+        expect(vi.mocked(clearLockDb)).toHaveBeenCalledTimes(1);
+        expect(erase.mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(clearLockDb).mock.invocationCallOrder[0]);
         expect(readLock()).toBeNull();
+        expect(await readLockDb()).toEqual({ initialized: true, record: undefined });
         expect(reload).toHaveBeenCalledTimes(1);
       });
     });
 
-    it('erases and reloads even when the erased-lock store cannot be opened', async () => {
-      await storeRecord();
-      vi.spyOn(indexedDB, 'open').mockImplementation(() => {
-        throw new Error('no indexedDB');
+    // The original bug: Android WebView wrote localStorage late, so after a force-stop the erased record came back.
+    it('the next start is open even when an old localStorage copy of the record is still on disk', async () => {
+      const old = await storeRecord();
+      await withReload(async () => {
+        const view = renderLock();
+        await call(() => api.eraseEverything());
+        view.unmount();
       });
+      localStorage.setItem(LOCK_STORAGE_KEY, JSON.stringify(old));
+      resetLockStoreForTests();
+      await loadLock();
+      renderLock();
+      expect(isOpen()).toBe(true);
+      expect(api.enabled).toBe(false);
+      expect(localStorage.getItem(LOCK_STORAGE_KEY)).toBeNull();
+    });
+
+    it('a lock set up after the erase is kept on the next start', async () => {
+      await storeRecord();
+      await withReload(async () => {
+        const view = renderLock();
+        await call(() => api.eraseEverything());
+        view.unmount();
+      });
+      const setup = renderLock();
+      await call(() => api.setUp('2468', false));
+      setup.unmount();
+      resetLockStoreForTests();
+      await loadLock();
+      renderLock();
+      expect(isLocked()).toBe(true);
+      expect(await call(() => api.unlock('2468'))).toBe('ok');
+    });
+
+    it('reloads even when clearing the lock never finishes', async () => {
+      await storeRecord();
+      vi.mocked(clearLockDb).mockImplementation(() => new Promise(() => {}));
+      const repo = createMemoryRepo();
+      const erase = vi.spyOn(repo, 'eraseAll');
+      await withReload(async (reload) => {
+        renderLock(repo);
+        await call(() => api.eraseEverything());
+        expect(erase).toHaveBeenCalledTimes(1);
+        expect(vi.mocked(clearLockDb)).toHaveBeenCalledTimes(1);
+        expect(reload).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    it('reloads even when clearing the lock fails', async () => {
+      await storeRecord();
+      vi.mocked(clearLockDb).mockRejectedValue(new Error('aborted'));
       await withReload(async (reload) => {
         renderLock();
         await call(() => api.eraseEverything());
-        expect(readLock()).toBeNull();
+        expect(vi.mocked(clearLockDb)).toHaveBeenCalledTimes(1);
         expect(reload).toHaveBeenCalledTimes(1);
       });
     });
@@ -663,7 +602,8 @@ describe('LockProvider', () => {
     await storeRecord({ failures: 7, blockedUntil: Date.now() + 10 * 86400000 });
     renderLock();
     expect(api.waitMs).toBe(900000);
-    expect(readLock()!.blockedUntil).toBe(Date.now() + 900000);
+    await call(() => readLockFresh());
+    expect((await stored())!.blockedUntil).toBe(Date.now() + 900000);
     expect(await call(() => api.unlock('1357'))).toBe('blocked');
     act(() => vi.advanceTimersByTime(900000));
     expect(api.waitMs).toBe(0);
@@ -676,7 +616,8 @@ describe('LockProvider', () => {
     vi.setSystemTime(Date.now() - 86400000);
     expect(await call(() => api.unlock('1357'))).toBe('blocked');
     expect(api.waitMs).toBe(900000);
-    expect(readLock()!.blockedUntil).toBe(Date.now() + 900000);
+    await call(() => readLockFresh());
+    expect((await stored())!.blockedUntil).toBe(Date.now() + 900000);
     act(() => vi.advanceTimersByTime(900000));
     expect(await call(() => api.unlock('1357'))).toBe('ok');
   });
@@ -747,30 +688,33 @@ describe('LockProvider', () => {
     await call(() => api.unlock('1357'));
     let check!: Promise<string>;
     let setUp!: Promise<string>;
+    let off!: Promise<boolean>;
     act(() => {
       check = api.verifyPin('0000');
-      api.turnOff();
+      off = api.turnOff();
       setUp = api.setUp('2468', false);
     });
+    expect(await call(() => off)).toBe(true);
     expect(await call(() => check)).toBe('wrong');
     await call(() => setUp);
-    expect(readLock()).toMatchObject({ failures: 0, blockedUntil: 0 });
+    expect(await stored()).toMatchObject({ failures: 0, blockedUntil: 0 });
     expect(await call(() => api.verifyPin('2468'))).toBe('ok');
   });
 
   it('turnOff and settings changes do nothing while locked, even after recovery', async () => {
-    const stored = await storeRecord();
+    const before = await storeRecord();
     renderLock();
-    act(() => api.turnOff());
-    act(() => api.setAutoLockMs(0));
-    act(() => api.setBiometric(true));
-    expect(readLock()).toEqual(stored);
+    expect(await call(() => api.turnOff())).toBe(false);
+    expect(await call(() => api.setAutoLockMs(0))).toBe(false);
+    expect(await call(() => api.setBiometric(true))).toBe(false);
+    expect(await stored()).toEqual(before);
+    expect(readLock()).toEqual(before);
     expect(isLocked()).toBe(true);
 
     await call(() => api.recover(CODE));
-    act(() => api.turnOff());
-    act(() => api.setAutoLockMs(0));
-    expect(readLock()).toMatchObject({ autoLockMs: 60000 });
+    expect(await call(() => api.turnOff())).toBe(false);
+    expect(await call(() => api.setAutoLockMs(0))).toBe(false);
+    expect(await stored()).toMatchObject({ autoLockMs: 60000 });
     expect(isLocked()).toBe(true);
   });
 
@@ -786,12 +730,12 @@ describe('LockProvider', () => {
       failures: 2,
       blockedUntil: 0,
     };
-    writeLock(other);
+    await writeLockDb(other);
     expect(await call(() => api.unlock('0000'))).toBe('wrong');
-    expect(readLock()).toMatchObject({ pin: other.pin, recovery: other.recovery, autoLockMs: 300000, failures: 3 });
+    expect(await stored()).toMatchObject({ pin: other.pin, recovery: other.recovery, autoLockMs: 300000, failures: 3 });
     expect(await call(() => api.unlock('1357'))).toBe('wrong');
     expect(await call(() => api.unlock('2468'))).toBe('ok');
-    expect(readLock()).toMatchObject({ pin: other.pin, failures: 0 });
+    expect(await stored()).toMatchObject({ pin: other.pin, failures: 0 });
   });
 
   it('adopts another tab\'s record before a settings change', async () => {
@@ -799,9 +743,9 @@ describe('LockProvider', () => {
     renderLock();
     await call(() => api.unlock('1357'));
     const otherPin = await hashSecret('2468', 1000);
-    writeLock({ ...mine, pin: otherPin });
-    act(() => api.setBiometric(true));
-    expect(readLock()).toMatchObject({ pin: otherPin, biometric: true });
+    await writeLockDb({ ...mine, pin: otherPin });
+    expect(await call(() => api.setBiometric(true))).toBe(true);
+    expect(await stored()).toMatchObject({ pin: otherPin, biometric: true });
   });
 
   it('a check whose record another tab replaces while it runs returns wrong without counting', async () => {
@@ -810,30 +754,31 @@ describe('LockProvider', () => {
     const otherPin = await hashSecret('2468', 1000);
     const derive = crypto.subtle.deriveBits.bind(crypto.subtle);
     vi.spyOn(crypto.subtle, 'deriveBits').mockImplementationOnce(async (...args) => {
-      writeLock({ ...readLock()!, pin: otherPin });
+      await writeLockDb({ ...(await stored())!, pin: otherPin });
       return derive(...args);
     });
     expect(await call(() => api.verifyPin('1357'))).toBe('wrong');
-    expect(readLock()).toMatchObject({ pin: otherPin, failures: 0 });
+    expect(await stored()).toMatchObject({ pin: otherPin, failures: 0 });
   });
 
   it('keeps the lock on when a storage read returns nothing', async () => {
     await storeRecord();
     renderLock();
-    vi.spyOn(Storage.prototype, 'getItem').mockReturnValue(null);
+    vi.mocked(readLockDb).mockResolvedValue({ initialized: true, record: undefined });
     expect(await call(() => api.unlock('0000'))).toBe('wrong');
     expect(api.enabled).toBe(true);
     expect(isLocked()).toBe(true);
-    act(() => api.turnOff());
+    expect(await call(() => api.turnOff())).toBe(false);
     expect(api.enabled).toBe(true);
     expect(await call(() => api.unlock('1357'))).toBe('ok');
-    act(() => api.setAutoLockMs(0));
+    expect(await call(() => api.setAutoLockMs(0))).toBe(true);
     expect(api.enabled).toBe(true);
     expect(api.record?.autoLockMs).toBe(0);
   });
 
-  it('reports a damaged record once, even under StrictMode', () => {
+  it('reports a damaged record once, even under StrictMode', async () => {
     localStorage.setItem(LOCK_STORAGE_KEY, '{"v":1,"pin":');
+    await loadLock();
     const first = render(
       <StrictMode>
         <RepoProvider repo={createMemoryRepo()}>

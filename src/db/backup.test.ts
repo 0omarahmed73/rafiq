@@ -1,4 +1,6 @@
-import { LOCK_STORAGE_KEY, readLock, writeLock } from '../features/lock/lockStore';
+import { IDBFactory } from 'fake-indexeddb';
+import { readLockDb } from '../features/lock/lockDb';
+import { loadLock, readLock, resetLockStoreForTests, writeLock } from '../features/lock/lockStore';
 import { hashSecret } from '../features/lock/pin';
 import { BackupError, exportBackup, importBackup, type BackupFile } from './backup';
 import { createMemoryRepo } from './memoryRepo';
@@ -290,13 +292,19 @@ describe('importBackup', () => {
 });
 
 describe('backup and the app lock', () => {
-  afterEach(() => localStorage.removeItem(LOCK_STORAGE_KEY));
+  beforeEach(async () => {
+    globalThis.indexedDB = new IDBFactory();
+    resetLockStoreForTests();
+    await loadLock();
+  });
+  afterEach(() => resetLockStoreForTests());
 
   it('never puts the lock in a backup and leaves it untouched on import', async () => {
     const pin = await hashSecret('2468', 1000);
     const recovery = await hashSecret('ABCDEFGHJKMN', 1000);
-    writeLock({ v: 1, pin, recovery, biometric: false, autoLockMs: 60000, failures: 2, blockedUntil: 0 });
+    await writeLock({ v: 1, pin, recovery, biometric: false, autoLockMs: 60000, failures: 2, blockedUntil: 0 });
     const before = readLock();
+    expect(await readLockDb()).toEqual({ initialized: true, record: before });
 
     const repo = await populated();
     const text = JSON.stringify(await exportBackup(repo));
@@ -306,5 +314,7 @@ describe('backup and the app lock', () => {
     await importBackup(createMemoryRepo(), text, 'replace');
     await importBackup(repo, text, 'merge');
     expect(readLock()).toEqual(before);
+    // The lock database itself is untouched by the export and both imports.
+    expect(await readLockDb()).toEqual({ initialized: true, record: before });
   });
 });
