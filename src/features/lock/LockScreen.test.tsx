@@ -479,7 +479,8 @@ describe('LockScreen', () => {
         expect(confirm).toBeEnabled();
         await user.click(confirm);
         expect(erase).toHaveBeenCalledTimes(1);
-        expect(readLock()).toBeNull();
+        // The erase marks the record in IndexedDB before removing it, so the removal comes a little later.
+        await vi.waitFor(() => expect(readLock()).toBeNull());
       } finally {
         restore();
       }

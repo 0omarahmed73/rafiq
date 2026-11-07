@@ -134,6 +134,9 @@ function readClamped(): LockRecord | null {
   return record ? clampAndPersist(record, Date.now()) : null;
 }
 
+/** Longest wait for the durable erase mark before the lock is cleared and the app reloads anyway. */
+const ERASE_MARK_TIMEOUT_MS = 1500;
+
 const NullScreen: ComponentType = () => null;
 
 export function LockProvider({
@@ -200,8 +203,8 @@ export function LockProvider({
     };
   }, [initial.record, setRecord, setLockedBoth, setRecoveredBoth]);
 
-  // Every PIN held here is noted durably, so an erase also covers an older PIN still on disk.
-  const pinKey = record ? `${record.pin.salt}:${record.pin.hash}` : null;
+  // Every PIN held here is noted durably (by its salt only), so an erase also covers an older PIN still on disk.
+  const pinKey = record ? record.pin.salt : null;
   useEffect(() => {
     if (pinKey && recordRef.current) void noteLock(recordRef.current);
   }, [pinKey]);
@@ -463,9 +466,16 @@ export function LockProvider({
 
   const eraseEverything = useCallback(async () => {
     await repo.eraseAll();
-    // Durably mark the record erased before removing it: the localStorage removal may never reach the disk.
+    // Durably mark the record erased before removing it: on Android the localStorage removal may never reach the
+    // disk before a force-stop (see erasedLocks). Only the erase is covered this way; any other lock write
+    // (set-up, PIN change, turning off, failure count) can still be lost on a force-stop, and moving the record
+    // to durable storage is an open owner decision recorded in HANDOFF. The wait is capped so that, with the
+    // data already gone, the lock is always cleared and the app reloads even if IndexedDB hangs.
     const erased = [recordRef.current, readLock()].filter((r): r is LockRecord => r !== null);
-    if (erased.length > 0) await rememberErased(erased);
+    await Promise.race([
+      rememberErased(erased),
+      new Promise<void>((resolve) => setTimeout(resolve, ERASE_MARK_TIMEOUT_MS)),
+    ]);
     clearLock();
     window.location.reload();
   }, [repo]);

@@ -7,6 +7,8 @@ import { LockProvider, useLock, type LockApi } from './LockProvider';
 import { LOCK_STORAGE_KEY, consumeResetNotice, readLock, writeLock, type LockRecord } from './lockStore';
 import { hashSecret, normalizeRecoveryCode } from './pin';
 import { verifyBiometric } from '../../platform/biometric';
+import { IDBFactory } from 'fake-indexeddb';
+import { noteLock, rememberErased, wasErased } from './erasedLocks';
 
 const fg = vi.hoisted(() => ({ cb: undefined as ((active: boolean) => void) | undefined }));
 vi.mock('../../platform/appState', () => ({
@@ -21,6 +23,52 @@ vi.mock('../../platform/biometric', () => ({
   isBiometricAvailable: vi.fn(async () => true),
   verifyBiometric: vi.fn(async () => true),
 }));
+
+// The real erased-lock store, wrapped so tests can wait for its work or make it hang.
+vi.mock('./erasedLocks', async (importOriginal) => {
+  const real = await importOriginal<typeof import('./erasedLocks')>();
+  return {
+    noteLock: vi.fn(real.noteLock),
+    rememberErased: vi.fn(real.rememberErased),
+    wasErased: vi.fn(real.wasErased),
+  };
+});
+
+/** Every key and value in the erased-lock IndexedDB store, as stored. */
+function rawErasedStore(): Promise<Record<string, unknown>> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('rafiq.lock.erased', 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('erased');
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => {
+      const db = req.result;
+      const store = db.transaction('erased', 'readonly').objectStore('erased');
+      const keys = store.getAllKeys();
+      const values = store.getAll();
+      values.onsuccess = () => {
+        db.close();
+        resolve(Object.fromEntries(keys.result.map((k, i) => [String(k), values.result[i]])));
+      };
+    };
+  });
+}
+
+function seedErasedStore(lists: Record<string, string[]>): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('rafiq.lock.erased', 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('erased');
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => {
+      const db = req.result;
+      const tx = db.transaction('erased', 'readwrite');
+      for (const [k, v] of Object.entries(lists)) tx.objectStore('erased').put(v, k);
+      tx.oncomplete = () => {
+        db.close();
+        resolve();
+      };
+    };
+  });
+}
 
 const CODE = 'ABCD-EFGH-JKMN';
 
@@ -83,6 +131,10 @@ async function call<T>(fn: () => Promise<T>): Promise<T> {
 
 beforeEach(() => {
   localStorage.clear();
+  globalThis.indexedDB = new IDBFactory();
+  vi.mocked(noteLock).mockClear();
+  vi.mocked(rememberErased).mockClear();
+  vi.mocked(wasErased).mockClear();
   consumeResetNotice();
   mounts.mockClear();
   effects.mockClear();
@@ -467,21 +519,40 @@ describe('LockProvider', () => {
   });
 
   describe('after an erase whose localStorage removal never reached the disk', () => {
-    // Android WebView commits localStorage to disk late (more than 20 s on the emulator), so a force-stop
-    // soon after an erase can bring the old record back. These tests put it back by hand, then cold start.
-    async function eraseThenLoseTheRemoval(): Promise<{ old: LockRecord; reload: ReturnType<typeof vi.fn> }> {
-      const old = await storeRecord();
+    // Android WebView commits localStorage to disk late, so a force-stop soon after an erase can bring the old
+    // record back. These tests put it back by hand, then cold start.
+    async function withReload(run: (reload: ReturnType<typeof vi.fn>) => Promise<void>) {
       const reload = vi.fn();
       const original = window.location;
       Object.defineProperty(window, 'location', { configurable: true, value: { ...original, reload } });
       try {
-        const view = renderLock();
-        await call(() => api.eraseEverything());
-        expect(readLock()).toBeNull();
-        view.unmount();
+        await run(reload);
       } finally {
         Object.defineProperty(window, 'location', { configurable: true, value: original });
       }
+    }
+
+    /** Waits until every noteLock and start-up check the provider began has finished. */
+    async function settle() {
+      await act(async () => {
+        await Promise.all([
+          ...vi.mocked(noteLock).mock.results.map((r) => r.value),
+          ...vi.mocked(wasErased).mock.results.map((r) => r.value),
+        ]);
+      });
+    }
+
+    async function eraseThenLoseTheRemoval(): Promise<{ old: LockRecord; reload: ReturnType<typeof vi.fn> }> {
+      const old = await storeRecord();
+      let reload!: ReturnType<typeof vi.fn>;
+      await withReload(async (r) => {
+        reload = r;
+        const view = renderLock();
+        await settle();
+        await call(() => api.eraseEverything());
+        expect(readLock()).toBeNull();
+        view.unmount();
+      });
       writeLock(old);
       return { old, reload };
     }
@@ -497,20 +568,15 @@ describe('LockProvider', () => {
 
     it('an older PIN still on disk (changed but never written out) also counts as erased', async () => {
       const older = await storeRecord();
-      const reload = vi.fn();
-      const original = window.location;
-      Object.defineProperty(window, 'location', { configurable: true, value: { ...original, reload } });
-      try {
+      await withReload(async () => {
         const view = renderLock();
-        await call(async () => new Promise((r) => setTimeout(r, 20)));
+        await settle();
         await call(() => api.unlock('1357'));
         await call(() => api.changePin('2468'));
         expect(readLock()!.pin.salt).not.toBe(older.pin.salt);
         await call(() => api.eraseEverything());
         view.unmount();
-      } finally {
-        Object.defineProperty(window, 'location', { configurable: true, value: original });
-      }
+      });
       writeLock(older);
       renderLock();
       await vi.waitFor(() => expect(isOpen()).toBe(true));
@@ -521,29 +587,75 @@ describe('LockProvider', () => {
       await eraseThenLoseTheRemoval();
       localStorage.clear();
       await storeRecord();
+      vi.mocked(wasErased).mockClear();
       renderLock();
       expect(isLocked()).toBe(true);
-      await call(async () => new Promise((r) => setTimeout(r, 50)));
+      expect(wasErased).toHaveBeenCalledTimes(1);
+      await settle();
       expect(isLocked()).toBe(true);
       expect(readLock()).not.toBeNull();
     });
 
-    it('erases and reloads even when the erased-lock store cannot be written', async () => {
-      await storeRecord();
-      vi.spyOn(indexedDB, 'open').mockImplementation(() => {
-        throw new Error('no indexedDB');
+    it('stores only salts, never a PIN or recovery hash', async () => {
+      const first = await storeRecord();
+      await withReload(async () => {
+        renderLock();
+        await settle();
+        await call(() => api.unlock('1357'));
+        await call(() => api.changePin('2468'));
+        await settle();
+        const second = readLock()!;
+        await call(() => api.eraseEverything());
+        const stored = await rawErasedStore();
+        const raw = JSON.stringify(stored);
+        for (const rec of [first, second]) {
+          expect(raw).not.toContain(rec.pin.hash);
+          expect(raw).not.toContain(rec.recovery.hash);
+          expect(raw).toContain(rec.pin.salt);
+        }
+        for (const list of Object.values(stored)) {
+          for (const entry of list as string[]) expect(entry).not.toContain(':');
+        }
       });
-      const reload = vi.fn();
-      const original = window.location;
-      Object.defineProperty(window, 'location', { configurable: true, value: { ...original, reload } });
-      try {
+    });
+
+    it('reads a legacy salt:hash entry as its salt and rewrites the lists as salts', async () => {
+      const old = await storeRecord();
+      const legacy = `${old.pin.salt}:${old.pin.hash}`;
+      await seedErasedStore({ pins: [legacy], seen: [legacy] });
+      await withReload(async () => {
+        renderLock();
+        await vi.waitFor(() => expect(isOpen()).toBe(true));
+        expect(localStorage.getItem(LOCK_STORAGE_KEY)).toBeNull();
+        await settle();
+        await call(() => api.eraseEverything());
+      });
+      const raw = await rawErasedStore();
+      expect(raw).toEqual({ pins: [old.pin.salt], seen: [old.pin.salt] });
+    });
+
+    it('clears the lock and reloads even when marking the erase never finishes', async () => {
+      await storeRecord();
+      vi.mocked(rememberErased).mockImplementationOnce(() => new Promise(() => {}));
+      await withReload(async (reload) => {
         renderLock();
         await call(() => api.eraseEverything());
         expect(readLock()).toBeNull();
         expect(reload).toHaveBeenCalledTimes(1);
-      } finally {
-        Object.defineProperty(window, 'location', { configurable: true, value: original });
-      }
+      });
+    });
+
+    it('erases and reloads even when the erased-lock store cannot be opened', async () => {
+      await storeRecord();
+      vi.spyOn(indexedDB, 'open').mockImplementation(() => {
+        throw new Error('no indexedDB');
+      });
+      await withReload(async (reload) => {
+        renderLock();
+        await call(() => api.eraseEverything());
+        expect(readLock()).toBeNull();
+        expect(reload).toHaveBeenCalledTimes(1);
+      });
     });
   });
 
