@@ -106,7 +106,9 @@ function isSyncKey(value: unknown): value is SyncKey {
     typeof CryptoKey !== 'undefined' &&
     v.key instanceof CryptoKey &&
     typeof v.salt === 'string' &&
-    typeof v.iter === 'number'
+    v.salt.length > 0 &&
+    Number.isInteger(v.iter) &&
+    (v.iter as number) > 0
   );
 }
 
@@ -118,6 +120,10 @@ export function loadSyncKey(): Promise<SyncKey | null> {
   }).catch(() => null);
 }
 
+/**
+ * Stores the key durably. A rejection (especially a timeout) means the outcome is UNKNOWN:
+ * the write may still have committed.
+ */
 export function saveSyncKey(k: SyncKey): Promise<void> {
   return run('readwrite', DEFAULT_TIMEOUT_MS, (store) => {
     store.put({ key: k.key, salt: k.salt, iter: k.iter }, KEY);
@@ -125,6 +131,10 @@ export function saveSyncKey(k: SyncKey): Promise<void> {
   });
 }
 
+/**
+ * Removes the key durably. A rejection (especially a timeout) means the outcome is UNKNOWN:
+ * the write may still have committed.
+ */
 export function clearSyncKey(): Promise<void> {
   return run('readwrite', DEFAULT_TIMEOUT_MS, (store) => {
     store.delete(KEY);
@@ -139,11 +149,17 @@ export function loadSyncMeta(): Promise<SyncMeta> {
     return (): SyncMeta => {
       const v = request.result as Partial<SyncMeta> | undefined;
       if (!v || typeof v.version !== 'number') return { version: 0 };
-      return typeof v.lastSyncedAt === 'string' ? { version: v.version, lastSyncedAt: v.lastSyncedAt } : { version: v.version };
+      return typeof v.lastSyncedAt === 'string'
+        ? { version: v.version, lastSyncedAt: v.lastSyncedAt }
+        : { version: v.version };
     };
   }).catch((): SyncMeta => ({ version: 0 }));
 }
 
+/**
+ * Stores the meta durably. A rejection (especially a timeout) means the outcome is UNKNOWN:
+ * the write may still have committed.
+ */
 export function saveSyncMeta(m: SyncMeta): Promise<void> {
   return run('readwrite', DEFAULT_TIMEOUT_MS, (store) => {
     store.put(m, META);
@@ -176,7 +192,10 @@ export function createSessionStorage(): {
   };
 }
 
-/** Deletes the key, the meta and every session item. Never rejects and resolves within `timeoutMs`. */
+/**
+ * Deletes the key, the meta and every session item. Best-effort: it never rejects and resolves within `timeoutMs`,
+ * so a caller cannot tell whether the key or the session stayed on disk (a timeout leaves the outcome UNKNOWN).
+ */
 export function clearSyncIdentity(timeoutMs: number = CLEAR_TIMEOUT_MS): Promise<void> {
   return run('readwrite', timeoutMs, (store) => {
     store.delete(KEY);
