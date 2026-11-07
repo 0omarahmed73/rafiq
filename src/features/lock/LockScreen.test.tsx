@@ -28,6 +28,13 @@ vi.mock('./LockProvider', async (importOriginal) => {
   return { ...real, useLock: (): LockApi => ({ ...real.useLock(), ...overrides.api }) };
 });
 
+// The real lock database, wrapped so a test can make a write's outcome unknown.
+vi.mock('./lockDb', async (importOriginal) => {
+  const real = await importOriginal<typeof import('./lockDb')>();
+  return { ...real, readLockDb: vi.fn(real.readLockDb), writeLockDb: vi.fn(real.writeLockDb) };
+});
+const realDb = await vi.importActual<typeof import('./lockDb')>('./lockDb');
+
 const CODE = 'ABCD-EFGH-JKMN';
 const SLOW = { timeout: 5000 };
 
@@ -82,6 +89,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
+  for (const fn of [readLockDb, writeLockDb]) vi.mocked(fn).mockRestore();
 });
 
 describe('LockScreen', () => {
@@ -417,6 +425,29 @@ describe('LockScreen', () => {
       await user.type(again, '2486');
       await user.click(save);
       expect(screen.getByRole('alert')).toHaveTextContent('الرمزان غير متطابقين');
+      expect(screen.queryByTestId('new-recovery-code')).toBeNull();
+    });
+
+    it('says the new PIN may have been saved when the save outcome is unknown', async () => {
+      const user = userEvent.setup();
+      await storeRecord();
+      renderScreen();
+      await user.click(screen.getByRole('button', { name: 'نسيت الرمز؟' }));
+      await user.click(screen.getByRole('button', { name: 'لدي رمز الاسترداد' }));
+      await user.type(screen.getByLabelText('رمز الاسترداد'), CODE);
+      await user.click(screen.getByRole('button', { name: 'أتحقق' }));
+      const first = await screen.findByLabelText('الرمز الجديد', undefined, SLOW);
+      vi.mocked(writeLockDb).mockImplementationOnce(async (record) => {
+        await realDb.writeLockDb(record);
+        vi.mocked(readLockDb).mockRejectedValueOnce(new Error('IndexedDB timed out'));
+        throw new Error('IndexedDB timed out');
+      });
+      await user.type(first, '2468');
+      await user.type(screen.getByLabelText('أعيد كتابة الرمز الجديد'), '2468');
+      await user.click(screen.getByRole('button', { name: 'أحفظ الرمز الجديد' }));
+      expect(await screen.findByRole('alert', undefined, SLOW)).toHaveTextContent(
+        'ربما حُفظ رمز الدخول الجديد. يمكنني المحاولة مرة أخرى.',
+      );
       expect(screen.queryByTestId('new-recovery-code')).toBeNull();
     });
 

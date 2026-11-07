@@ -3,8 +3,8 @@ import { Switch } from '../../components/Switch';
 import type { Bi } from '../../i18n';
 import { useI18n } from '../../i18n/LanguageProvider';
 import { isBiometricAvailable, verifyBiometric } from '../../platform/biometric';
-import { useLock } from './LockProvider';
-import { AUTO_LOCK_OPTIONS, DEFAULT_AUTO_LOCK_MS, readLock } from './lockStore';
+import { LockAlreadyOnError, useLock } from './LockProvider';
+import { AUTO_LOCK_OPTIONS, DEFAULT_AUTO_LOCK_MS, LockWriteUnknownError } from './lockStore';
 import { BackButton, RANGE_ERROR, WaitStatus, card, errorText, field, primary, secondary } from './lockUi';
 import { isValidPin, isWeakPin, normalizeDigits } from './pin';
 
@@ -22,6 +22,11 @@ const IDLE: Step = { kind: 'idle' };
 const SAVE_FAILED: Bi = {
   ar: 'تعذّر حفظ القفل على هذا الجهاز',
   en: 'The lock could not be saved on this device',
+};
+/** The save was reported as failed but may have reached the device. */
+const MAY_HAVE_SAVED: Bi = {
+  ar: 'ربما حُفظ القفل. أفتح الإعدادات من جديد وأتحقق',
+  en: 'The lock may have been saved. I check Settings and try again',
 };
 const BIOMETRIC_LABEL: Bi = {
   ar: 'استخدم البصمة أيضًا',
@@ -151,11 +156,12 @@ export function LockSettings() {
       const next = mode === 'setup' ? await lock.setUp(pin, useBio) : await lock.changePin(pin);
       go({ kind: 'showCode', mode });
       setCode(next);
-    } catch {
+    } catch (error) {
       if (mode === 'setup') go(IDLE);
       else setAgain('');
       // A lock that is already on (set up elsewhere meanwhile) is not a save failure: the card shows it.
-      if (mode === 'change' || readLock() === null) setError(t(SAVE_FAILED));
+      if (error instanceof LockWriteUnknownError) setError(t(MAY_HAVE_SAVED));
+      else if (!(error instanceof LockAlreadyOnError)) setError(t(SAVE_FAILED));
     } finally {
       setBusy(false);
     }

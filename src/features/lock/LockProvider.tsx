@@ -19,6 +19,8 @@ import {
   clampBlock,
   clearLock,
   consumeResetNotice,
+  eraseLock,
+  LockWriteUnknownError,
   readLock,
   readLockFresh,
   recordFailure,
@@ -39,6 +41,14 @@ import {
 } from './pin';
 
 export type VerifyResult = 'ok' | 'wrong' | 'blocked';
+
+/** setUp found a lock already on (set up elsewhere meanwhile); not a save failure. */
+export class LockAlreadyOnError extends Error {
+  constructor() {
+    super('The lock is already on.');
+    this.name = 'LockAlreadyOnError';
+  }
+}
 
 export interface LockApi {
   enabled: boolean;
@@ -131,8 +141,8 @@ function readClamped(): LockRecord | null {
   return record ? clampAndPersist(record, Date.now()) : null;
 }
 
-/** Longest wait for the lock removal after an erase before the app reloads anyway. */
-const ERASE_CLEAR_TIMEOUT_MS = 1500;
+/** Longest wait for the lock removal after an erase before the app reloads anyway: lockDb's 2 s timeout + margin. */
+const ERASE_CLEAR_TIMEOUT_MS = 2500;
 
 const NullScreen: ComponentType = () => null;
 
@@ -212,6 +222,22 @@ export function LockProvider({
     chain.current = result.catch(() => undefined);
     return result;
   }, []);
+
+  /**
+   * Writes a new PIN record. When the outcome is unknown the new PIN may be stored, so memory must not keep the old
+   * one: a re-read is queued (and every next action re-reads too), adopting the stored record once storage answers.
+   */
+  const writeOrResync = useCallback(
+    async (next: LockRecord) => {
+      try {
+        await writeLock(next);
+      } catch (error) {
+        if (error instanceof LockWriteUnknownError) void enqueue(syncFromStorage).catch(() => undefined);
+        throw error;
+      }
+    },
+    [enqueue, syncFromStorage],
+  );
 
   // Auto-lock: remember when the app left the foreground (in memory only) and lock on return when
   // at least autoLockMs has passed.
@@ -307,22 +333,26 @@ export function LockProvider({
   );
 
   // Biometrics work during a PIN wait and reset the failure count; the device's own biometric throttling applies.
+  // The prompt runs outside the queue; the reset it earns runs in it, so a check in progress cannot overwrite it.
   const unlockWithBiometric = useCallback(async () => {
     if (!recordRef.current?.biometric) return false;
     const ok = await verifyBiometric(t({ ar: 'افتح رفيق', en: 'Unlock Rafiq' }));
-    const latest = recordRef.current;
-    if (!ok || !latest) return false;
-    setRecord(
-      await persistOr(() => recordSuccess(latest), {
-        ...latest,
-        failures: 0,
-        blockedUntil: 0,
-      }),
-    );
-    setRecoveredBoth(false);
-    setLockedBoth(false);
-    return true;
-  }, [setRecord, setLockedBoth, setRecoveredBoth]);
+    if (!ok) return false;
+    return enqueue(async () => {
+      const latest = await syncFromStorage();
+      if (!latest) return false;
+      setRecord(
+        await persistOr(() => recordSuccess(latest), {
+          ...latest,
+          failures: 0,
+          blockedUntil: 0,
+        }),
+      );
+      setRecoveredBoth(false);
+      setLockedBoth(false);
+      return true;
+    });
+  }, [enqueue, syncFromStorage, setRecord, setLockedBoth, setRecoveredBoth]);
 
   const recover = useCallback(
     async (code: string) => {
@@ -337,7 +367,7 @@ export function LockProvider({
     (pin: string, biometric: boolean) =>
       enqueue(async () => {
         const normalized = newPin(pin);
-        if (await syncFromStorage()) throw new Error('The lock is already on.');
+        if (await syncFromStorage()) throw new LockAlreadyOnError();
         const code = generateRecoveryCode();
         const next: LockRecord = {
           v: 1,
@@ -348,14 +378,14 @@ export function LockProvider({
           failures: 0,
           blockedUntil: 0,
         };
-        if (await syncFromStorage()) throw new Error('The lock is already on.');
-        await writeLock(next);
+        if (await syncFromStorage()) throw new LockAlreadyOnError();
+        await writeOrResync(next);
         setRecord(next);
         setRecoveredBoth(false);
         setLockedBoth(false);
         return code;
       }),
-    [enqueue, syncFromStorage, setRecord, setLockedBoth, setRecoveredBoth],
+    [enqueue, syncFromStorage, writeOrResync, setRecord, setLockedBoth, setRecoveredBoth],
   );
 
   const changePin = useCallback(
@@ -381,12 +411,12 @@ export function LockProvider({
           failures: 0,
           blockedUntil: 0,
         };
-        await writeLock(next);
+        await writeOrResync(next);
         setRecord(next);
         if (viaRecovery) recoveryPinSaved.current = true;
         return code;
       }),
-    [enqueue, syncFromStorage, setRecord],
+    [enqueue, syncFromStorage, writeOrResync, setRecord],
   );
 
   const finishRecovery = useCallback(() => {
@@ -457,11 +487,12 @@ export function LockProvider({
   }, [enqueue, syncFromStorage, setRecord, setLockedBoth, setRecoveredBoth]);
 
   const eraseEverything = useCallback(async () => {
-    // The data goes first, so a crash in between never leaves data without its lock. The removal is durable
-    // (IndexedDB) and its wait is capped, so the app always reloads even if IndexedDB hangs.
+    // The data goes first, so a crash in between never leaves data without its lock. eraseLock removes the mirror
+    // at once, stops queued writes from bringing the record back and clears IndexedDB without waiting behind them;
+    // the wait is capped above lockDb's own timeout, so the app always reloads even if IndexedDB hangs.
     await repo.eraseAll();
     await Promise.race([
-      clearLock().catch(() => undefined),
+      eraseLock(),
       new Promise<void>((resolve) => setTimeout(resolve, ERASE_CLEAR_TIMEOUT_MS)),
     ]);
     window.location.reload();

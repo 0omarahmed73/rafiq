@@ -7,6 +7,7 @@ import { LockProvider, useLock, type LockApi } from './LockProvider';
 import { clearLockDb, readLockDb, writeLockDb } from './lockDb';
 import {
   LOCK_STORAGE_KEY,
+  LockWriteUnknownError,
   loadLock,
   readLock,
   readLockFresh,
@@ -51,6 +52,17 @@ async function stored(): Promise<LockRecord | undefined> {
 function failWrites() {
   vi.mocked(writeLockDb).mockRejectedValue(new Error('QuotaExceededError'));
   vi.mocked(clearLockDb).mockRejectedValue(new Error('QuotaExceededError'));
+}
+
+const realDb = await vi.importActual<typeof import('./lockDb')>('./lockDb');
+
+/** The next write commits but is reported as failed, and the read-back fails too: an unknown outcome. */
+function nextWriteUnknown() {
+  vi.mocked(writeLockDb).mockImplementationOnce(async (record) => {
+    await realDb.writeLockDb(record);
+    vi.mocked(readLockDb).mockRejectedValueOnce(new Error('IndexedDB timed out'));
+    throw new Error('IndexedDB timed out');
+  });
 }
 
 const CODE = 'ABCD-EFGH-JKMN';
@@ -273,6 +285,44 @@ describe('LockProvider', () => {
     expect(await call(() => api.unlock('1357'))).toBe('ok');
     expect(isOpen()).toBe(true);
     expect(api.record?.failures).toBe(0);
+  });
+
+  it('a biometric success waits for a PIN check already running, so its reset is not overwritten', async () => {
+    await storeRecord({ biometric: true });
+    renderLock();
+    let check!: Promise<string>;
+    let bio!: Promise<boolean>;
+    act(() => {
+      check = api.verifyPin('0000');
+      bio = api.unlockWithBiometric();
+    });
+    expect(await call(() => check)).toBe('wrong');
+    expect(await call(() => bio)).toBe(true);
+    expect(await stored()).toMatchObject({ failures: 0, blockedUntil: 0 });
+    expect(api.record).toMatchObject({ failures: 0 });
+    expect(isOpen()).toBe(true);
+  });
+
+  it('after a PIN change whose save is unknown, the next check uses the new PIN when it was stored', async () => {
+    await storeRecord();
+    renderLock();
+    await call(() => api.unlock('1357'));
+    nextWriteUnknown();
+    await expect(call(() => api.changePin('2468'))).rejects.toBeInstanceOf(LockWriteUnknownError);
+    expect(await call(() => api.verifyPin('2468'))).toBe('ok');
+    expect(await call(() => api.verifyPin('1357'))).toBe('wrong');
+  });
+
+  it('after a set-up whose save is unknown, the lock shows as on once storage answers', async () => {
+    await loadLock();
+    renderLock();
+    nextWriteUnknown();
+    await expect(call(() => api.setUp('2468', false))).rejects.toBeInstanceOf(LockWriteUnknownError);
+    // The provider's queued re-read runs before this one and adopts the stored record.
+    await call(() => readLockFresh());
+    expect(api.enabled).toBe(true);
+    expect(api.locked).toBe(false);
+    expect(await call(() => api.verifyPin('2468'))).toBe('ok');
   });
 
   it('unlocks with biometrics only when they are enabled', async () => {
@@ -585,6 +635,9 @@ describe('LockProvider', () => {
         await call(() => api.eraseEverything());
         view.unmount();
       });
+      // The reload after the erase starts the store afresh.
+      resetLockStoreForTests();
+      await loadLock();
       const setup = renderLock();
       await call(() => api.setUp('2468', false));
       setup.unmount();
@@ -605,6 +658,27 @@ describe('LockProvider', () => {
         await call(() => api.eraseEverything());
         expect(erase).toHaveBeenCalledTimes(1);
         expect(vi.mocked(clearLockDb)).toHaveBeenCalledTimes(1);
+        expect(localStorage.getItem(LOCK_STORAGE_KEY)).toBeNull();
+        expect(readLock()).toBeNull();
+        expect(reload).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    it('a hung failure-count write does not stop the erase from clearing the lock and reloading', async () => {
+      await storeRecord();
+      await withReload(async (reload) => {
+        renderLock();
+        vi.mocked(writeLockDb).mockClear().mockImplementation(() => new Promise(() => {}));
+        act(() => {
+          void api.verifyPin('0000');
+        });
+        await vi.waitFor(() => expect(vi.mocked(writeLockDb)).toHaveBeenCalled(), { timeout: 3000 });
+        const started = performance.now();
+        await call(() => api.eraseEverything());
+        expect(performance.now() - started).toBeLessThan(2600);
+        expect(localStorage.getItem(LOCK_STORAGE_KEY)).toBeNull();
+        expect(readLock()).toBeNull();
+        expect(await readLockDb()).toEqual({ initialized: true, record: undefined });
         expect(reload).toHaveBeenCalledTimes(1);
       });
     });

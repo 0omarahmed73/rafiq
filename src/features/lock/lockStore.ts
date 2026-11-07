@@ -1,4 +1,4 @@
-import { clearLockDb, lockDbAvailable, readLockDb, writeLockDb } from './lockDb';
+import { clearLockDb, lockDbAvailable, readLockDb, writeLockDb, type LockDbState } from './lockDb';
 import { waitMs, type SecretRecord } from './pin';
 
 /**
@@ -71,6 +71,22 @@ function isLockRecord(value: unknown): value is LockRecord {
   );
 }
 
+/** A write or clear that definitely did not reach storage. */
+export class LockWriteError extends Error {
+  constructor(readonly reason?: unknown) {
+    super('The lock could not be saved.');
+    this.name = 'LockWriteError';
+  }
+}
+
+/** IndexedDB reported a failure and could not be read back: the change may or may not be stored. */
+export class LockWriteUnknownError extends Error {
+  constructor() {
+    super('The lock may have been saved.');
+    this.name = 'LockWriteUnknownError';
+  }
+}
+
 type Mode = 'idb' | 'local';
 
 /** How long the load may wait for IndexedDB before the store falls back to localStorage. */
@@ -82,6 +98,8 @@ let mode: Mode = 'local';
 let loading: Promise<void> | null = null;
 /** Writes and fresh reads run one at a time, in call order, so the cache always matches the last commit. */
 let queue: Promise<unknown> = Promise.resolve();
+/** Set by eraseLock: from then on, until the next start, nothing writes a record again. */
+let erased = false;
 
 function serial<T>(task: () => Promise<T>): Promise<T> {
   const result = queue.then(task, task);
@@ -213,6 +231,7 @@ export function readLock(): LockRecord | null {
 export function readLockFresh(): Promise<LockRecord | null> {
   return serial(async () => {
     await loadLock();
+    if (erased) return null;
     if (mode === 'local') {
       const local = readLocal();
       if (local === 'damaged') {
@@ -243,17 +262,55 @@ export function readLockFresh(): Promise<LockRecord | null> {
 }
 
 /**
+ * Runs an IndexedDB write. lockDb also rejects on a timeout, after which the transaction may still commit, so a
+ * rejection is checked by reading back: the change is there (resolves), it is not (LockWriteError), or the read
+ * fails too (LockWriteUnknownError).
+ */
+async function confirmed(attempt: () => Promise<void>, landed: (state: LockDbState) => boolean): Promise<void> {
+  try {
+    await attempt();
+  } catch (error) {
+    let state: LockDbState;
+    try {
+      state = await readLockDb();
+    } catch {
+      throw new LockWriteUnknownError();
+    }
+    if (!landed(state)) throw new LockWriteError(error);
+  }
+}
+
+function strictLocal(change: () => void): void {
+  try {
+    change();
+  } catch (error) {
+    throw new LockWriteError(error);
+  }
+}
+
+/**
  * Saves the record; resolves once it is stored (in IndexedDB, committed; in local mode, in localStorage), and only
- * then updates the cache. The other store is updated best effort and never changes the result.
+ * then updates the cache. The other store is updated best effort and never changes the result. After eraseLock it
+ * does nothing.
  */
 export function writeLock(record: LockRecord): Promise<void> {
   return serial(async () => {
     await loadLock();
+    if (erased) return;
     if (mode === 'idb') {
-      await writeLockDb(record);
+      const json = JSON.stringify(record);
+      await confirmed(
+        () => writeLockDb(record),
+        (state) => JSON.stringify(state.record) === json,
+      );
+      // An erase that ran while this write was in flight wins: clear again so the record cannot come back.
+      if (erased) {
+        await clearLockDb().catch(() => undefined);
+        return;
+      }
       mirror(record);
     } else {
-      localStorage.setItem(LOCK_STORAGE_KEY, JSON.stringify(record));
+      strictLocal(() => localStorage.setItem(LOCK_STORAGE_KEY, JSON.stringify(record)));
       tryInDb(() => writeLockDb(record));
     }
     cache = record;
@@ -264,15 +321,32 @@ export function writeLock(record: LockRecord): Promise<void> {
 export function clearLock(): Promise<void> {
   return serial(async () => {
     await loadLock();
+    if (erased) return;
     if (mode === 'idb') {
-      await clearLockDb();
+      await confirmed(
+        () => clearLockDb(),
+        (state) => state.record === undefined,
+      );
       removeLocal();
     } else {
-      localStorage.removeItem(LOCK_STORAGE_KEY);
+      strictLocal(() => localStorage.removeItem(LOCK_STORAGE_KEY));
       tryInDb(() => clearLockDb());
     }
     cache = null;
   });
+}
+
+/**
+ * Removes the lock for an erase. A write already queued or in flight (a failure count, a clamp) must not bring the
+ * record back before the reload, and IndexedDB may be slow: so the mirror and the cache go at once, every later
+ * write becomes a no-op, and the IndexedDB clear is issued directly instead of waiting behind the queue. Never
+ * rejects.
+ */
+export function eraseLock(): Promise<void> {
+  erased = true;
+  cache = null;
+  removeLocal();
+  return clearLockDb().catch(() => undefined);
 }
 
 export function consumeResetNotice(): boolean {
@@ -301,6 +375,7 @@ export function resetLockStoreForTests(): void {
   loading = null;
   queue = Promise.resolve();
   idbAttempts = Promise.resolve();
+  erased = false;
   resetNotice = false;
 }
 

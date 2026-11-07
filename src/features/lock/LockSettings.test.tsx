@@ -9,7 +9,7 @@ import { LockProvider, useLock, type LockApi } from './LockProvider';
 import { LockSettings } from './LockSettings';
 import { IDBFactory } from 'fake-indexeddb';
 import { clearLockDb, readLockDb, writeLockDb } from './lockDb';
-import { LOCK_STORAGE_KEY, loadLock, resetLockStoreForTests, type LockRecord } from './lockStore';
+import { LOCK_STORAGE_KEY, loadLock, readLockFresh, resetLockStoreForTests, type LockRecord } from './lockStore';
 import { hashSecret, normalizeRecoveryCode, verifySecret } from './pin';
 
 const fg = vi.hoisted(() => ({
@@ -40,8 +40,14 @@ vi.mock('./LockProvider', async (importOriginal) => {
 // The real lock database, wrapped so tests can make its writes fail.
 vi.mock('./lockDb', async (importOriginal) => {
   const real = await importOriginal<typeof import('./lockDb')>();
-  return { ...real, writeLockDb: vi.fn(real.writeLockDb), clearLockDb: vi.fn(real.clearLockDb) };
+  return {
+    ...real,
+    readLockDb: vi.fn(real.readLockDb),
+    writeLockDb: vi.fn(real.writeLockDb),
+    clearLockDb: vi.fn(real.clearLockDb),
+  };
 });
+const realDb = await vi.importActual<typeof import('./lockDb')>('./lockDb');
 vi.mock('../../platform/biometric', () => ({
   isBiometricAvailable: vi.fn(async () => false),
   verifyBiometric: vi.fn(async () => false),
@@ -57,6 +63,17 @@ const SAVE_FAILED_AR = 'تعذّر حفظ القفل على هذا الجهاز'
 /** The record in the lock database, read straight from IndexedDB. */
 async function onDisk(): Promise<LockRecord | undefined> {
   return (await readLockDb()).record as LockRecord | undefined;
+}
+
+const MAY_HAVE_SAVED_AR = 'ربما حُفظ القفل. أفتح الإعدادات من جديد وأتحقق';
+
+/** The next write commits but is reported as failed, and the read-back fails too: an unknown outcome. */
+function nextWriteUnknown() {
+  vi.mocked(writeLockDb).mockImplementationOnce(async (record) => {
+    await realDb.writeLockDb(record);
+    vi.mocked(readLockDb).mockRejectedValueOnce(new Error('IndexedDB timed out'));
+    throw new Error('IndexedDB timed out');
+  });
 }
 
 /** Makes every lock database write fail from now on in this test. */
@@ -146,7 +163,7 @@ beforeEach(async () => {
 afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
-  for (const fn of [writeLockDb, clearLockDb]) vi.mocked(fn).mockRestore();
+  for (const fn of [readLockDb, writeLockDb, clearLockDb]) vi.mocked(fn).mockRestore();
 });
 
 describe('LockSettings off', () => {
@@ -251,6 +268,25 @@ describe('LockSettings set up', () => {
       expect(screen.queryByTestId('recovery-code')).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'أوقف القفل' })).not.toBeInTheDocument();
       expect(await onDisk()).toBeUndefined();
+    },
+    SLOW,
+  );
+
+  it(
+    'says the lock may have been saved when the save outcome is unknown',
+    async () => {
+      const user = renderCard();
+      await user.click(await screen.findByRole('button', { name: 'تفعيل القفل' }));
+      nextWriteUnknown();
+      await choosePin(user, '2468');
+      // Once storage answers, the provider re-reads it and the card shows the lock that was stored, with the note.
+      expect(await screen.findByRole('button', { name: 'أوقف القفل' }, SLOW)).toBeInTheDocument();
+      await act(async () => {
+        await readLockFresh();
+      });
+      expect(screen.getByText(MAY_HAVE_SAVED_AR)).toBeInTheDocument();
+      expect(screen.queryByText(SAVE_FAILED_AR)).not.toBeInTheDocument();
+      expect(screen.queryByTestId('recovery-code')).not.toBeInTheDocument();
     },
     SLOW,
   );
@@ -525,6 +561,25 @@ describe('LockSettings on', () => {
       await user.click(done);
       expect(screen.queryByTestId('recovery-code')).not.toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'غيّر الرمز' })).toBeInTheDocument();
+    },
+    SLOW,
+  );
+
+  it(
+    'says the PIN may have been saved when a PIN change outcome is unknown, and the new PIN then works',
+    async () => {
+      const user = await renderOn();
+      await user.click(screen.getByRole('button', { name: 'غيّر الرمز' }));
+      await enterCurrent(user, PIN);
+      await screen.findByLabelText('الرمز الجديد');
+      nextWriteUnknown();
+      await choosePin(user, '2468');
+      expect(await screen.findByText(MAY_HAVE_SAVED_AR, {}, SLOW)).toBeInTheDocument();
+      expect(screen.queryByText(SAVE_FAILED_AR)).not.toBeInTheDocument();
+      expect(await verifySecret('2468', (await onDisk())!.pin)).toBe(true);
+      await act(async () => {
+        await readLockFresh();
+      });
     },
     SLOW,
   );

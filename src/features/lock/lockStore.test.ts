@@ -8,7 +8,10 @@ import {
   clampBlock,
   clearLock,
   consumeResetNotice,
+  eraseLock,
   loadLock,
+  LockWriteError,
+  LockWriteUnknownError,
   readLock,
   readLockFresh,
   recordFailure,
@@ -19,6 +22,8 @@ import {
   type LockRecord,
 } from './lockStore';
 import { hashSecret } from './pin';
+
+const realDb = await vi.importActual<typeof import('./lockDb')>('./lockDb');
 
 // The real IndexedDB wrapper, wrapped so single tests can make it fail.
 vi.mock('./lockDb', async (importOriginal) => {
@@ -240,6 +245,117 @@ describe('lockStore in IndexedDB', () => {
     vi.mocked(lockDb.writeLockDb).mockRejectedValueOnce(new Error('aborted'));
     await expect(recordFailure(base, 1000)).rejects.toThrow();
     expect(readLock()).toBeNull();
+  });
+});
+
+describe('a write whose outcome IndexedDB did not confirm', () => {
+  // lockDb rejects on a timeout too, and a transaction can still commit after that: the store reads back to decide.
+  it('counts a write that committed but was reported as failed', async () => {
+    await loadLock();
+    vi.mocked(lockDb.writeLockDb).mockImplementationOnce(async (record) => {
+      await realDb.writeLockDb(record);
+      throw new Error('IndexedDB timed out');
+    });
+    await writeLock({ ...base, failures: 2 });
+    expect(readLock()).toEqual({ ...base, failures: 2 });
+    expect(mirrored()).toEqual({ ...base, failures: 2 });
+  });
+
+  it('rejects as a definite failure when the read-back shows the old record', async () => {
+    await loadLock();
+    await writeLock(base);
+    vi.mocked(lockDb.writeLockDb).mockRejectedValueOnce(new Error('IndexedDB timed out'));
+    const error = await writeLock({ ...base, failures: 2 }).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(LockWriteError);
+    expect(error).not.toBeInstanceOf(LockWriteUnknownError);
+    expect(readLock()).toEqual(base);
+  });
+
+  it('rejects as unknown when the read-back fails too, and leaves the cache', async () => {
+    await loadLock();
+    await writeLock(base);
+    vi.mocked(lockDb.writeLockDb).mockRejectedValueOnce(new Error('IndexedDB timed out'));
+    vi.mocked(lockDb.readLockDb).mockRejectedValueOnce(new Error('IndexedDB timed out'));
+    await expect(writeLock({ ...base, failures: 2 })).rejects.toBeInstanceOf(LockWriteUnknownError);
+    expect(readLock()).toEqual(base);
+  });
+
+  it('counts a clear that committed but was reported as failed', async () => {
+    await loadLock();
+    await writeLock(base);
+    vi.mocked(lockDb.clearLockDb).mockImplementationOnce(async () => {
+      await realDb.clearLockDb();
+      throw new Error('IndexedDB timed out');
+    });
+    await clearLock();
+    expect(readLock()).toBeNull();
+    expect(mirrored()).toBeNull();
+  });
+
+  it('rejects a clear as definite when the record remains, and as unknown when the read-back fails', async () => {
+    await loadLock();
+    await writeLock(base);
+    vi.mocked(lockDb.clearLockDb).mockRejectedValueOnce(new Error('aborted'));
+    await expect(clearLock()).rejects.toBeInstanceOf(LockWriteError);
+    vi.mocked(lockDb.clearLockDb).mockRejectedValueOnce(new Error('aborted'));
+    vi.mocked(lockDb.readLockDb).mockRejectedValueOnce(new Error('IndexedDB timed out'));
+    await expect(clearLock()).rejects.toBeInstanceOf(LockWriteUnknownError);
+    expect(readLock()).toEqual(base);
+  });
+});
+
+describe('eraseLock', () => {
+  it('removes the mirror and the cache at once and clears IndexedDB without waiting for a hung write', async () => {
+    await loadLock();
+    await writeLock(base);
+    vi.mocked(lockDb.writeLockDb).mockImplementationOnce(() => new Promise(() => {}));
+    void writeLock({ ...base, failures: 1 });
+    const erasing = eraseLock();
+    expect(mirrored()).toBeNull();
+    expect(readLock()).toBeNull();
+    await erasing;
+    expect(await stored()).toEqual({ initialized: true, record: undefined });
+  });
+
+  it('removes the mirror even when the IndexedDB clear never finishes', async () => {
+    await loadLock();
+    await writeLock(base);
+    vi.mocked(lockDb.clearLockDb).mockImplementationOnce(() => new Promise(() => {}));
+    void eraseLock();
+    expect(mirrored()).toBeNull();
+    expect(readLock()).toBeNull();
+  });
+
+  it('a write started before the erase that commits after it does not bring the record back', async () => {
+    await loadLock();
+    await writeLock(base);
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    vi.mocked(lockDb.writeLockDb).mockImplementationOnce(async (record) => {
+      await gate;
+      await realDb.writeLockDb(record);
+    });
+    const late = writeLock({ ...base, failures: 1 });
+    await eraseLock();
+    release();
+    await late;
+    expect(readLock()).toBeNull();
+    expect(mirrored()).toBeNull();
+    expect(await stored()).toEqual({ initialized: true, record: undefined });
+    resetLockStoreForTests();
+    await loadLock();
+    expect(readLock()).toBeNull();
+  });
+
+  it('turns later writes into no-ops', async () => {
+    await loadLock();
+    await eraseLock();
+    await writeLock(base);
+    expect(readLock()).toBeNull();
+    expect(mirrored()).toBeNull();
+    expect((await stored()).record).toBeUndefined();
   });
 });
 

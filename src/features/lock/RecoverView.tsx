@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { useI18n } from '../../i18n/LanguageProvider';
 import { useLock } from './LockProvider';
+import { LockWriteUnknownError } from './lockStore';
 import { BackButton, CHECK_FAILED, RANGE_ERROR, WaitStatus, card, errorText, field, primary, secondary } from './lockUi';
 import { isValidPin, isWeakPin, normalizeDigits, normalizeRecoveryCode } from './pin';
 
@@ -80,12 +81,19 @@ export function RecoverView({ onBack }: { onBack: () => void }) {
       setPin('');
       setAgain('');
       setStep('saved');
-    } catch {
+    } catch (error) {
       setError(
-        t({
-          ar: 'تعذّر حفظ رمز الدخول الجديد. يمكنني المحاولة مرة أخرى.',
-          en: 'Could not save the PIN. I can try again.',
-        }),
+        t(
+          error instanceof LockWriteUnknownError
+            ? {
+                ar: 'ربما حُفظ رمز الدخول الجديد. يمكنني المحاولة مرة أخرى.',
+                en: 'The new PIN may have been saved. I can try again.',
+              }
+            : {
+                ar: 'تعذّر حفظ رمز الدخول الجديد. يمكنني المحاولة مرة أخرى.',
+                en: 'Could not save the PIN. I can try again.',
+              },
+        ),
       );
     } finally {
       setBusy(false);
