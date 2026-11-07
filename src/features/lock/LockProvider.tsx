@@ -26,6 +26,7 @@ import {
   writeLock,
   type LockRecord,
 } from './lockStore';
+import { noteLock, rememberErased, wasErased } from './erasedLocks';
 import {
   generateRecoveryCode,
   hashSecret,
@@ -180,6 +181,30 @@ export function LockProvider({
   useEffect(() => {
     pendingResetNotice = false;
   }, []);
+
+  // A record that an earlier erase removed can come back from disk (see erasedLocks); it is no lock.
+  useEffect(() => {
+    const start = initial.record;
+    if (!start) return;
+    let live = true;
+    void wasErased(start).then((erased) => {
+      const current = recordRef.current;
+      if (!live || !erased || !current || !sameSecret(current.pin, start.pin)) return;
+      clearLock();
+      setRecord(null);
+      setRecoveredBoth(false);
+      setLockedBoth(false);
+    });
+    return () => {
+      live = false;
+    };
+  }, [initial.record, setRecord, setLockedBoth, setRecoveredBoth]);
+
+  // Every PIN held here is noted durably, so an erase also covers an older PIN still on disk.
+  const pinKey = record ? `${record.pin.salt}:${record.pin.hash}` : null;
+  useEffect(() => {
+    if (pinKey && recordRef.current) void noteLock(recordRef.current);
+  }, [pinKey]);
 
   /**
    * Adopts the stored record when it is valid and differs from memory (another tab changed it), so this tab
@@ -438,6 +463,9 @@ export function LockProvider({
 
   const eraseEverything = useCallback(async () => {
     await repo.eraseAll();
+    // Durably mark the record erased before removing it: the localStorage removal may never reach the disk.
+    const erased = [recordRef.current, readLock()].filter((r): r is LockRecord => r !== null);
+    if (erased.length > 0) await rememberErased(erased);
     clearLock();
     window.location.reload();
   }, [repo]);

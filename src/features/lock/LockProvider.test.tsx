@@ -466,6 +466,87 @@ describe('LockProvider', () => {
     }
   });
 
+  describe('after an erase whose localStorage removal never reached the disk', () => {
+    // Android WebView commits localStorage to disk late (more than 20 s on the emulator), so a force-stop
+    // soon after an erase can bring the old record back. These tests put it back by hand, then cold start.
+    async function eraseThenLoseTheRemoval(): Promise<{ old: LockRecord; reload: ReturnType<typeof vi.fn> }> {
+      const old = await storeRecord();
+      const reload = vi.fn();
+      const original = window.location;
+      Object.defineProperty(window, 'location', { configurable: true, value: { ...original, reload } });
+      try {
+        const view = renderLock();
+        await call(() => api.eraseEverything());
+        expect(readLock()).toBeNull();
+        view.unmount();
+      } finally {
+        Object.defineProperty(window, 'location', { configurable: true, value: original });
+      }
+      writeLock(old);
+      return { old, reload };
+    }
+
+    it('the next start treats the erased record as no lock and removes it again', async () => {
+      const { reload } = await eraseThenLoseTheRemoval();
+      expect(reload).toHaveBeenCalledTimes(1);
+      renderLock();
+      await vi.waitFor(() => expect(isOpen()).toBe(true));
+      expect(api.enabled).toBe(false);
+      expect(localStorage.getItem(LOCK_STORAGE_KEY)).toBeNull();
+    });
+
+    it('an older PIN still on disk (changed but never written out) also counts as erased', async () => {
+      const older = await storeRecord();
+      const reload = vi.fn();
+      const original = window.location;
+      Object.defineProperty(window, 'location', { configurable: true, value: { ...original, reload } });
+      try {
+        const view = renderLock();
+        await call(async () => new Promise((r) => setTimeout(r, 20)));
+        await call(() => api.unlock('1357'));
+        await call(() => api.changePin('2468'));
+        expect(readLock()!.pin.salt).not.toBe(older.pin.salt);
+        await call(() => api.eraseEverything());
+        view.unmount();
+      } finally {
+        Object.defineProperty(window, 'location', { configurable: true, value: original });
+      }
+      writeLock(older);
+      renderLock();
+      await vi.waitFor(() => expect(isOpen()).toBe(true));
+      expect(localStorage.getItem(LOCK_STORAGE_KEY)).toBeNull();
+    });
+
+    it('a lock set up after the erase is kept', async () => {
+      await eraseThenLoseTheRemoval();
+      localStorage.clear();
+      await storeRecord();
+      renderLock();
+      expect(isLocked()).toBe(true);
+      await call(async () => new Promise((r) => setTimeout(r, 50)));
+      expect(isLocked()).toBe(true);
+      expect(readLock()).not.toBeNull();
+    });
+
+    it('erases and reloads even when the erased-lock store cannot be written', async () => {
+      await storeRecord();
+      vi.spyOn(indexedDB, 'open').mockImplementation(() => {
+        throw new Error('no indexedDB');
+      });
+      const reload = vi.fn();
+      const original = window.location;
+      Object.defineProperty(window, 'location', { configurable: true, value: { ...original, reload } });
+      try {
+        renderLock();
+        await call(() => api.eraseEverything());
+        expect(readLock()).toBeNull();
+        expect(reload).toHaveBeenCalledTimes(1);
+      } finally {
+        Object.defineProperty(window, 'location', { configurable: true, value: original });
+      }
+    });
+  });
+
   it('caps a wait stored while the clock was far ahead at 15 minutes from now', async () => {
     await storeRecord({ failures: 7, blockedUntil: Date.now() + 10 * 86400000 });
     renderLock();
