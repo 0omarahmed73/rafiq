@@ -24,6 +24,7 @@ import { ProfileCard } from './ProfileCard';
 import { CurrentCountryPicker } from './CurrentCountryPicker';
 import { LanguageChoice } from '../language/LanguageChoice';
 import { LockSettings } from '../lock/LockSettings';
+import { SyncSettings } from '../sync/SyncSettings';
 
 type Mode = 'replace' | 'merge';
 
@@ -273,6 +274,7 @@ export function SettingsPage({
       </section>
 
       <LockSettings />
+      <SyncSettings />
 
       <CurrentCountryPicker />
 

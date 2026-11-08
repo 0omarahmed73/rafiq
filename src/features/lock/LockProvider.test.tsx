@@ -17,6 +17,9 @@ import {
 import { hashSecret, normalizeRecoveryCode } from './pin';
 import { verifyBiometric } from '../../platform/biometric';
 import { IDBFactory } from 'fake-indexeddb';
+import { createSessionStorage, loadSyncKey, loadSyncMeta, saveSyncKey, saveSyncMeta } from '../sync/syncKeyStore';
+import { createFakeSyncServer } from '../sync/syncServer.fake';
+import { createSyncEngine } from '../sync/syncEngine';
 
 const fg = vi.hoisted(() => ({ cb: undefined as ((active: boolean) => void) | undefined }));
 vi.mock('../../platform/appState', () => ({
@@ -607,6 +610,37 @@ describe('LockProvider', () => {
         expect(erase.mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(clearLockDb).mock.invocationCallOrder[0]);
         expect(readLock()).toBeNull();
         expect(await readLockDb()).toEqual({ initialized: true, record: undefined });
+        expect(reload).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    it('stops sync before erasing, clears the IndexedDB sync identity, and stays off afterward', async () => {
+      await storeRecord();
+      const repo = createMemoryRepo();
+      const server = createFakeSyncServer();
+      const engine = createSyncEngine({ repo, server });
+      const stop = vi.spyOn(engine, 'stop');
+      const erase = vi.spyOn(repo, 'eraseAll');
+      const key = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+      const sessionStorage = createSessionStorage();
+      await saveSyncKey({ key, salt: 'salt', iter: 1000 });
+      await saveSyncMeta({ version: 4, lastSyncedAt: '2026-11-07T10:00:00.000Z' });
+      await sessionStorage.setItem('auth', 'stored-session');
+
+      await withReload(async (reload) => {
+        renderLock(repo);
+        await call(() => api.eraseEverything());
+        expect(stop).toHaveBeenCalledTimes(1);
+        expect(stop.mock.invocationCallOrder[0]).toBeLessThan(erase.mock.invocationCallOrder[0]);
+        expect(erase).toHaveBeenCalledTimes(1);
+        expect(await loadSyncKey()).toBeNull();
+        expect(await loadSyncMeta()).toEqual({ version: 0 });
+        expect(await sessionStorage.getItem('auth')).toBeNull();
+
+        await engine.syncNow();
+        expect(engine.getState()).toEqual({ status: 'off' });
+        expect(server.shared.gets).toBe(0);
+        expect(server.shared.pushes).toBe(0);
         expect(reload).toHaveBeenCalledTimes(1);
       });
     });

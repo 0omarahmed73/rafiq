@@ -13,6 +13,8 @@ import { useRepo } from '../../db/RepoContext';
 import { t } from '../../i18n';
 import { onForegroundChange } from '../../platform/appState';
 import { verifyBiometric } from '../../platform/biometric';
+import { clearSyncIdentity } from '../sync/syncKeyStore';
+import { stopActiveSync } from '../sync/syncEngine';
 import {
   AUTO_LOCK_OPTIONS,
   DEFAULT_AUTO_LOCK_MS,
@@ -487,12 +489,11 @@ export function LockProvider({
   }, [enqueue, syncFromStorage, setRecord, setLockedBoth, setRecoveredBoth]);
 
   const eraseEverything = useCallback(async () => {
-    // The data goes first, so a crash in between never leaves data without its lock. eraseLock removes the mirror
-    // at once, stops queued writes from bringing the record back and clears IndexedDB without waiting behind them;
-    // the wait is capped above lockDb's own timeout, so the app always reloads even if IndexedDB hangs.
+    // Stop sync before erasing data so a run cannot merge or push an empty snapshot after the reset.
+    await stopActiveSync();
     await repo.eraseAll();
     await Promise.race([
-      eraseLock(),
+      Promise.all([eraseLock(), clearSyncIdentity()]).then(() => undefined),
       new Promise<void>((resolve) => setTimeout(resolve, ERASE_CLEAR_TIMEOUT_MS)),
     ]);
     window.location.reload();
