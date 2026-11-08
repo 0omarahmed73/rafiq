@@ -9,6 +9,7 @@ import { loadSyncKey, loadSyncMeta, createSessionStorage } from './syncKeyStore'
 import {
   checkPassphrase,
   createSyncAccount,
+  SIGN_OUT_TIMEOUT_MS,
   SyncAccountError,
   type SyncAccount,
   type SyncAccountErrorKind,
@@ -226,6 +227,13 @@ describe('unlockVault', () => {
     await expectKind(d.account.unlockVault(PASS), 'notSignedIn');
   });
 
+  it('rejects with damaged for a malformed cloud copy and caches nothing', async () => {
+    const { a, b } = await twoDevices();
+    a.server.setEnvelope({ v: 1, junk: true });
+    await expectKind(b.account.unlockVault(PASS), 'damaged');
+    expect(await loadSyncKey()).toBeNull();
+  });
+
   it('rejects with noVault when there is no cloud copy', async () => {
     const d = await signedIn();
     await expectKind(d.account.unlockVault(PASS), 'noVault');
@@ -297,6 +305,12 @@ describe('resetVault', () => {
       status: 'attention',
       issue: 'keyChanged',
     });
+
+    // resetting from the affected device clears the card
+    await checkin(b.repo, 'b data');
+    await b.account.resetVault('a third passphrase');
+    expect(b.engine.getState()).toMatchObject({ status: 'idle' });
+    expect(b.engine.getState().issue).toBeUndefined();
   });
 
   it('leaves the old key and meta untouched when the server fails', async () => {
@@ -340,8 +354,12 @@ describe('resetVault', () => {
     const keyBefore = await loadSyncKey();
     const metaBefore = await loadSyncMeta();
     const vaultBefore = b.server.vault();
+    const pushes = b.server.pushCount();
+    const deriveKey = vi.spyOn(crypto.subtle, 'deriveKey');
 
     await expectKind(b.account.resetVault('a brand new passphrase'), 'emptyLocal');
+    expect(deriveKey).not.toHaveBeenCalled();
+    expect(b.server.pushCount()).toBe(pushes);
     expect(await loadSyncKey()).toEqual(keyBefore);
     expect(await loadSyncMeta()).toEqual(metaBefore);
     expect(b.server.vault()).toEqual(vaultBefore);
@@ -361,7 +379,7 @@ describe('resetVault', () => {
     expect(await a.account.localRecordCount()).toBe(0);
     await checkin(a.repo, 'one');
     await checkin(a.repo, 'two');
-    await a.repo.saveNote({ id: 'n1', text: 'a note' } as never);
+    await a.repo.saveNote({ id: 'n1', text: 'a note', createdAt: new Date().toISOString() });
     expect(await a.account.localRecordCount()).toBe(3);
     await a.repo.deleteNote('n1');
     expect(await a.account.localRecordCount()).toBe(2);
@@ -438,6 +456,45 @@ describe('signOut', () => {
     expect(await createSessionStorage().getItem('token')).toBeNull();
     expect(refresh).toHaveBeenCalledOnce();
     expect(a.engine.getState()).toEqual({ status: 'off' });
+  });
+});
+
+describe('signOut when the server stalls', () => {
+  it('resolves after the timeout and still clears the identity', async () => {
+    const a = await signedIn();
+    await checkin(a.repo, 'mine');
+    await a.account.createVault(PASS);
+    await createSessionStorage().setItem('token', 'x');
+    const stop = vi.spyOn(a.engine, 'stop');
+    a.server.signOut = () => new Promise<void>(() => undefined);
+
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      let done = false;
+      const result = a.account.signOut().then(() => {
+        done = true;
+      });
+      await vi.advanceTimersByTimeAsync(SIGN_OUT_TIMEOUT_MS - 1);
+      expect(done).toBe(false);
+      expect(await loadSyncKey()).not.toBeNull(); // nothing is cleared before the server call has had its chance
+      await vi.advanceTimersByTimeAsync(1);
+      await result;
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(await loadSyncKey()).toBeNull();
+    expect(await loadSyncMeta()).toEqual({ version: 0 });
+    expect(await createSessionStorage().getItem('token')).toBeNull();
+    expect(a.engine.getState()).toEqual({ status: 'off' });
+    expect(stop).not.toHaveBeenCalled();
+  });
+
+  it('never stops the engine on a normal sign-out either', async () => {
+    const a = await signedIn();
+    await a.account.createVault(PASS);
+    const stop = vi.spyOn(a.engine, 'stop');
+    await a.account.signOut();
+    expect(stop).not.toHaveBeenCalled();
   });
 });
 

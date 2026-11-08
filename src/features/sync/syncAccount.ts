@@ -16,6 +16,8 @@ import { clearSyncIdentity, saveSyncKey, saveSyncMeta } from './syncKeyStore';
 import { SyncServerError, type SyncServer } from './syncServer';
 
 export const MIN_PASSPHRASE_LENGTH = 10;
+/** How long sign-out waits for the server before it clears this device anyway. */
+export const SIGN_OUT_TIMEOUT_MS = 3000;
 export type PassphraseCheck = 'ok' | 'tooShort';
 /** 'unknown': the vault lookup failed after sign-in; retry with vaultStatus(). */
 export type VaultStatus = 'none' | 'exists' | 'unknown';
@@ -29,6 +31,7 @@ export type SyncAccountErrorKind =
   | 'vaultExists'
   | 'noVault'
   | 'emptyLocal'
+  | 'damaged'
   | 'unknown';
 
 /** A typed account failure. The message is fixed text: never a passphrase, key or server body. */
@@ -73,7 +76,10 @@ function toAccountError(error: unknown): SyncAccountError {
     const known = error.kind === 'network' || error.kind === 'auth' || error.kind === 'tooLarge';
     return new SyncAccountError(known ? error.kind : 'unknown');
   }
-  if (error instanceof EnvelopeError && error.kind === 'unsupported') return new SyncAccountError('newerVersion');
+  if (error instanceof EnvelopeError) {
+    if (error.kind === 'unsupported') return new SyncAccountError('newerVersion');
+    if (error.kind === 'format') return new SyncAccountError('damaged');
+  }
   return new SyncAccountError('unknown');
 }
 
@@ -173,10 +179,10 @@ export function createSyncAccount(deps: {
       guarded(async () => {
         requireLongEnough(passphrase);
         const session = await requireSession();
-        const salt = newSalt();
-        const key = await deriveVaultKey(passphrase, salt, iter);
         const data = toSyncData(await repo.exportAll());
         if (countRecords(data) === 0 && opts?.allowEmpty !== true) throw new SyncAccountError('emptyLocal');
+        const salt = newSalt();
+        const key = await deriveVaultKey(passphrase, salt, iter);
         const envelope = await encryptEnvelope(key, salt, session.userId, toPlaintext(data), iter);
         const { version } = await server.replaceVault(envelope);
         // Only now that the server holds the new copy does this device switch to the new key.
@@ -187,11 +193,20 @@ export function createSyncAccount(deps: {
 
     signOut: () =>
       guarded(async () => {
+        let timer: ReturnType<typeof setTimeout> | undefined;
         try {
-          await server.signOut();
+          // The token must still be here for the server call, so nothing is cleared first. A stalled or failing
+          // server must not keep the key on this device: the local sign-out is what matters.
+          await Promise.race([
+            server.signOut(),
+            new Promise<void>((resolve) => {
+              timer = setTimeout(resolve, SIGN_OUT_TIMEOUT_MS);
+            }),
+          ]);
         } catch {
-          // The local sign-out must still succeed when the server is unavailable.
+          // fall through to the local clear
         } finally {
+          clearTimeout(timer);
           await clearSyncIdentity();
           await engine.refresh();
         }
