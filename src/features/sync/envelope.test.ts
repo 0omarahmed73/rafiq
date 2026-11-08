@@ -3,6 +3,7 @@ import {
   EnvelopeError,
   KDF_ITERATIONS,
   MAX_KDF_ITERATIONS,
+  MAX_DECOMPRESSED_BYTES,
   assertSupportedKdf,
   decryptEnvelope,
   deriveVaultKey,
@@ -104,6 +105,13 @@ describe('envelope', () => {
     expect(env.gz).toBe(true);
     expect(env.ct.length).toBeLessThan(JSON.stringify(big).length / 4);
     expect(await decryptEnvelope(key, 'u1', env)).toEqual(big);
+  });
+
+  it('rejects gzip output above the mobile plaintext limit', async () => {
+    const { key, salt } = await setup();
+    const env = await encryptEnvelope(key, salt, 'u1', { text: 'x'.repeat(MAX_DECOMPRESSED_BYTES) }, ITER);
+    expect(env.gz).toBe(true);
+    expect(await kindOf(decryptEnvelope(key, 'u1', env))).toBe('tooLarge');
   });
 
   it('cannot decrypt with a key derived from a different salt', async () => {

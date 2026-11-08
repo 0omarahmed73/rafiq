@@ -74,7 +74,7 @@ export interface SyncAccount {
   resetVault(passphrase: string, opts?: { allowEmpty?: boolean }): Promise<void>;
   /** Records this device would upload: every synced table except settings (and deletion markers). */
   localRecordCount(): Promise<number>;
-  /** Clears the key, the meta and the session. Local data and the cloud copy are untouched. */
+  /** Clears the key, the meta and the session; rejects if the local clear fails. Local data and the cloud copy stay. */
   signOut(): Promise<void>;
 }
 
@@ -86,6 +86,7 @@ function toAccountError(error: unknown): SyncAccountError {
   }
   if (error instanceof EnvelopeError) {
     if (error.kind === 'unsupported') return new SyncAccountError('newerVersion');
+    if (error.kind === 'tooLarge') return new SyncAccountError('tooLarge');
     if (error.kind === 'format') return new SyncAccountError('damaged');
   }
   return new SyncAccountError('unknown');
@@ -223,9 +224,9 @@ export function createSyncAccount(deps: {
           // fall through to the local clear
         } finally {
           clearTimeout(timer);
-          await clearSyncIdentity();
-          await engine.refresh();
         }
+        await clearSyncIdentity();
+        await engine.refresh();
       }),
   };
 }

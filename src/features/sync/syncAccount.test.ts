@@ -494,6 +494,24 @@ describe('signOut', () => {
     expect(refresh).toHaveBeenCalledOnce();
     expect(a.engine.getState()).toEqual({ status: 'off' });
   });
+
+  it('reports a local identity clear failure instead of treating sign-out as complete', async () => {
+    const a = await signedIn();
+    await a.account.createVault(PASS);
+    await createSessionStorage().setItem('token', 'x');
+    const idb = globalThis.indexedDB;
+    const refresh = vi.spyOn(a.engine, 'refresh');
+    // @ts-expect-error simulate IndexedDB becoming unavailable during sign-out
+    globalThis.indexedDB = undefined;
+    try {
+      await expectKind(a.account.signOut(), 'unknown');
+    } finally {
+      globalThis.indexedDB = idb;
+    }
+    expect(await loadSyncKey()).not.toBeNull();
+    expect(await createSessionStorage().getItem('token')).toBe('x');
+    expect(refresh).not.toHaveBeenCalled();
+  });
 });
 
 describe('signOut when the server stalls', () => {

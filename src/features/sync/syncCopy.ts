@@ -31,8 +31,8 @@ export const ERRORS: Record<SyncAccountErrorKind, Bi> = {
   },
   auth: { ar: 'تعذّر التحقق من الحساب أو الرمز.', en: 'Could not verify the account or code.' },
   tooLarge: {
-    ar: 'النسخة أكبر من الحد الذي تسمح به الخدمة. بياناتي باقية على هذا الجهاز.',
-    en: 'This copy is larger than the service allows. My data stays on this device.',
+    ar: 'النسخة تتجاوز حد الحجم. بياناتي باقية على هذا الجهاز.',
+    en: 'This copy exceeds the size limit. My data stays on this device.',
   },
   vaultExists: {
     ar: 'توجد نسخة سحابية بالفعل. أفتحها بعبارة مرورها.',

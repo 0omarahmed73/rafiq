@@ -612,7 +612,7 @@ describe('LockProvider', () => {
       }
     }
 
-    it('erases the repo first, then clears the record durably, then reloads', async () => {
+    it('clears sync credentials before erasing the repo, clears the lock, then reloads', async () => {
       await storeRecord();
       const repo = createMemoryRepo();
       const erase = vi.spyOn(repo, 'eraseAll');
@@ -621,6 +621,7 @@ describe('LockProvider', () => {
         await call(() => api.eraseEverything());
         expect(erase).toHaveBeenCalledTimes(1);
         expect(vi.mocked(clearLockDb)).toHaveBeenCalledTimes(1);
+        expect(vi.mocked(clearSyncIdentity).mock.invocationCallOrder[0]).toBeLessThan(erase.mock.invocationCallOrder[0]);
         expect(erase.mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(clearLockDb).mock.invocationCallOrder[0]);
         expect(readLock()).toBeNull();
         expect(await readLockDb()).toEqual({ initialized: true, record: undefined });
@@ -646,6 +647,7 @@ describe('LockProvider', () => {
         await call(() => api.eraseEverything());
         expect(stop).toHaveBeenCalledTimes(1);
         expect(stop.mock.invocationCallOrder[0]).toBeLessThan(erase.mock.invocationCallOrder[0]);
+        expect(vi.mocked(clearSyncIdentity).mock.invocationCallOrder[0]).toBeLessThan(erase.mock.invocationCallOrder[0]);
         expect(erase).toHaveBeenCalledTimes(1);
         expect(await loadSyncKey()).toBeNull();
         expect(await loadSyncMeta()).toEqual({ version: 0 });
@@ -753,17 +755,18 @@ describe('LockProvider', () => {
       }
     }
 
-    it('reloads even when clearing the sync identity never finishes', async () => {
+    it('preserves local data and the lock when clearing the sync identity fails', async () => {
       await storeRecord();
-      vi.mocked(clearSyncIdentity).mockImplementation(() => new Promise(() => {}));
+      vi.mocked(clearSyncIdentity).mockRejectedValue(new Error('IndexedDB unavailable'));
       const repo = createMemoryRepo();
       const erase = vi.spyOn(repo, 'eraseAll');
       await withReload(async (reload) => {
         renderLock(repo);
-        await eraseWithFakeClock(reload);
-        expect(erase).toHaveBeenCalledTimes(1);
+        await expect(call(() => api.eraseEverything())).rejects.toThrow('IndexedDB unavailable');
+        expect(erase).not.toHaveBeenCalled();
         expect(vi.mocked(clearSyncIdentity)).toHaveBeenCalledTimes(1);
-        expect(readLock()).toBeNull();
+        expect(readLock()).not.toBeNull();
+        expect(vi.mocked(clearLockDb)).not.toHaveBeenCalled();
         expect(reload).toHaveBeenCalledTimes(1);
       });
     });

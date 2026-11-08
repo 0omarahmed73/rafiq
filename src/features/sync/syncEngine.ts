@@ -81,7 +81,10 @@ class Halt {
 const RETRIED: ReadonlySet<SyncIssue> = new Set(['busy', 'unknown']);
 
 function envelopeIssue(error: unknown): SyncIssue {
-  return error instanceof EnvelopeError && error.kind === 'unsupported' ? 'newerVersion' : 'damaged';
+  if (!(error instanceof EnvelopeError)) return 'damaged';
+  if (error.kind === 'unsupported') return 'newerVersion';
+  if (error.kind === 'tooLarge') return 'tooLarge';
+  return 'damaged';
 }
 
 /** The most recently created engine, for stopActiveSync(). */
@@ -172,9 +175,14 @@ export function createSyncEngine(deps: SyncEngineDeps): SyncEngine {
    * Another account signed in on top of a cached key: its data must never be merged here, nor this device's data
    * pushed there under this key. Sign out and forget the key, the meta and the session; local data stays.
    */
-  async function dropForeign(): Promise<void> {
+  async function dropForeign(email: string): Promise<void> {
     // This device forgets first; the server sign-out is best effort and bounded, so a stalled call cannot hang the run.
-    await clearSyncIdentity();
+    try {
+      await clearSyncIdentity();
+    } catch {
+      if (!stopped) fail('unknown', email);
+      return;
+    }
     let timer: ReturnType<typeof setTimeout> | undefined;
     await Promise.race([
       server.signOut().catch(() => undefined),
@@ -286,7 +294,7 @@ export function createSyncEngine(deps: SyncEngineDeps): SyncEngine {
       return;
     }
     if (foreign(who)) {
-      await dropForeign();
+      await dropForeign(who.session.email);
       return;
     }
     const { session } = who;

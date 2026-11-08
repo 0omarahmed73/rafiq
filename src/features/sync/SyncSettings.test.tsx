@@ -268,6 +268,22 @@ describe('SyncSettings: turning sync on', () => {
     expect(screen.queryByLabelText('Passphrase')).not.toBeInTheDocument();
   });
 
+  it('keeps the set-up step open when sign-out cannot clear the local session', async () => {
+    const user = userEvent.setup();
+    const account = fakeAccount();
+    account.verifyCode.mockResolvedValue({ email: EMAIL, vault: 'none' });
+    account.signOut.mockRejectedValue(new SyncAccountError('unknown'));
+    renderWithSync({ account });
+    await enterCode(user);
+    await screen.findByLabelText('Passphrase');
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(screen.getByLabelText('Passphrase')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Turn on sync' })).not.toBeInTheDocument();
+  });
+
   it('disables Cancel while a request is in flight', async () => {
     const user = userEvent.setup();
     const account = fakeAccount();
@@ -284,7 +300,7 @@ describe('SyncSettings: turning sync on', () => {
   });
 
   it.each<[SyncState, string]>([
-    [{ status: 'attention', issue: 'tooLarge', email: EMAIL }, 'larger than the service allows'],
+    [{ status: 'attention', issue: 'tooLarge', email: EMAIL }, 'exceeds the size limit'],
     [{ status: 'offline', email: EMAIL }, 'Offline. I will retry when I am online.'],
     [{ status: 'attention', issue: 'keyChanged', email: EMAIL }, 'The passphrase changed on another device.'],
   ])('shows the live state %j after unlocking, not the confirmation', async (final, text) => {

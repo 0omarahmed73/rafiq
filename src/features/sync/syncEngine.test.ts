@@ -6,6 +6,7 @@ import { decryptEnvelope, deriveVaultKey, encryptEnvelope, newSalt } from './env
 import { parseRemote, sameSyncData, toPlaintext, toSyncData, type SyncData } from './syncData';
 import { SIGN_OUT_TIMEOUT_MS } from './syncAccount';
 import { createSyncEngine, stopActiveSync, type SyncEngine, type SyncState } from './syncEngine';
+import * as syncKeyStore from './syncKeyStore';
 import { clearSyncIdentity, loadSyncKey, loadSyncMeta, saveSyncKey, saveSyncMeta, type SyncKey } from './syncKeyStore';
 import { createFakeSyncServer, FAKE_CODE, type FakeBackingStore, type FakeSyncServer } from './syncServer.fake';
 
@@ -985,6 +986,22 @@ describe('sync engine: the account the key belongs to', () => {
     await until(() => done);
     expect(d.engine.getState()).toEqual({ status: 'off' });
     expect(d.server.pushCount()).toBe(0);
+  });
+
+  it('keeps an error state and retries when a foreign identity cannot be cleared', async () => {
+    const d = await device();
+    await saveSyncKey({ ...(await makeKey()), userId: 'user-other' });
+    const clear = vi.spyOn(syncKeyStore, 'clearSyncIdentity').mockRejectedValueOnce(new Error('IndexedDB failed'));
+
+    await d.engine.syncNow();
+
+    expect(d.engine.getState()).toEqual({ status: 'attention', issue: 'unknown', email: EMAIL });
+    expect(clear).toHaveBeenCalledOnce();
+    expect(await loadSyncKey()).not.toBeNull();
+    expect(await d.server.session()).not.toBeNull();
+    expect(d.server.pushCount()).toBe(0);
+    expect(d.server.getCount()).toBe(0);
+    clear.mockRestore();
   });
 
   it('reports off on refresh while another account is signed in on top of the key', async () => {

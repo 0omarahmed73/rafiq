@@ -54,7 +54,7 @@ describe('SyncSettings: the on panel', () => {
   });
 
   it.each<[SyncIssue, string]>([
-    ['tooLarge', 'This copy is larger than the service allows. My data stays on this device.'],
+    ['tooLarge', 'This copy exceeds the size limit. My data stays on this device.'],
     ['auth', 'My sign-in expired. I sign in again to keep syncing.'],
     ['busy', 'The copy changed repeatedly during sync. I will try again.'],
     ['unknown', 'That did not work. I can try again.'],
@@ -248,6 +248,18 @@ describe('SyncSettings: the on panel', () => {
     expect(await screen.findByRole('button', { name: 'Turn on sync' })).toBeInTheDocument();
     await act(async () => undefined);
     expect(cardStatus()).toHaveTextContent('I turned off sync on this device. My local data stays here.');
+  });
+
+  it('does not report sync turned off when clearing the local identity fails', async () => {
+    const user = userEvent.setup();
+    const account = fakeAccount();
+    account.signOut.mockRejectedValue(new Error('IndexedDB unavailable'));
+    onCard({ status: 'idle', email: EMAIL }, account);
+    await user.click(screen.getByRole('button', { name: 'Turn off sync on this device' }));
+    await user.click(screen.getByRole('button', { name: 'Confirm turning off' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('That did not work. I can try again.');
+    expect(screen.getByRole('button', { name: 'Confirm turning off' })).toBeInTheDocument();
+    expect(screen.queryByText('I turned off sync on this device. My local data stays here.')).not.toBeInTheDocument();
   });
 
   it.each([

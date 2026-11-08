@@ -4,6 +4,8 @@
 export const KDF_ITERATIONS = 600_000;
 // A row from the server is untrusted; an absurd iteration count would hang the unlock, so it is bounded.
 export const MAX_KDF_ITERATIONS = 10_000_000;
+// Bound gzip expansion on mobile even when a small, authenticated envelope expands dramatically.
+export const MAX_DECOMPRESSED_BYTES = 16 * 1024 * 1024;
 
 export interface Envelope {
   v: 1;
@@ -14,7 +16,7 @@ export interface Envelope {
   ct: string;
 }
 
-export type EnvelopeErrorKind = 'unsupported' | 'decrypt' | 'format';
+export type EnvelopeErrorKind = 'unsupported' | 'decrypt' | 'format' | 'tooLarge';
 
 export class EnvelopeError extends Error {
   kind: EnvelopeErrorKind;
@@ -53,12 +55,26 @@ function fromBase64(text: string): Uint8Array {
 async function pipe(
   bytes: Uint8Array,
   transform: CompressionStream | DecompressionStream,
+  maxOutputBytes?: number,
 ): Promise<Uint8Array> {
   const writer = transform.writable.getWriter();
   // Errors surface on the read side; keep the write side from raising an unhandled rejection.
   writer.write(bytes as BufferSource).catch(() => undefined);
   writer.close().catch(() => undefined);
-  return new Uint8Array(await new Response(transform.readable).arrayBuffer());
+  let readable: ReadableStream<Uint8Array> = transform.readable;
+  if (maxOutputBytes !== undefined) {
+    let size = 0;
+    readable = readable.pipeThrough(
+      new TransformStream<Uint8Array, Uint8Array>({
+        transform(chunk, controller) {
+          size += chunk.byteLength;
+          if (size > maxOutputBytes) throw new EnvelopeError('tooLarge', 'Decompressed data exceeds the size limit');
+          controller.enqueue(chunk);
+        },
+      }),
+    );
+  }
+  return new Uint8Array(await new Response(readable).arrayBuffer());
 }
 
 const canGzip = () => typeof CompressionStream === 'function' && typeof DecompressionStream === 'function';
@@ -186,7 +202,9 @@ export async function decryptEnvelope(key: CryptoKey, userId: string, envelope: 
   try {
     if (envelope.gz) {
       if (!canGzip()) throw new EnvelopeError('unsupported', 'Compression is not available');
-      data = await pipe(data, new DecompressionStream('gzip'));
+      data = await pipe(data, new DecompressionStream('gzip'), MAX_DECOMPRESSED_BYTES);
+    } else if (data.byteLength > MAX_DECOMPRESSED_BYTES) {
+      throw new EnvelopeError('tooLarge', 'Decrypted data exceeds the size limit');
     }
     return JSON.parse(decoder.decode(data));
   } catch (error) {

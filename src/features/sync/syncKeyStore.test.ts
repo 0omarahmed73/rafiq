@@ -141,29 +141,20 @@ describe('syncKeyStore', () => {
     await expect(clearSyncIdentity()).resolves.toBeUndefined();
   });
 
-  it('clearSyncIdentity resolves within its timeout when IndexedDB never answers', async () => {
+  it('clearSyncIdentity rejects within its timeout when IndexedDB never answers', async () => {
     globalThis.indexedDB = silentFactory();
     fakeTimeouts();
-    let done = false;
-    const promise = clearSyncIdentity(100).then(() => {
-      done = true;
-    });
+    const promise = expect(clearSyncIdentity(100)).rejects.toThrow('IndexedDB timed out');
     await vi.advanceTimersByTimeAsync(99);
-    expect(done).toBe(false);
     await vi.advanceTimersByTimeAsync(1);
     await promise;
-    expect(done).toBe(true);
   });
 
-  it('clearSyncIdentity defaults to a 2500 ms timeout', async () => {
+  it('clearSyncIdentity uses a 2500 ms timeout by default', async () => {
     globalThis.indexedDB = silentFactory();
     fakeTimeouts();
-    let done = false;
-    const promise = clearSyncIdentity().then(() => {
-      done = true;
-    });
+    const promise = expect(clearSyncIdentity()).rejects.toThrow('IndexedDB timed out');
     await vi.advanceTimersByTimeAsync(2499);
-    expect(done).toBe(false);
     await vi.advanceTimersByTimeAsync(1);
     await promise;
   });
@@ -300,10 +291,10 @@ describe('syncKeyStore', () => {
     await expect(storage.removeItem('a')).rejects.toBeDefined();
   });
 
-  it('clearSyncIdentity resolves when IndexedDB is unavailable', async () => {
+  it('clearSyncIdentity rejects when IndexedDB is unavailable', async () => {
     // @ts-expect-error simulate a missing IndexedDB
     globalThis.indexedDB = undefined;
-    await expect(clearSyncIdentity()).resolves.toBeUndefined();
+    await expect(clearSyncIdentity()).rejects.toThrow('IndexedDB is not available');
   });
 
   it('degrades when IndexedDB is unavailable', async () => {

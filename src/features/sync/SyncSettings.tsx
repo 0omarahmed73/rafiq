@@ -150,12 +150,9 @@ function ConfiguredSyncSettings({ sync }: { sync: SyncApi }) {
   /** Leaving set-up after the code was accepted: sign out so no session is left without a key. */
   const cancelSetup = () =>
     run(async () => {
-      try {
-        await account.signOut();
-      } finally {
-        setEmail('');
-        go('off');
-      }
+      await account.signOut();
+      setEmail('');
+      go('off');
     });
 
   const cancelVaultStep = () => (flow === 'setup' ? void cancelSetup() : go('on'));

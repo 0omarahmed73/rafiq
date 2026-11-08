@@ -489,15 +489,18 @@ export function LockProvider({
   }, [enqueue, syncFromStorage, setRecord, setLockedBoth, setRecoveredBoth]);
 
   const eraseEverything = useCallback(async () => {
-    // Sync stops first (its own wait is capped), so a run cannot merge into or push an empty snapshot after the
-    // reset. Then the data goes, before the lock, so a crash in between never leaves data without its lock. eraseLock
-    // removes the mirror at once, stops queued writes from bringing the record back and clears IndexedDB without
-    // waiting behind them; clearSyncIdentity removes the sync key, meta and session. Their wait is capped above
-    // lockDb's own timeout, so the app always reloads even if IndexedDB hangs.
+    // Sync stops first. Clear cloud credentials before local data so a failed IndexedDB clear cannot restore erased
+    // data from the cloud on the next start. Then erase data before the lock so a crash cannot leave data unprotected.
     await stopActiveSync();
+    try {
+      await clearSyncIdentity();
+    } catch (error) {
+      window.location.reload(); // stop() is final, so restart the engine after an aborted erase.
+      throw error;
+    }
     await repo.eraseAll();
     await Promise.race([
-      Promise.all([eraseLock(), clearSyncIdentity()]).then(() => undefined),
+      eraseLock(),
       new Promise<void>((resolve) => setTimeout(resolve, ERASE_CLEAR_TIMEOUT_MS)),
     ]);
     window.location.reload();

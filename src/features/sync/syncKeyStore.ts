@@ -226,18 +226,12 @@ export function createSessionStorage(): {
   };
 }
 
-/**
- * Deletes the key, the meta and every session item. Best-effort: it never rejects and resolves within `timeoutMs`,
- * so a caller cannot tell whether the key or the session stayed on disk (a timeout leaves the outcome UNKNOWN).
- */
+/** Deletes the key, the meta and every session item in one transaction; rejects if deletion is unconfirmed. */
 export function clearSyncIdentity(timeoutMs: number = CLEAR_TIMEOUT_MS): Promise<void> {
   return run('readwrite', timeoutMs, (store) => {
     store.delete(KEY);
     store.delete(META);
     store.delete(IDBKeyRange.bound(SESSION_PREFIX, SESSION_PREFIX + '￿'));
     return () => undefined;
-  }).then(
-    () => undefined,
-    () => undefined,
-  );
+  });
 }
