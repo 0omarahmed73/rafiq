@@ -132,6 +132,12 @@ describe('sign-in', () => {
     await createSupabaseServer(client).signOut();
     expect(auth.signOut).toHaveBeenCalledTimes(1);
   });
+
+  it('signOut only ends this device (scope local), never every device', async () => {
+    const { client, auth } = makeClient();
+    await createSupabaseServer(client).signOut();
+    expect(auth.signOut).toHaveBeenCalledWith({ scope: 'local' });
+  });
 });
 
 describe('getVault', () => {
@@ -229,6 +235,66 @@ describe('replaceVault', () => {
     expect(await kindOf(createSupabaseServer(auth.client).replaceVault(envelope))).toBe('auth');
     const bad = makeClient({ rpc: ok('nope') });
     expect(await kindOf(createSupabaseServer(bad.client).replaceVault(envelope))).toBe('unknown');
+  });
+});
+
+describe('expired or revoked sessions', () => {
+  const refreshFailure = (code: string) => ({ name: 'AuthApiError', status: 400, code, message: 'refresh failed' });
+  const callers: Array<[string, (s: ReturnType<typeof createSupabaseServer>) => Promise<unknown>]> = [
+    ['session', (s) => s.session()],
+    ['getVault', (s) => s.getVault()],
+    ['pushVault', (s) => s.pushVault(1, envelope)],
+    ['replaceVault', (s) => s.replaceVault(envelope)],
+  ];
+
+  for (const code of ['refresh_token_not_found', 'refresh_token_already_used', 'session_expired', 'session_not_found']) {
+    it(`maps getSession failing with ${code} to auth for every call`, async () => {
+      for (const [, run] of callers) {
+        const { client } = makeClient({ session: fail(refreshFailure(code)) });
+        expect(await kindOf(run(createSupabaseServer(client)))).toBe('auth');
+      }
+    });
+  }
+
+  it('maps the refresh-token and missing-session messages to auth', async () => {
+    for (const [name, message] of [
+      ['AuthApiError', 'Invalid Refresh Token: Refresh Token Not Found'],
+      ['AuthSessionMissingError', 'Auth session missing!'],
+    ]) {
+      const { client } = makeClient({ session: fail({ name, status: 400, message }) });
+      expect(await kindOf(createSupabaseServer(client).session())).toBe('auth');
+    }
+  });
+
+  it('maps PostgREST 28000 and 42501 to auth on the vault calls', async () => {
+    for (const code of ['28000', '42501']) {
+      const pg = { code, message: 'denied', status: 403 };
+      const vault = createSupabaseServer(makeClient({ maybeSingle: fail(pg) }).client);
+      const rpc = createSupabaseServer(makeClient({ rpc: fail(pg) }).client);
+      expect(await kindOf(vault.getVault())).toBe('auth');
+      expect(await kindOf(rpc.pushVault(1, envelope))).toBe('auth');
+      expect(await kindOf(rpc.replaceVault(envelope))).toBe('auth');
+    }
+  });
+
+  it('keeps an unrelated 400 as unknown outside the code sign-in', async () => {
+    const bad = { name: 'AuthApiError', status: 400, code: 'validation_failed', message: 'x' };
+    const other = makeClient({ session: fail(bad) });
+    expect(await kindOf(createSupabaseServer(other.client).session())).toBe('unknown');
+  });
+
+  it('keeps the thrown message fixed text', async () => {
+    const leaky = `refresh_token_not_found ${CODE} ${EMAIL} ACCESS-TOKEN-1`;
+    const bad = { name: 'AuthApiError', status: 400, code: 'session_expired', message: leaky };
+    const { client } = makeClient({ session: fail(bad) });
+    try {
+      await createSupabaseServer(client).session();
+      throw new Error('did not throw');
+    } catch (e) {
+      for (const secret of [CODE, EMAIL, 'ACCESS-TOKEN-1', 'refresh_token_not_found']) {
+        expect((e as Error).message).not.toContain(secret);
+      }
+    }
   });
 });
 

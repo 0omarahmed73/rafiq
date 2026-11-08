@@ -22,7 +22,7 @@ export interface SupabaseClientLike {
     signInWithOtp(params: { email: string; options: { shouldCreateUser: boolean } }): PromiseLike<Result>;
     verifyOtp(params: { email: string; token: string; type: 'email' }): PromiseLike<Result>;
     getSession(): PromiseLike<Result>;
-    signOut(): PromiseLike<{ error: unknown }>;
+    signOut(options: { scope: 'local' }): PromiseLike<{ error: unknown }>;
   };
   from(table: string): { select(columns: string): { maybeSingle(): PromiseLike<Result> } };
   rpc(name: string, args: Record<string, unknown>): PromiseLike<Result>;
@@ -51,6 +51,17 @@ interface ErrorFields {
   code?: unknown;
 }
 
+// A session that can no longer be refreshed (expired, revoked, used twice) and the database's own auth errors.
+const AUTH_CODES = new Set([
+  'refresh_token_not_found',
+  'refresh_token_already_used',
+  'session_expired',
+  'session_not_found',
+  'PGRST301',
+  '28000',
+  '42501',
+]);
+const AUTH_TEXT = /invalid refresh token|auth session missing|jwt/i;
 const NETWORK_TEXT = /failed to fetch|networkerror|network request failed|load failed|fetch failed|timed? ?out/i;
 
 function kindOf(error: unknown, otp = false): SyncServerErrorKind {
@@ -63,7 +74,7 @@ function kindOf(error: unknown, otp = false): SyncServerErrorKind {
   if (error instanceof TypeError || name === 'AuthRetryableFetchError' || status === 0 || NETWORK_TEXT.test(message)) {
     return 'network';
   }
-  if (name === 'AuthSessionMissingError' || status === 401 || code === 'PGRST301' || /jwt/i.test(message)) {
+  if (name === 'AuthSessionMissingError' || status === 401 || AUTH_CODES.has(code) || AUTH_TEXT.test(message)) {
     return 'auth';
   }
   if (otp && (status === 400 || status === 403 || status === 422 || code.startsWith('otp_'))) return 'auth';
@@ -119,7 +130,8 @@ export function createSupabaseServer(client: SupabaseClientLike = defaultClient(
     },
     session: stored,
     async signOut() {
-      await call(() => client.auth.signOut());
+      // 'local' ends this device only; the default 'global' would revoke the refresh tokens of every device.
+      await call(() => client.auth.signOut({ scope: 'local' }));
     },
     async getVault(): Promise<VaultRow | null> {
       await requireSession();

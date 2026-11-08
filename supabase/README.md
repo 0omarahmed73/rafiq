@@ -5,16 +5,22 @@ The schema and the two functions live in `migrations/0001_vaults.sql`. The migra
 project yet: apply it to a test project and run the SQL checks (another user cannot read or write a vault, a stale
 `expected_version` is refused, the 5 MB cap is enforced) before relying on it.
 
-## 1. Apply the migration
+## 1. Apply the migrations
 
-Either:
+Apply `migrations/0001_vaults.sql` and then `migrations/0002_hardening.sql`, in that order, with ONE method only:
 
-- Open the project's SQL editor, paste the contents of `migrations/0001_vaults.sql` and run it once; or
+- Open the project's SQL editor, paste each file's contents in order and run it once; or
 - With the Supabase CLI: `supabase link --project-ref <ref>` then `supabase db push`.
+
+Do not mix the two methods: `0001` is not idempotent (it uses plain `create table` / `create function`), so a second
+run fails. `0002` only replaces `push_vault` and is safe to repeat. A project that already ran `0001` needs `0002`.
+Neither file was executed by the review process: the SQL was only read, never run, so test it on a project first.
 
 ## 2. Auth settings (Authentication, Providers and Email)
 
 - The Email provider is on.
+- Keep "Allow anonymous sign-ins" OFF. Anonymous users get the `authenticated` role, so each could store a vault
+  (up to about 10 MB including the previous copy).
 - Sign-ups are allowed (the app signs new users up with `shouldCreateUser`).
 - The "Magic Link" / "Confirm signup" email templates show the code: put `{{ .Token }}` in the body (the 6-digit
   code the app asks for). The app does not use the link.
@@ -33,6 +39,10 @@ and the two functions are the protection. Never use the `service_role` key in th
 sync stays off.
 
 ## Before real users
+
+- Open sign-ups plus up to 5 MB (about 10 MB with the previous copy) per account is a storage-abuse risk on the free
+  tier's 500 MB database. Watch usage, and consider limiting sign-ups or adding quotas.
+- `session()` may refresh an expired access token, so it can hit the network and fail with a network error.
 
 - Supabase's built-in email sender is limited to a few emails per hour and is meant for testing. Configure a custom
   SMTP sender (for example Resend) on a domain you own before launch.
