@@ -521,8 +521,8 @@ describe('LockScreen', () => {
         await user.type(field, '{Backspace}');
         expect(confirm).toBeEnabled();
         await user.click(confirm);
-        expect(erase).toHaveBeenCalledTimes(1);
-        // The data is erased first and the lock removal is stored after it, so it comes a little later.
+        await vi.waitFor(() => expect(erase).toHaveBeenCalledTimes(1));
+        // Sync credentials clear before local data; lock removal and reload follow the data erase.
         await vi.waitFor(() => expect(restore.reload).toHaveBeenCalledTimes(1));
         expect(readLock()).toBeNull();
         expect(await stored()).toBeUndefined();
@@ -555,7 +555,7 @@ describe('LockScreen', () => {
         await user.type(screen.getByLabelText('Type ERASE to confirm'), 'ERASE');
         expect(confirm).toBeEnabled();
         await user.click(confirm);
-        expect(erase).toHaveBeenCalledTimes(1);
+        await vi.waitFor(() => expect(erase).toHaveBeenCalledTimes(1));
         // The reload comes after the lock removal; it must reach the stand-in, not jsdom.
         await vi.waitFor(() => expect(restore.reload).toHaveBeenCalledTimes(1));
       } finally {

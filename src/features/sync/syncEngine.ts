@@ -1,0 +1,425 @@
+// The sync loop: pull the cloud copy, merge it into this device, push the merged result when it differs.
+// One run at a time; requests during a run coalesce into one follow-up. Local data is written only after the cloud
+// copy has decrypted and validated, and every write or push is preceded by a check that the engine was not stopped
+// and the session and key are still the ones the run started with. Nothing here logs, and the state never carries a
+// key or a passphrase.
+import type { Repo } from '../../db/repo';
+import { assertSupportedKdf, decryptEnvelope, encryptEnvelope, EnvelopeError } from './envelope';
+import {
+  orphanPhotoIds,
+  parseRemote,
+  prepareRemote,
+  sameSyncData,
+  toPlaintext,
+  toSyncData,
+  type SyncData,
+} from './syncData';
+import { SIGN_OUT_TIMEOUT_MS } from './syncAccount';
+import { bindSyncKey, clearSyncIdentity, loadSyncKey, loadSyncMeta, saveSyncMeta, type SyncKey } from './syncKeyStore';
+import { SyncServerError, type SyncServer, type SyncSession, type VaultRow } from './syncServer';
+
+export type SyncStatus = 'off' | 'idle' | 'syncing' | 'offline' | 'attention';
+export type SyncIssue =
+  'wrongPassphrase' | 'keyChanged' | 'damaged' | 'newerVersion' | 'tooLarge' | 'auth' | 'busy' | 'unknown';
+
+export interface SyncState {
+  status: SyncStatus;
+  issue?: SyncIssue;
+  lastSyncedAt?: string;
+  email?: string;
+}
+
+export type SyncReason = 'start' | 'change' | 'foreground' | 'online' | 'manual';
+
+export interface SyncEngine {
+  getState(): SyncState;
+  subscribe(fn: (s: SyncState) => void): () => void;
+  /** Schedules the start sync (about 2 s); it only reaches the server when signed in with a cached key. */
+  start(): void;
+  /**
+   * Final: clears every timer, cancels a pending follow-up and makes every later call a no-op. A run in flight
+   * stops before its next write, push or key-store write. There is no restart: create a new engine to sync again,
+   * so a React unmount/remount must never call this.
+   *
+   * It cannot interrupt a `repo.mergeAll` that is already running (the merge is one atomic transaction), and it does
+   * not wait: use `stopActiveSync()`, which also waits for the run in flight, before erasing data.
+   */
+  stop(): void;
+  /** 'change' is debounced 5 s; 'manual' runs now and resets the backoff; the others run now. */
+  requestSync(reason: SyncReason): void;
+  /** Runs one sync (or joins the current one and its follow-up) and resolves when it finished. Never rejects. */
+  syncNow(): Promise<void>;
+  /** Resolves when no run is in flight. Never rejects. */
+  whenIdle(): Promise<void>;
+  /**
+   * Re-reads the session and the key (after sign-in or sign-out): `off` without them; otherwise updates the email
+   * and last sync time and keeps the last run's status and issue (`off` becomes `idle`).
+   */
+  refresh(): Promise<void>;
+}
+
+export interface SyncEngineDeps {
+  /** The raw repo: the engine's own writes must never count as local changes. */
+  repo: Repo;
+  server: SyncServer;
+  /** Called after a run whose merge changed this device's data (to reload the screens). Never for a no-op merge. */
+  onMerged?: () => void;
+}
+
+export const START_DELAY_MS = 2_000;
+export const CHANGE_DEBOUNCE_MS = 5_000;
+export const BACKOFF_MS = [30_000, 120_000, 600_000, 1_800_000] as const;
+export const MAX_ATTEMPTS = 3;
+export const STOP_TIMEOUT_MS = 2_500;
+
+/** Ends a run with an issue ('off': the session or key went away; 'stopped': stop() was called). */
+class Halt {
+  constructor(readonly issue: SyncIssue | 'off' | 'stopped') {}
+}
+
+/** Issues that clear only when something changes (a new key, a new sign-in, a smaller copy): no automatic retry. */
+const RETRIED: ReadonlySet<SyncIssue> = new Set(['busy', 'unknown']);
+
+function envelopeIssue(error: unknown): SyncIssue {
+  if (!(error instanceof EnvelopeError)) return 'damaged';
+  if (error.kind === 'unsupported') return 'newerVersion';
+  if (error.kind === 'tooLarge') return 'tooLarge';
+  return 'damaged';
+}
+
+/** The most recently created engine, for stopActiveSync(). */
+let latest: SyncEngine | null = null;
+
+/**
+ * Stops the most recently created engine and waits until its run in flight has finished, or `timeoutMs` passed.
+ * Never rejects; resolves at once when no engine exists. Only the latest engine is stopped (see createSyncEngine).
+ *
+ * REQUIRED ORDER for erasing everything: `await stopActiveSync()` BEFORE `repo.eraseAll()` and before clearing the
+ * key store. The caller is the erase flow in the lock provider (Task 8). Sign-out must NOT call this (stop is final):
+ * it clears the sync identity and then calls `engine.refresh()`; a run in flight notices the missing identity before
+ * its next write or push and ends as `off`.
+ *
+ * Limits: stop() cannot interrupt a `repo.mergeAll` already running, so waiting here is what keeps that merge from
+ * landing after the erase. After the timeout this resolves even if a run is still inside `pushVault`; such a late
+ * push carries data exported before the stop (pre-erase data), never an empty snapshot.
+ */
+export function stopActiveSync(timeoutMs: number = STOP_TIMEOUT_MS): Promise<void> {
+  const engine = latest;
+  if (!engine) return Promise.resolve();
+  engine.stop();
+  return new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, timeoutMs);
+    void engine.whenIdle().then(() => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+}
+
+/**
+ * Creates the sync engine. Contract for the app:
+ * - Create it ONCE, outside React (e.g. in main.tsx), with the raw repo. `stop()` is final, so a React
+ *   unmount/remount (StrictMode) must never call it, and UI components must not create engines.
+ * - Only ONE live engine is supported: `stopActiveSync()` stops only the most recently created one; an older engine
+ *   still running would keep syncing and could race an erase.
+ */
+export function createSyncEngine(deps: SyncEngineDeps): SyncEngine {
+  const { repo, server, onMerged } = deps;
+  let state: SyncState = { status: 'off' };
+  const listeners = new Set<(s: SyncState) => void>();
+  let loop: Promise<void> | null = null;
+  let pending = false;
+  let stopped = false;
+  let failures = 0;
+  const timers: Record<'start' | 'change' | 'retry', ReturnType<typeof setTimeout> | undefined> = {
+    start: undefined,
+    change: undefined,
+    retry: undefined,
+  };
+
+  function publish(next: SyncState): void {
+    const clean: SyncState = { status: next.status };
+    if (next.issue) clean.issue = next.issue;
+    if (next.lastSyncedAt) clean.lastSyncedAt = next.lastSyncedAt;
+    if (next.email) clean.email = next.email;
+    if (JSON.stringify(clean) === JSON.stringify(state)) return;
+    state = clean;
+    for (const fn of [...listeners]) fn(state);
+  }
+
+  function clearTimer(name: keyof typeof timers): void {
+    clearTimeout(timers[name]);
+    timers[name] = undefined;
+  }
+
+  function schedule(name: keyof typeof timers, ms: number): void {
+    clearTimer(name);
+    if (stopped) return;
+    timers[name] = setTimeout(() => {
+      timers[name] = undefined;
+      void kick();
+    }, ms);
+  }
+
+  async function identity(): Promise<{ session: SyncSession; key: SyncKey } | null> {
+    const [session, key] = await Promise.all([server.session().catch(() => null), loadSyncKey()]);
+    return session && key ? { session, key } : null;
+  }
+
+  /** The session is another account than the one the key was cached for (a key without an account is unknown). */
+  function foreign(who: { session: SyncSession; key: SyncKey }): boolean {
+    return who.key.userId !== undefined && who.key.userId !== who.session.userId;
+  }
+
+  /**
+   * Another account signed in on top of a cached key: its data must never be merged here, nor this device's data
+   * pushed there under this key. Sign out and forget the key, the meta and the session; local data stays.
+   */
+  async function dropForeign(email: string): Promise<void> {
+    // This device forgets first; the server sign-out is best effort and bounded, so a stalled call cannot hang the run.
+    try {
+      await clearSyncIdentity();
+    } catch {
+      if (!stopped) fail('unknown', email);
+      return;
+    }
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([
+      server.signOut().catch(() => undefined),
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, SIGN_OUT_TIMEOUT_MS);
+      }),
+    ]);
+    clearTimeout(timer);
+    if (!stopped) goOff();
+  }
+
+  /**
+   * Throws unless the engine is still running with the session and key this run started with (not stopped, signed
+   * out, erased or reset). The last checks run synchronously, but the caller resumes one microtask later (the
+   * `await guard()` hop). Only microtasks run in that gap, never IndexedDB events or timers, and the push re-checks
+   * `stopped` synchronously right before calling the server. Whatever is written or pushed after the guard was read
+   * before it, so a stop landing in the gap can at worst let pre-stop data through, never an erased snapshot; the
+   * erase itself waits for the run (stopActiveSync).
+   */
+  async function guard(session: SyncSession, key: SyncKey): Promise<void> {
+    if (stopped) throw new Halt('stopped');
+    const now = await identity();
+    if (stopped) throw new Halt('stopped');
+    const same =
+      !!now &&
+      !foreign(now) &&
+      now.session.userId === session.userId &&
+      now.key.salt === key.salt &&
+      now.key.iter === key.iter;
+    if (!same) throw new Halt('off');
+  }
+
+  /** Decrypts and validates the cloud copy. Throws a Halt; never writes. */
+  async function open(row: VaultRow, session: SyncSession, key: SyncKey): Promise<SyncData> {
+    const envelope = row.envelope;
+    try {
+      assertSupportedKdf(envelope);
+    } catch (error) {
+      throw new Halt(envelopeIssue(error));
+    }
+    // The cached key was derived with other settings (a reset elsewhere): it cannot open this copy.
+    if (envelope.kdf.salt !== key.salt || envelope.kdf.iter !== key.iter) throw new Halt('keyChanged');
+    let plaintext: unknown;
+    try {
+      plaintext = await decryptEnvelope(key.key, session.userId, envelope);
+    } catch (error) {
+      // The key was verified when it was cached, so a failure here means the copy is damaged.
+      throw new Halt(envelopeIssue(error));
+    }
+    try {
+      return parseRemote(plaintext);
+    } catch {
+      throw new Halt('damaged');
+    }
+  }
+
+  /** Pull, merge, push; returns the cloud version this device now matches. Sets `run.merged` on a real change. */
+  async function exchange(session: SyncSession, key: SyncKey, run: { merged: boolean }): Promise<number> {
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      const row = await server.getVault();
+      let remote: SyncData | null = null;
+      if (row) {
+        remote = await open(row, session, key);
+        const before = await repo.exportAll();
+        await guard(session, key);
+        await repo.mergeAll(prepareRemote(remote, before));
+        // A homework deleted elsewhere leaves its photos here; they never sync, so remove them now.
+        for (const id of orphanPhotoIds(await repo.exportAll())) {
+          await guard(session, key);
+          await repo.deleteHomeworkImage(id);
+        }
+        if (!sameSyncData(toSyncData(before), toSyncData(await repo.exportAll()))) run.merged = true;
+      }
+      const mine = toSyncData(await repo.exportAll());
+      if (row && remote && sameSyncData(mine, remote)) return row.version;
+      const envelope = await encryptEnvelope(key.key, key.salt, session.userId, toPlaintext(mine), key.iter);
+      await guard(session, key);
+      if (stopped) throw new Halt('stopped');
+      const result = await server.pushVault(row?.version ?? 0, envelope);
+      if (result.ok) return result.version;
+    }
+    throw new Halt('busy');
+  }
+
+  function fail(issue: SyncIssue | 'offline', email: string): void {
+    const lastSyncedAt = state.lastSyncedAt;
+    if (issue === 'offline') publish({ status: 'offline', email, lastSyncedAt });
+    else publish({ status: 'attention', issue, email, lastSyncedAt });
+    if (issue === 'offline' || RETRIED.has(issue)) {
+      schedule('retry', BACKOFF_MS[Math.min(failures, BACKOFF_MS.length - 1)]);
+      failures++;
+    } else {
+      clearTimer('retry');
+    }
+  }
+
+  function goOff(): void {
+    failures = 0;
+    clearTimer('retry');
+    publish({ status: 'off' });
+  }
+
+  async function runOnce(): Promise<void> {
+    clearTimer('retry');
+    const who = await identity();
+    if (stopped) return;
+    if (!who) {
+      goOff();
+      return;
+    }
+    if (foreign(who)) {
+      await dropForeign(who.session.email);
+      return;
+    }
+    const { session } = who;
+    // A key cached before keys recorded their account is bound to the account of its first run.
+    const key: SyncKey = who.key.userId ? who.key : { ...who.key, userId: session.userId };
+    // Only that same unbound key is bound: never a key saved meanwhile by a create, unlock or reset.
+    if (!who.key.userId) await bindSyncKey(session.userId, key.salt, key.iter).catch(() => undefined);
+    if (stopped) return;
+    const meta = await loadSyncMeta();
+    if (stopped) return;
+    const settled = state;
+    publish({ status: 'syncing', email: session.email, lastSyncedAt: meta.lastSyncedAt ?? state.lastSyncedAt });
+    const run = { merged: false };
+    try {
+      const version = await exchange(session, key, run);
+      await guard(session, key);
+      const lastSyncedAt = new Date().toISOString();
+      await saveSyncMeta({ version, lastSyncedAt }).catch(() => undefined);
+      failures = 0;
+      publish({ status: 'idle', email: session.email, lastSyncedAt });
+    } catch (error) {
+      if (stopped || (error instanceof Halt && error.issue === 'stopped')) {
+        // stop() is final: go back to the state before this run (never 'syncing') and schedule nothing.
+        if (state.status === 'syncing') {
+          publish(
+            settled.status === 'attention' || settled.status === 'offline' ? settled : { ...state, status: 'idle' },
+          );
+        }
+      } else if (error instanceof Halt) {
+        if (error.issue === 'off') goOff();
+        else fail(error.issue as SyncIssue, session.email);
+      } else if (error instanceof SyncServerError) {
+        fail(error.kind === 'network' ? 'offline' : error.kind, session.email);
+      } else {
+        fail('unknown', session.email);
+      }
+    }
+    if (run.merged && onMerged) {
+      try {
+        onMerged();
+      } catch {
+        // a listener failure must not break the sync loop
+      }
+    }
+  }
+
+  function kick(): Promise<void> {
+    if (stopped) return loop ?? Promise.resolve();
+    pending = true;
+    if (!loop) {
+      loop = (async () => {
+        try {
+          while (pending && !stopped) {
+            pending = false;
+            await runOnce().catch(() => {
+              if (!stopped) publish({ status: 'attention', issue: 'unknown' });
+            });
+          }
+        } finally {
+          pending = false;
+          loop = null;
+        }
+      })();
+    }
+    return loop;
+  }
+
+  async function refresh(): Promise<void> {
+    if (stopped) return;
+    const who = await identity();
+    if (stopped) return;
+    // Another account's session: the next run forgets the identity; until then sync is not on.
+    if (!who || foreign(who)) {
+      goOff();
+      return;
+    }
+    const meta = await loadSyncMeta();
+    if (stopped) return;
+    const lastSyncedAt = meta.lastSyncedAt ?? state.lastSyncedAt;
+    const email = who.session.email;
+    // A run may have settled while this was reading: keep its status and issue.
+    if (state.status === 'off') {
+      failures = 0;
+      publish({ status: loop ? 'syncing' : 'idle', email, lastSyncedAt });
+    } else {
+      publish({ ...state, email, lastSyncedAt });
+    }
+  }
+
+  const engine: SyncEngine = {
+    getState: () => state,
+    subscribe(fn) {
+      listeners.add(fn);
+      return () => {
+        listeners.delete(fn);
+      };
+    },
+    start() {
+      if (stopped) return;
+      void refresh();
+      schedule('start', START_DELAY_MS);
+    },
+    stop() {
+      stopped = true;
+      pending = false;
+      clearTimer('start');
+      clearTimer('change');
+      clearTimer('retry');
+    },
+    requestSync(reason) {
+      if (stopped) return;
+      if (reason === 'change') schedule('change', CHANGE_DEBOUNCE_MS);
+      else if (reason === 'start') schedule('start', START_DELAY_MS);
+      else {
+        if (reason === 'manual') {
+          failures = 0;
+          clearTimer('retry');
+        }
+        void kick();
+      }
+    },
+    syncNow: () => kick(),
+    whenIdle: () => loop ?? Promise.resolve(),
+    refresh,
+  };
+  latest = engine;
+  return engine;
+}

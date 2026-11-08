@@ -1,14 +1,14 @@
 # رفيق (Rafiq): Handoff
 
 Any model or person can continue from this file. It is updated with every task commit.
-Last updated: 2026-11-07 (app lock on `feat/app-lock`; see App lock rulings) — previously 2026-11-03 — the English version is committed as `df001aa` and deployed to production (see the changes log). Device sync was removed in `a5992d8`, so the sync, QR and ML Kit notes in this file are historical. Before that, on 2026-11-02, the uncommitted English version was added: a first-run language screen (English preselected), a complete English app, and the language choice under Settings. See the changes log. Earlier, 2026-11-01 — owner tested the Android app on their phone and confirmed it works; the native and web splash fixes are implemented. This uncommitted work also adds manual country choice and source-linked Egypt crisis contacts, a therapist content review packet, same-network device sync, homework/answer photos, and clickable developer profile links. After scan and v2-paste failures, QR scanning now uses 120 ms ZXing retries at up to 720p, and Android has native ML Kit scanning. The owner's screenshots confirm ICE failure after reply generation. Owner chose direct-only sync and declined TURN; v7 clears the stale reply notice after failure while preserving Cloudflare STUN discovery and local-candidate fallback. A network that blocks direct peer traffic can still prevent sync. Production remains at https://rafiq-iota-neon.vercel.app; this follow-up is local only.
+Last updated: 2026-11-08 (encrypted Supabase sync on `feat/sync`, hardening commit `7f27f00`; final review, PR and merge pending; the live Supabase, email, Vercel and emulator steps were recorded by another worker and are NOT verified, see "Encrypted account sync") — previously 2026-11-07 (app lock on `feat/app-lock`; see App lock rulings) — previously 2026-11-03 — the English version is committed as `df001aa` and deployed to production (see the changes log). The earlier direct-device sync was removed in `a5992d8`; its sync, QR and ML Kit notes are historical. Before that, on 2026-11-02, the uncommitted English version was added: a first-run language screen (English preselected), a complete English app, and the language choice under Settings. See the changes log. Earlier, 2026-11-01 — owner tested the Android app on their phone and confirmed it works; the native and web splash fixes are implemented. This uncommitted work also adds manual country choice and source-linked Egypt crisis contacts, a therapist content review packet, same-network device sync, homework/answer photos, and clickable developer profile links. After scan and v2-paste failures, QR scanning now uses 120 ms ZXing retries at up to 720p, and Android has native ML Kit scanning. The owner's screenshots confirm ICE failure after reply generation. Owner chose direct-only sync and declined TURN; v7 clears the stale reply notice after failure while preserving Cloudflare STUN discovery and local-candidate fallback. A network that blocks direct peer traffic can still prevent sync. Production is https://rafiq-iota-neon.vercel.app; another worker recorded a production deploy with account sync on 2026-11-08, built from an uncommitted worktree that is not tied to any commit (not verified here); production must be redeployed from the merged code after merge.
 
 ## What this is
-An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing journey, tracks check-ins, and builds a printable summary for the user's therapist. All data stays on the device (IndexedDB). It is a supportive tool, not therapy.
+An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing journey, tracks check-ins, and builds a printable summary for the user's therapist. Data stays on the device by default; optional account sync sends an encrypted vault after sign-in and a sync passphrase. It is a supportive tool, not therapy.
 
 ## Where things are
 - Project root: `/home/omarahmed/Downloads/OmarFelix/rafiq/` (its **own git repo**; the parent repo ignores this folder on purpose)
-- Branch: `feat/build` (initial docs commit is on `main`)
+- Current branch: `feat/sync` (encrypted account sync); earlier app work is recorded under its original branches below.
 - Spec (binding authority): `docs/superpowers/specs/2026-10-31-rafiq-design.md`
 - Plan (18 tasks, TDD, exact test assertions): `docs/superpowers/plans/2026-10-31-rafiq.md`
 - Step 4-10 content (Arabic wording to transcribe): `docs/content/steps-4-10.html`
@@ -27,7 +27,7 @@ An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing j
 - Intensity is an integer 0..10. Day keys are `YYYY-MM-DD` in local time.
 - Privacy defaults: `share=false`, `forNextSession=false`; session notes never enter the summary.
 - No streak counter; empty days are hidden, never described as failure.
-- No analytics, no network calls with user data, fonts self-hosted.
+- No analytics. Sync is opt-in; only the encrypted vault is sent for sync. Fonts are self-hosted.
 - Touch targets >= 44px, contrast >= 4.5:1, real buttons/labels.
 - Never write help-line phone numbers from memory.
 - Every user-facing string and every piece of content is bilingual: `{ ar, en }` (`Bi` in `src/i18n`), shown with `t()` / `useI18n()`. Arabic stays exactly as it was; English is a draft until the therapist has reviewed it. Stored answers are ids, so a saved answer reads the same in either language. Numbers use Arabic-Indic digits in Arabic and plain digits in English.
@@ -60,7 +60,133 @@ An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing j
 | Developer info | Attribution in About (owner clarification) | specified; not implemented |
 | Browser theme | Automatic / light / dark selector | done; deployed 2026-11-03 |
 | App lock | Optional PIN lock, recovery code, erase, biometric (branch `feat/app-lock`) | code done; lock record moved to its own IndexedDB database `rafiq-lock` (2026-11-07); unit tests pass; emulator-verified on `237f04a` (see Changes log): lock and changed timeout survive a force-stop after 5 s or more, wrong-PIN count survives, erase and turn-off stay done, 1 min and Immediately timeouts, Arabic recovery screens, soft keyboard. NOT verified: biometrics (never run), 5 and 15 min timeouts, camera/file picker with Immediately, fail-closed fallback (IndexedDB failing at start), anything on a real phone; not deployed, not on the phone |
-| Sub-project 2 | Encrypted Supabase sync | not started; needs its own spec |
+| Encrypted account sync | Supabase email-code sign-in and encrypted vault (branch `feat/sync`) | code hardened through `7f27f00`; final diff review, PR and merge in progress. Production reportedly runs a build of an uncommitted worktree that is not tied to any commit (recorded by another worker, not verified); redeploy from the merged code after live migration and session revocation are confirmed. `0002_hardening.sql` not applied or verified on the live project; live SQL checklist, OTP delivery, two-device and emulator checks open |
+
+## Encrypted account sync (2026-11-08)
+Spec: `docs/superpowers/specs/2026-11-08-rafiq-encrypted-sync-design.md`. Ledger (git-ignored):
+`.superpowers/sdd/2026-11-08-rafiq-encrypted-sync/progress.md`. Server setup and the live SQL checklist:
+`supabase/README.md`.
+
+### What the code does (checked against `2f4f691`)
+- Privacy ruling: only end-to-end encrypted data leaves the device, and only after sign-in and a sync passphrase; the
+  email is sent separately for account authentication. With `VITE_SUPABASE_URL` or `VITE_SUPABASE_ANON_KEY` empty,
+  `main.tsx` creates no sync engine and the Settings card is not shown, so nothing changes for offline users.
+- Sign-in: Supabase email code (6 digits, `shouldCreateUser: true`, resend after 60 s); no magic links. The auth
+  session is kept by supabase-js in the app's IndexedDB database `rafiq-sync` (store `kv`), not in localStorage.
+- Key: PBKDF2-SHA-256 with 600,000 iterations and a 16-byte salt derives a non-extractable AES-256-GCM key. Every
+  upload has a fresh 12-byte IV; the AAD binds the envelope to the account's user id; data is gzipped when
+  `CompressionStream` exists. Decompression is capped at 16 MiB. The key, its salt and the account it belongs to are
+  cached in `rafiq-sync` (strict durability); the passphrase is never stored. Minimum 10 characters, with a strength
+  hint.
+- Server: one row per account in `public.vaults` (envelope, version, one previous envelope). Row-level security lets
+  the owner read only; the client cannot insert, update or delete; writes go only through `push_vault`
+  (compare-and-swap on the version) and `reset_vault` (atomic replace), both `security definer` with
+  `search_path = public`, both refusing an envelope over 5 MB with `vault too large`.
+- Engine: one run at a time, extra requests coalesce. Pull, decrypt and validate, merge (latest `updatedAt` wins per
+  record, deletions propagate), push only when the merged data differs; a refused push retries up to 3 times, then
+  `busy`. Triggers: start (about 2 s), 5 s after the last local write, return to the foreground, back online, Sync
+  now. Retry backoff 30 s, 2 min, 10 min, then 30 min. It keeps running while the lock screen is shown.
+- Turn off sync on this device (behind a confirmation): signs out this device only (`scope: 'local'`; other devices
+  stay signed in), waits for the server at most 3 s, then clears the key, the meta and the session. If the local
+  IndexedDB clear fails, the UI reports an error and does not claim sync is off. Local data and the cloud copy stay.
+- Sign in again (shown when the session expired, issue `auth`): keeps the cached key. If the code signs in another
+  account than the one the key belongs to (or another email), this device signs out and forgets the key; local data
+  stays and sync must be turned on again. The engine does the same when it finds another account's session next to
+  a cached key; if local cleanup fails, it keeps an attention state and retries rather than claiming sync is off.
+- Cancel during initial setup signs out before leaving the setup step. If local session cleanup fails, the error stays
+  visible and setup remains open so sign-out can be retried.
+- Reset cloud copy (the answer to a forgotten passphrase): new passphrase; this device's data replaces the cloud copy
+  in one statement; other devices report that the passphrase changed and must enter the new one. A device with no
+  records must type a confirmation word first.
+- Erase everything: stops sync (waits at most 2.5 s for a run in flight), and first requires IndexedDB to confirm
+  that the sync key, metadata and session are cleared. If that fails, local records and the lock are preserved and
+  the app reloads so sync can be retried. After the clear succeeds, it erases app data, clears the lock and reloads.
+  The encrypted cloud copy is not deleted.
+- Not synced: homework photos (a homework deleted elsewhere also removes its local photos), the reminder time, the
+  last reminder day, the last backup time, and the app lock.
+- Verification by this pass (2026-11-08, code at `7f27f00`): `npm test -- --reporter=dot` passed, 98 files,
+  1,298 tests; `npm run build` passed (Vite reports the existing >500 kB main-chunk warning); `git diff --check`
+  passed. The SQL was read, never executed. Nothing live was checked.
+
+### Known limits
+- Clocks: "latest edit wins" compares the devices' own clocks (`updatedAt`), so a device with a badly wrong clock can
+  make an older edit win.
+- Homework photos are not synced; a homework that arrives from another device shows no photos.
+- A form left open while a merge lands can overwrite the merged record when it is saved (the open screen keeps its
+  own copy; only a language change remounts the screens).
+- The server, and Supabase, see the account email, timestamps, the version number and the size of the encrypted blob.
+- A weak passphrase can be guessed offline if the server copy leaks; the slow derivation and the 10-character minimum
+  slow this down, they do not prevent it.
+- A decrypted sync copy over 16 MiB is rejected to cap gzip expansion on mobile; reduce the local copy before syncing
+  it to another device.
+- Supabase Free projects can be paused after a period of inactivity (confirm the current rules); sync then fails with
+  an error until the project is restored.
+- A forgotten passphrase cannot be recovered (no recovery key): the only way back is Reset cloud copy from a device
+  that still has the data; other devices then need the new passphrase.
+- Sign in again with a different account signs this device out and clears its sync key (local data stays); it never
+  syncs one account's data into another.
+- `prev_envelope` is kept for manual recovery through the Supabase dashboard only; the app never reads it.
+
+### Live infrastructure: recorded by another worker, NOT verified
+> Everything in this subsection was written by another session that worked on this branch during a usage-limit gap
+> (see the ledger, "SESSION GAP"). The task-by-task review read the code and the SQL only: it did not open Supabase
+> or Vercel, run SQL, send or read email, or start the emulator. Treat every line here as a claim to confirm.
+- Supabase: a dedicated Free project `Rafiq` (ref `<project-ref>`, Central EU/Frankfurt) was created on 2026-11-08.
+  The ref is omitted here on purpose; it is in the project URL in `.env.local` and the Vercel settings.
+- Migrations: `0001_vaults.sql` was applied from the SQL Editor (the authenticated `SELECT` grant in it is needed
+  because automatic Data API exposure is disabled). `0002_hardening.sql` was written later, after the review found
+  that `push_vault` could return `(true, NULL)`; nothing records it being applied to the live project, so treat it
+  as NOT applied.
+- Email: custom SMTP was enabled with personal Gmail (`smtp.gmail.com:465`), sender and username set, password stored
+  masked in the dashboard; Supabase warned that personal Gmail may affect deliverability. The Magic link or OTP and
+  Confirm sign up templates were changed to bilingual Rafiq copy with `{{ .Token }}`; the dashboard preview showed
+  the numeric code. The Site URL was changed from `http://localhost:3000` to `https://rafiq-iota-neon.vercel.app`.
+- Vercel: `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` were added to Production; a prebuilt deployment
+  (`<deployment-id>`, id omitted) of the then uncommitted, unreviewed worktree reached READY and was aliased to
+  https://rafiq-iota-neon.vercel.app. A HEAD request returned HTTP 200 and the bundle contained the project URL.
+  That build is not tied to any commit and predates the review fixes (`89c8efe`..`2f4f691`: local-only sign-out,
+  expired sessions mapped to auth, Sign in again, the account-bound key). Redeploy from the merged code after merge.
+- Local config: the ignored `.env.local` holds only `VITE_SUPABASE_URL` and the public publishable key. No secret or
+  service key is used by the client or stored in the repo or APK.
+- Android emulator smoke: `npm run android:sync` and `assembleDebug` passed; the APK (0.2.0, code 8) was installed
+  over the existing `azkar` emulator app with `adb install -r` and opened to the language screen (screenshot
+  `/tmp/rafiq-supabase-build.png`). Sign-in and sync were not exercised.
+
+### Auth email and the exposed session token
+- The worker recorded both "no test auth email was sent" and that a screenshot shared on 2026-11-08 showed a session
+  token in the browser address bar. These do not fit together: Supabase puts a session in the address bar only when
+  a link from an auth email is opened, so at least one auth email with a link was sent and opened (most likely the
+  old Confirm sign up email, whose link redirected to the old Site URL `http://localhost:3000`). Known: the templates
+  were changed afterwards and no OTP sign-in was completed. Unknown: how many emails were sent, and whether one was
+  sent after the change.
+- A URL of that kind usually carries a refresh token too, which stays usable until the session is ended. The owner
+  was told to revoke it; nothing records that it was done. The owner must confirm it: in the Supabase dashboard,
+  Authentication, Users, open that user and sign out or revoke all sessions (or delete the test user), then check
+  that no active session is left. This must happen before any real data is synced to that account.
+
+### Launch rule (from the spec, still open)
+- Before real users, auth email must go through a custom SMTP sender on a domain the owner owns (for example Resend
+  with that domain). The personal Gmail SMTP set up above is not that: it is a personal mailbox with Gmail's own
+  sending limits, and Supabase itself warns about its deliverability. It is acceptable only for the owner's testing.
+- Also before real users: confirm the free-tier rules (pausing, 500 MB database), and consider limiting sign-ups or
+  adding quotas (open sign-ups allow up to about 10 MB per account).
+
+### Remaining owner steps
+1. Confirm the leaked session is revoked (above); do this before real sync data is used.
+2. Apply `supabase/migrations/0002_hardening.sql` to the live project once (SQL Editor) and verify success.
+3. Run the live SQL checklist in `supabase/README.md` (9 checks) and record the results here.
+4. Confirm OTP delivery: request a code, check that it arrives (inbox, not spam) with the 6-digit code and bilingual
+   copy, and that signing in with it works.
+5. Two-device test (two browser profiles): sign in on both, create the passphrase on A, unlock on B, add data on
+   each and see both converge, delete on one and see it gone on the other, a wrong passphrase on a third profile
+   changes nothing, Reset on A makes B ask for the new passphrase, airplane mode then recovery.
+6. Android emulator: sign in, sync, force-stop at least 5 s after the last write and confirm the key and session
+   survive the relaunch; Erase everything clears the sync identity.
+7. App lock phone checklist (see App lock rulings): biometrics, the 5 and 15 min timeouts, and the camera and file
+   picker with 'Immediately'.
+8. After merge and after steps 1-2: redeploy production from the merged commit (`vercel deploy --prod` from a clean
+   checkout) and record the deployment against that commit.
+9. Before real users: custom SMTP on an owned domain (launch rule above).
 
 ## Rulings (decisions that deviate from, or fill gaps in, the plan)
 1. `rafiq/` is its own git repo, not part of the Mashhad repo. Reason: the parent `.gitignore` is an allow-list that ignores `rafiq/`, and the parent publishes to a Vercel deploy. Cost if wrong: one remote/URL change later.
@@ -112,13 +238,13 @@ An offline-first Arabic (RTL) web app / PWA that guides a 10-step self-healing j
 - Privacy ruling: the lock adds no network calls. The lock record lives in its own IndexedDB database `rafiq-lock` (see the durability design below), outside the app's Dexie data and outside the backup, so a restored backup never carries a lock.
 - Known limits: the Android recent-apps preview can show content (no FLAG_SECURE yet); data is not encrypted at rest (the lock hides the app, it does not encrypt); leaving Settings while a recovery code is showing loses that code (Change PIN issues a new one); the 4-6 digit PIN is a gate, not a strong secret.
 - Owner still has to confirm biometrics on a real phone; the emulator had no fingerprint enrolled, so the biometric prompt was not checked.
-- Sub-project 2 (encrypted Supabase sync) is not started and has its own spec to write.
+- Sub-project 2 (encrypted Supabase sync): superseded, now built on `feat/sync` (see Encrypted account sync).
 - More known limits: when the lock engages (auto-lock or cold start) the whole app is replaced by the lock screen, so typed-but-unsaved text and a pending camera/file-picker result are lost (most likely with 'Immediately', since the camera and file picker count as leaving the app); the owner may prefer keeping the app mounted under an inert overlay. Editing browser/app storage can switch the lock off (accepted: privacy gate, not encryption). Two open browser tabs can still race on lock settings (mitigated by re-reading storage before each action).
 - Lock store design (owner decided 2026-11-07 to move the record to IndexedDB, replacing the old localStorage record and the `erasedLocks` workaround): own IndexedDB database `rafiq-lock` (`src/features/lock/lockDb.ts`), strict durability, an `initialized` marker, and a best-effort localStorage mirror (`rafiq.lock.v1`) that is rewritten to match IndexedDB at every healthy start and is read when IndexedDB fails at start, so the app starts locked. The record is loaded at boot before the first render with a 2 s cap. After a timed-out write the store reads back to decide committed / definite failure / unknown (unknown shows the 'may have been saved' copy). Erase: app data first, then the lock step removes the mirror first, marks the store erased, clears IndexedDB directly with a 2.5 s cap and always reloads. `erasedLocks.ts` is removed.
 - Lock store limits: in local mode (IndexedDB failed at start) writes already queued ignore the erased flag (fail closed; a second erase may be needed); after an unknown setUp the lock may be on while the recovery code was never shown (Change PIN gives a new one); a lock-only change made while IndexedDB was down can be dropped at the next healthy start; a failed mirror write can make a failed-IndexedDB start open unlocked; biometric unlock can wait about 4 s behind a slow check; the 'may have been saved' text has copy nits.
 - Open platform risk for ALL app data (not only the lock): on the first emulator run of `237f04a` a force-stop about 1 s after changing the auto-lock timeout lost the change, and once the next launch showed first-run onboarding with all app data gone; logcat had `Failed to open LevelDB database ... IndexedDB/https_localhost_0.indexeddb.leveldb` then `IndexedDB recovering from a corrupted (and deleted) database` (the emulator process also died once in that run). Control experiment (below, 12 data runs plus 3 lock runs) did not reproduce it: no run lost data or logged the corruption line on either the old localStorage-lock build `ca0e708` or `237f04a`, with 1 s and 5 s gaps; 3 further 1 s timeout-change runs also survived. So the table does NOT show the corruption predates the lock change, and it does not show the lock change causes it: it was seen once and not reproduced. Treat it as an unexplained, rare WebView/IndexedDB risk after a SIGKILL right after a write; check on the real phone.
 - Owner phone checklist (all unchecked): [ ] biometrics on the lock screen and the Settings toggle; [ ] biometrics with 'Immediately' (the prompt is a separate activity; confirm it does not lock the app right after a successful prompt); [ ] camera and file picker with 'Immediately'; [ ] soft keyboard after a wrong PIN; [ ] set up a lock, force-stop, confirm it survives; [ ] erase, force-stop, confirm it stays erased; [ ] force-stop right after saving a check-in or changing a setting, confirm no data is lost (the unexplained corruption above).
-- Next steps: sub-project 2 (encrypted Supabase sync) not started; needs its own spec.
+- Next steps (2026-11-07, superseded): sub-project 2 has its spec and is built on `feat/sync`.
 
 ## Changes log (newest first)
 - 2026-11-07 — App lock record moved to IndexedDB (owner decision) and emulator-checked. Code: `lockDb.ts` wrapper (strict durability, abort and timeout paths), async lock store, record loaded at boot before first render (2 s cap), localStorage mirror, read-back after a timed-out write, erase ordering fixed (data, then mirror, then erased mark and IndexedDB clear, 2.5 s cap, always reload), `erasedLocks.ts` removed. Emulator results on `237f04a` (emulator-5580, AVD `azkar`, exclusive use; debug APK SHA-256 `f8779752…248e1e`, pm clear between runs, every force-stop 5 s or more after the write unless stated; driven through the WebView devtools, so clicks were synthetic DOM clicks): lock set up (PIN 5820) survives a force-stop and 5820 unlocks; changed timeouts (Immediately, 5 min, 1 min) survived 6 s force-stops; 3 wrong PINs, force-stop, 2 more: the 30 s wait started at the 5th total failure; erase then force-stop twice: first-run screen, no lock; turn off with PIN then force-stop: no lock; 1 minute timeout: not locked after 38 s in the background, locked after 66 s, in English and Arabic; Immediately locks after 4 s in both; Arabic forgot-PIN, recovery-code and new-code screens (reached by a real recovery) are RTL with «تم» on screen; after a wrong PIN `mInputShown=false` and the pad and Unlock stay visible. Control table (data run = pm clear, onboarding, one check-in, force-stop, relaunch; data survived and corruption line count): `ca0e708` gap 1 s x3 all survived, 0 corruption lines; `ca0e708` gap 5 s x3 survived, 0; `237f04a` gap 1 s x3 survived, 0; `237f04a` gap 5 s x3 survived, 0; `237f04a` lock setup then force-stop 1 s later x3: lock present, app data present, 0 corruption lines. 3 extra runs (timeout change, force-stop 1 s later): value survived, 0 corruption lines. Earlier in the same task one run lost a timeout change and one lost all app data with the corruption lines (see Open platform risk above); not reproduced. Old-build APK was the prebuilt one for `ca0e708` (checked: bundle holds `rafiq.lock.v1`, no `rafiq-lock`). Not checked: biometrics, 5/15 min timeouts, fail-closed fallback.
