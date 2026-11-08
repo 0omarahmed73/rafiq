@@ -158,6 +158,14 @@ export const COPY = {
   enterPassphrase: { ar: 'إدخال عبارة المرور', en: 'Enter passphrase' },
   tryAgain: { ar: 'المحاولة مرة أخرى', en: 'Try again' },
   signInAgain: { ar: 'سجّل الدخول من جديد', en: 'Sign in again' },
+  otherAccount: {
+    ar:
+      'كان هذا حسابًا آخر، فأوقفتُ المزامنة على هذا الجهاز ونسيتُ مفتاحه. بياناتي باقية هنا. ' +
+      'أفعّل المزامنة من جديد بالحساب الذي أريده.',
+    en:
+      'That was a different account, so I turned off sync on this device and forgot its key. ' +
+      'My data stays here. I can turn sync on again with the account I want.',
+  },
   signedInAgain: { ar: 'سجّلتُ الدخول من جديد وأتابع المزامنة.', en: 'I signed in again and sync continues.' },
   syncNow: { ar: 'مزامنة الآن', en: 'Sync now' },
   reset: { ar: 'إعادة ضبط النسخة السحابية', en: 'Reset cloud copy' },
@@ -176,6 +184,10 @@ export const COPY = {
     en:
       'I will delete the cloud copy and upload this device’s data under a new passphrase. ' +
       'My other devices will need the new passphrase.',
+  },
+  resetCountOne: {
+    ar: 'سأرفع السجل الوحيد الموجود على هذا الجهاز.',
+    en: 'I will upload the one record on this device.',
   },
   resetCount: {
     ar: 'سأرفع {count} من السجلات الموجودة على هذا الجهاز.',

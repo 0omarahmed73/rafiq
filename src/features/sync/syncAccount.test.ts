@@ -149,6 +149,7 @@ describe('createVault', () => {
     expect(stored).not.toBeNull();
     expect(atob(stored!.salt)).toHaveLength(16);
     expect(stored!.iter).toBe(1000);
+    expect(stored!.userId).toBe((await d.server.session())!.userId);
     expect(d.server.vault()!.version).toBe(1);
     const remote = await cloud(d, stored!.key);
     expect(sameSyncData(remote, toSyncData(await d.repo.exportAll()))).toBe(true);
@@ -204,6 +205,7 @@ describe('unlockVault', () => {
     expect(stored).not.toBeNull();
     expect(stored!.salt).toBe(keyA.salt);
     expect(stored!.iter).toBe(1000);
+    expect(stored!.userId).toBe((await b.server.session())!.userId);
     expect(await notes(b.repo)).toEqual(['from a', 'only on b']);
     const remote = await cloud(a, keyA.key);
     expect(remote.checkins.map((c) => c.note).sort()).toEqual(['from a', 'only on b']);
@@ -273,6 +275,7 @@ describe('resetVault', () => {
     const fresh = (await loadSyncKey())!;
     expect(fresh.salt).not.toBe(oldKey.salt);
     expect(fresh.iter).toBe(1000);
+    expect(fresh.userId).toBe((await a.server.session())!.userId);
     const row = a.server.vault()!;
     expect(row.version).toBe(2);
     expect(row.envelope.kdf.salt).toBe(fresh.salt);

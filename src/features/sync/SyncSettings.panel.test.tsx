@@ -1,5 +1,5 @@
 import { IDBFactory } from 'fake-indexeddb';
-import { act, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FAKE_CODE } from './syncServer.fake';
@@ -120,6 +120,7 @@ describe('SyncSettings: the on panel', () => {
     expect(screen.getByRole('button', { name: 'Turn off sync on this device' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Sign in again' }));
     expect(screen.getByLabelText('Email address')).toHaveValue(EMAIL);
+    expect(screen.getByLabelText('Email address')).toHaveAttribute('readonly');
     await user.click(screen.getByRole('button', { name: 'Send a code' }));
     expect(account.requestCode).toHaveBeenCalledWith(EMAIL);
     await user.type(screen.getByLabelText('Email code'), FAKE_CODE);
@@ -129,6 +130,21 @@ describe('SyncSettings: the on panel', () => {
     expect(screen.queryByLabelText('Passphrase')).not.toBeInTheDocument();
     expect(account.unlockVault).not.toHaveBeenCalled();
     expect(account.signOut).not.toHaveBeenCalled();
+  });
+
+  it('signs out and keeps no key when signing in again reaches another account', async () => {
+    const user = userEvent.setup();
+    const { account, engine } = onCard({ status: 'attention', issue: 'auth', email: EMAIL });
+    account.verifyCode.mockResolvedValue({ email: 'other@example.com', vault: 'none' });
+    await user.click(screen.getByRole('button', { name: 'Sign in again' }));
+    await user.click(screen.getByRole('button', { name: 'Send a code' }));
+    await user.type(screen.getByLabelText('Email code'), FAKE_CODE);
+    await user.click(screen.getByRole('button', { name: 'Verify code' }));
+    expect(await screen.findByRole('button', { name: 'Turn on sync' })).toBeInTheDocument();
+    expect(account.signOut).toHaveBeenCalledTimes(1);
+    expect(engine.syncNow).not.toHaveBeenCalled();
+    expect(account.createVault).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent('That was a different account');
   });
 
   it('Cancel on the sign-in-again step returns to the on panel', async () => {
@@ -182,6 +198,53 @@ describe('SyncSettings: the on panel', () => {
 
     await waitFor(() => expect(reset).toHaveBeenCalledWith(PASS, { allowEmpty: true }));
     await waitFor(() => expect(setup.server.vault()?.version).toBeGreaterThan(1));
+  });
+
+  it('names a single record in the singular', async () => {
+    const user = userEvent.setup();
+    onCard({ status: 'idle', email: EMAIL });
+    await user.click(screen.getByRole('button', { name: 'Reset cloud copy' }));
+    expect(await screen.findByText('I will upload the one record on this device.')).toBeInTheDocument();
+  });
+
+  it('keeps the turned-off notice when the off state arrives in the same update', async () => {
+    const user = userEvent.setup();
+    const account = fakeAccount();
+    const { publish } = onCard({ status: 'idle', email: EMAIL }, account);
+    // The state change lands in the same React update as the notice (as the real refresh can).
+    account.signOut.mockImplementation(() => {
+      queueMicrotask(() => publish({ status: 'off' }));
+      return Promise.resolve(undefined);
+    });
+    await user.click(screen.getByRole('button', { name: 'Turn off sync on this device' }));
+    // fireEvent: the continuation after signOut runs outside act, so React batches it with the state change.
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm turning off' }));
+    expect(await screen.findByRole('button', { name: 'Turn on sync' })).toBeInTheDocument();
+    await act(async () => undefined);
+    expect(cardStatus()).toHaveTextContent('I turned off sync on this device. My local data stays here.');
+  });
+
+  it.each([
+    ['Turn off sync on this device', 'Confirm turning off'],
+    ['Reset cloud copy', 'Continue and enter a new passphrase'],
+  ])('returns to the off panel when sync goes off elsewhere after %s', async (open, marker) => {
+    const user = userEvent.setup();
+    const { publish } = onCard({ status: 'idle', email: EMAIL });
+    await user.click(screen.getByRole('button', { name: open }));
+    expect(await screen.findByRole('button', { name: marker })).toBeInTheDocument();
+    act(() => publish({ status: 'off' }));
+    expect(screen.getByRole('button', { name: 'Turn on sync' })).toBeInTheDocument();
+  });
+
+  it('returns to the off panel when sync goes off elsewhere on the new passphrase step', async () => {
+    const user = userEvent.setup();
+    const { publish } = onCard({ status: 'idle', email: EMAIL });
+    await user.click(screen.getByRole('button', { name: 'Reset cloud copy' }));
+    await user.click(await screen.findByRole('button', { name: 'Continue and enter a new passphrase' }));
+    await user.type(screen.getByLabelText('New passphrase'), PASS);
+    act(() => publish({ status: 'off' }));
+    expect(screen.getByRole('button', { name: 'Turn on sync' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('New passphrase')).not.toBeInTheDocument();
   });
 
   it('turns sync off only after a confirmation, clearing the key, meta and session but not local data', async () => {

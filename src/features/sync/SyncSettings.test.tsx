@@ -130,7 +130,7 @@ describe('SyncSettings: turning sync on', () => {
 
     await enterCode(user);
     expect(screen.getByText('I signed in, but could not check the cloud copy.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Turn off sync on this device' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Turn off sync on this device' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Check again' }));
     expect(await screen.findByLabelText('Passphrase')).toBeInTheDocument();
     expect(account.verifyCode).toHaveBeenCalledTimes(1);
@@ -146,6 +146,22 @@ describe('SyncSettings: turning sync on', () => {
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(account.signOut).toHaveBeenCalledTimes(1);
     expect(await screen.findByRole('button', { name: 'Turn on sync' })).toBeInTheDocument();
+  });
+
+  it.each<['damaged' | 'newerVersion', string]>([
+    ['damaged', 'The cloud copy is damaged or cannot be read. My data on this device has not changed.'],
+    ['newerVersion', 'My other device runs a newer version of the app. I update the app on this device'],
+  ])('explains a %s cloud copy when unlocking fails', async (kind, text) => {
+    const user = userEvent.setup();
+    const account = fakeAccount();
+    account.verifyCode.mockResolvedValue({ email: EMAIL, vault: 'exists' });
+    account.unlockVault.mockRejectedValue(new SyncAccountError(kind));
+    renderWithSync({ account });
+    await enterCode(user);
+    await user.type(await screen.findByLabelText('Passphrase'), PASS);
+    await user.click(screen.getByRole('button', { name: 'Unlock copy' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(text);
+    expect(screen.getByLabelText('Passphrase')).toHaveValue('');
   });
 
   it('allows resending an email code after the cooldown', async () => {

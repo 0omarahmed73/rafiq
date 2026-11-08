@@ -184,9 +184,20 @@ describe('syncKeyStore', () => {
     ['a non-string salt', async () => ({ key: await makeKey(), salt: 5, iter: 1 })],
     ['an empty salt', async () => ({ key: await makeKey(), salt: '', iter: 1 })],
     ['a non-object', async () => 'junk'],
+    ['a non-string account', async () => ({ key: await makeKey(), salt: 's', iter: 1, userId: 7 })],
   ])('loadSyncKey is null for a stored record with %s', async (_name, make) => {
     await rawPut('key', await make());
     await expect(loadSyncKey()).resolves.toBeNull();
+  });
+
+  it('keeps the account a key belongs to, and still loads a key cached without one', async () => {
+    const key = await makeKey();
+    await saveSyncKey({ key, salt: 's', iter: 1, userId: 'user-1' });
+    await expect(loadSyncKey()).resolves.toMatchObject({ salt: 's', iter: 1, userId: 'user-1' });
+    await rawPut('key', { key, salt: 's', iter: 1 });
+    const legacy = await loadSyncKey();
+    expect(legacy).toMatchObject({ salt: 's', iter: 1 });
+    expect(legacy!.userId).toBeUndefined();
   });
 
   it('loadSyncMeta falls back to the default for a malformed record', async () => {

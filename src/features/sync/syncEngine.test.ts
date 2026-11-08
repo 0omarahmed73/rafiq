@@ -5,7 +5,7 @@ import type { Repo } from '../../db/repo';
 import { decryptEnvelope, deriveVaultKey, encryptEnvelope, newSalt } from './envelope';
 import { parseRemote, sameSyncData, toPlaintext, toSyncData, type SyncData } from './syncData';
 import { createSyncEngine, stopActiveSync, type SyncEngine, type SyncState } from './syncEngine';
-import { clearSyncIdentity, loadSyncMeta, saveSyncKey, type SyncKey } from './syncKeyStore';
+import { clearSyncIdentity, loadSyncKey, loadSyncMeta, saveSyncKey, saveSyncMeta, type SyncKey } from './syncKeyStore';
 import { createFakeSyncServer, FAKE_CODE, type FakeBackingStore, type FakeSyncServer } from './syncServer.fake';
 
 const PASS = 'a long test passphrase';
@@ -921,5 +921,71 @@ describe('sync engine: triggers', () => {
     expect(vi.getTimerCount()).toBe(0);
     await vi.advanceTimersByTimeAsync(3_600_000);
     expect(getVault).not.toHaveBeenCalled();
+  });
+});
+
+describe('sync engine: the account the key belongs to', () => {
+  it('pushes and merges nothing when another account signs in over the key, and forgets the identity', async () => {
+    const d = await device();
+    const userA = (await d.server.session())!.userId;
+    const keyA = await cacheKey();
+    await saveSyncKey({ ...keyA, userId: userA });
+    await saveSyncMeta({ version: 3, lastSyncedAt: T0.toISOString() });
+    await checkin(d.repo, 'only on this device');
+    // Account B already has a cloud copy of its own.
+    await d.server.verifyCode('other@example.com', FAKE_CODE);
+    const keyB = await makeKey();
+    const userB = (await d.server.session())!.userId;
+    const empty = toPlaintext(toSyncData(await createMemoryRepo().exportAll()));
+    await d.server.pushVault(0, await encryptEnvelope(keyB.key, keyB.salt, userB, empty, ITER));
+    const before = await snapshot(d.repo);
+    const pushes = d.server.pushCount();
+    const gets = d.server.getCount();
+
+    await d.engine.syncNow();
+
+    expect(d.server.pushCount()).toBe(pushes);
+    expect(d.server.getCount()).toBe(gets);
+    expect(await snapshot(d.repo)).toBe(before);
+    expect(d.merged).not.toHaveBeenCalled();
+    expect(d.engine.getState()).toEqual({ status: 'off' });
+    expect(await loadSyncKey()).toBeNull();
+    expect(await loadSyncMeta()).toEqual({ version: 0 });
+    expect(await d.server.session()).toBeNull();
+  });
+
+  it('also refuses an account with no cloud copy: this device is never uploaded to it', async () => {
+    const d = await device();
+    const userA = (await d.server.session())!.userId;
+    await saveSyncKey({ ...(await makeKey()), userId: userA });
+    await checkin(d.repo, 'mine');
+    await d.server.verifyCode('other@example.com', FAKE_CODE);
+
+    await d.engine.syncNow();
+
+    expect(d.server.vault()).toBeNull();
+    expect(d.server.pushCount()).toBe(0);
+    expect(d.engine.getState()).toEqual({ status: 'off' });
+  });
+
+  it('reports off on refresh while another account is signed in on top of the key', async () => {
+    const d = await device();
+    await saveSyncKey({ ...(await makeKey()), userId: 'user-other' });
+    await d.engine.refresh();
+    expect(d.engine.getState()).toEqual({ status: 'off' });
+  });
+
+  it('binds a key cached without an account to the account of its first run and keeps syncing', async () => {
+    const d = await device();
+    const userId = (await d.server.session())!.userId;
+    const k = await cacheKey();
+    await checkin(d.repo, 'legacy');
+    await d.engine.syncNow();
+    expect(d.engine.getState()).toMatchObject({ status: 'idle', email: EMAIL });
+    expect(d.server.vault()?.version).toBe(1);
+    expect((await loadSyncKey())?.userId).toBe(userId);
+    expect((await cloud(d.server, k)).checkins.map((c) => c.note)).toEqual(['legacy']);
+    await d.engine.syncNow();
+    expect(d.engine.getState().status).toBe('idle');
   });
 });

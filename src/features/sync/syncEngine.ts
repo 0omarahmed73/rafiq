@@ -14,7 +14,7 @@ import {
   toSyncData,
   type SyncData,
 } from './syncData';
-import { loadSyncKey, loadSyncMeta, saveSyncMeta, type SyncKey } from './syncKeyStore';
+import { clearSyncIdentity, loadSyncKey, loadSyncMeta, saveSyncKey, saveSyncMeta, type SyncKey } from './syncKeyStore';
 import { SyncServerError, type SyncServer, type SyncSession, type VaultRow } from './syncServer';
 
 export type SyncStatus = 'off' | 'idle' | 'syncing' | 'offline' | 'attention';
@@ -162,6 +162,21 @@ export function createSyncEngine(deps: SyncEngineDeps): SyncEngine {
     return session && key ? { session, key } : null;
   }
 
+  /** The session is another account than the one the key was cached for (a key without an account is unknown). */
+  function foreign(who: { session: SyncSession; key: SyncKey }): boolean {
+    return who.key.userId !== undefined && who.key.userId !== who.session.userId;
+  }
+
+  /**
+   * Another account signed in on top of a cached key: its data must never be merged here, nor this device's data
+   * pushed there under this key. Sign out and forget the key, the meta and the session; local data stays.
+   */
+  async function dropForeign(): Promise<void> {
+    await server.signOut().catch(() => undefined);
+    await clearSyncIdentity();
+    if (!stopped) goOff();
+  }
+
   /**
    * Throws unless the engine is still running with the session and key this run started with (not stopped, signed
    * out, erased or reset). The last checks run synchronously, but the caller resumes one microtask later (the
@@ -175,7 +190,11 @@ export function createSyncEngine(deps: SyncEngineDeps): SyncEngine {
     const now = await identity();
     if (stopped) throw new Halt('stopped');
     const same =
-      !!now && now.session.userId === session.userId && now.key.salt === key.salt && now.key.iter === key.iter;
+      !!now &&
+      !foreign(now) &&
+      now.session.userId === session.userId &&
+      now.key.salt === key.salt &&
+      now.key.iter === key.iter;
     if (!same) throw new Halt('off');
   }
 
@@ -257,7 +276,15 @@ export function createSyncEngine(deps: SyncEngineDeps): SyncEngine {
       goOff();
       return;
     }
-    const { session, key } = who;
+    if (foreign(who)) {
+      await dropForeign();
+      return;
+    }
+    const { session } = who;
+    // A key cached before keys recorded their account is bound to the account of its first run.
+    const key: SyncKey = who.key.userId ? who.key : { ...who.key, userId: session.userId };
+    if (!who.key.userId) await saveSyncKey(key).catch(() => undefined);
+    if (stopped) return;
     const meta = await loadSyncMeta();
     if (stopped) return;
     const settled = state;
@@ -321,7 +348,8 @@ export function createSyncEngine(deps: SyncEngineDeps): SyncEngine {
     if (stopped) return;
     const who = await identity();
     if (stopped) return;
-    if (!who) {
+    // Another account's session: the next run forgets the identity; until then sync is not on.
+    if (!who || foreign(who)) {
       goOff();
       return;
     }

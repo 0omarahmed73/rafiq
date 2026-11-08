@@ -1,13 +1,13 @@
 // The Settings card «المزامنة» / "Sync": owns the step and the form state; the steps themselves only render.
 import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '../../i18n/LanguageProvider';
-import { card, errorText, primary } from '../lock/lockUi';
-import { OnPanel, TurnOffConfirm } from './OnPanel';
+import { card, errorText } from '../lock/lockUi';
+import { OffPanel, OnPanel, TurnOffConfirm } from './OnPanel';
 import { ResetConfirmStep, ResetPassphraseStep } from './ResetSteps';
 import { CodeStep, EmailStep, VaultUnknownStep } from './SignInSteps';
 import { checkPassphrase, MIN_PASSPHRASE_LENGTH, SyncAccountError, type VaultStatus } from './syncAccount';
-import { COPY, ERRORS, PRIVACY, stateText } from './syncCopy';
-import { CardStatus, intro } from './syncFields';
+import { COPY, ERRORS, stateText } from './syncCopy';
+import { CardStatus, useNotice } from './syncFields';
 import { useSync, type SyncApi } from './SyncProvider';
 import { CreateStep, UnlockStep } from './VaultSteps';
 
@@ -27,7 +27,8 @@ function ConfiguredSyncSettings({ sync }: { sync: SyncApi }) {
   const { account, state } = sync;
   const [step, setStep] = useState<Step>(() => (state.status !== 'off' && state.email ? 'on' : 'off'));
   const [flow, setFlow] = useState<Flow>('setup');
-  const [turnOffFrom, setTurnOffFrom] = useState<Step>('on');
+  /** The account being signed in again; another account must not keep this key. */
+  const [reauthEmail, setReauthEmail] = useState('');
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [passphrase, setPassphrase] = useState('');
@@ -38,15 +39,22 @@ function ConfiguredSyncSettings({ sync }: { sync: SyncApi }) {
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useNotice(state);
+  const lastStatus = useRef(state.status);
 
   useEffect(() => {
+    const was = lastStatus.current;
+    lastStatus.current = state.status;
     if (state.status !== 'off' && state.email) setStep((current) => (current === 'off' ? 'on' : current));
-    else if (state.status === 'off') setStep((current) => (current === 'on' ? 'off' : current));
+    else if (state.status === 'off' && was !== 'off') {
+      // Sync went off (here or elsewhere): no signed-in step can continue, and no typed secret stays in memory.
+      setStep('off');
+      setCode('');
+      setPassphrase('');
+      setAgain('');
+      setTyped('');
+    }
   }, [state.status, state.email]);
-
-  // A confirmation lasts only until the live state changes, so it can never hide what sync is doing now.
-  useEffect(() => setNotice(null), [state]);
 
   function go(next: Step) {
     setStep(next);
@@ -84,7 +92,9 @@ function ConfiguredSyncSettings({ sync }: { sync: SyncApi }) {
 
   function begin(next: Flow) {
     setFlow(next);
-    setEmail(next === 'reauth' ? state.email || '' : '');
+    const expected = next === 'reauth' ? state.email || '' : '';
+    setReauthEmail(expected);
+    setEmail(expected);
     go('email');
   }
 
@@ -103,6 +113,14 @@ function ConfiguredSyncSettings({ sync }: { sync: SyncApi }) {
         const result = await account.verifyCode(email, code.trim());
         setEmail(result.email || email);
         if (flow !== 'reauth') return chooseVault(result.vault);
+        if (reauthEmail && result.email.toLowerCase() !== reauthEmail.toLowerCase()) {
+          // The key belongs to the other account: forget it here (local data stays) rather than sync across accounts.
+          await account.signOut();
+          setEmail('');
+          go('off');
+          setError(t(COPY.otherAccount));
+          return;
+        }
         // The key is still on this device: the new session is all sync needed.
         go('on');
         setNotice(t(COPY.signedInAgain));
@@ -214,11 +232,6 @@ function ConfiguredSyncSettings({ sync }: { sync: SyncApi }) {
       await sync.syncNow();
     });
 
-  function askTurnOff(from: Step) {
-    setTurnOffFrom(from);
-    go('turnOff');
-  }
-
   const healthy = state.status === 'idle' || state.status === 'syncing';
   const live = step === 'on' ? stateText(state, t) : null;
   const shownNotice = step === 'on' && !healthy ? null : notice;
@@ -229,18 +242,12 @@ function ConfiguredSyncSettings({ sync }: { sync: SyncApi }) {
       <h2 id="sync-title" className="text-base font-bold">
         {t(COPY.title)}
       </h2>
-      {step === 'off' && (
-        <>
-          <p className={intro}>{t(PRIVACY)}</p>
-          <button type="button" className={primary} onClick={() => begin('setup')}>
-            {t(COPY.turnOn)}
-          </button>
-        </>
-      )}
+      {step === 'off' && <OffPanel onTurnOn={() => begin('setup')} />}
       {step === 'email' && (
         <EmailStep
           email={email}
           onEmail={setEmail}
+          readOnly={flow === 'reauth' && reauthEmail !== ''}
           busy={busy}
           onSubmit={() => void requestCode()}
           onCancel={() => go(flow === 'reauth' ? 'on' : 'off')}
@@ -258,12 +265,7 @@ function ConfiguredSyncSettings({ sync }: { sync: SyncApi }) {
         />
       )}
       {step === 'vaultUnknown' && (
-        <VaultUnknownStep
-          busy={busy}
-          onRetry={() => void retryVaultStatus()}
-          onCancel={() => void cancelSetup()}
-          onTurnOff={() => askTurnOff('vaultUnknown')}
-        />
+        <VaultUnknownStep busy={busy} onRetry={() => void retryVaultStatus()} onCancel={() => void cancelSetup()} />
       )}
       {step === 'create' && <CreateStep {...field} onSubmit={createVault} onCancel={cancelVaultStep} />}
       {step === 'unlock' && <UnlockStep {...field} onSubmit={() => void unlockVault()} onCancel={cancelVaultStep} />}
@@ -279,12 +281,10 @@ function ConfiguredSyncSettings({ sync }: { sync: SyncApi }) {
           }}
           onSignInAgain={() => begin('reauth')}
           onReset={() => void beginReset()}
-          onTurnOff={() => askTurnOff('on')}
+          onTurnOff={() => go('turnOff')}
         />
       )}
-      {step === 'turnOff' && (
-        <TurnOffConfirm busy={busy} onConfirm={() => void turnOff()} onBack={() => go(turnOffFrom)} />
-      )}
+      {step === 'turnOff' && <TurnOffConfirm busy={busy} onConfirm={() => void turnOff()} onBack={() => go('on')} />}
       {step === 'resetConfirm' && (
         <ResetConfirmStep
           recordCount={recordCount}

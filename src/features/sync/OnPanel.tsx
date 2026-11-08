@@ -1,10 +1,22 @@
-// The Sync card while sync is on: the account, the last sync and the actions that fit the current state.
+// The Sync card's panels: off (the honest note), on (the account, the last sync and the actions for the state).
 import { useI18n } from '../../i18n/LanguageProvider';
 import { dayKey, formatFullDate, formatTime } from '../../lib/dates';
 import { primary } from '../lock/lockUi';
 import type { SyncState } from './syncEngine';
-import { COPY } from './syncCopy';
+import { COPY, PRIVACY } from './syncCopy';
 import { intro, Secondary } from './syncFields';
+
+export function OffPanel({ onTurnOn }: { onTurnOn: () => void }) {
+  const { t } = useI18n();
+  return (
+    <>
+      <p className={intro}>{t(PRIVACY)}</p>
+      <button type="button" className={primary} onClick={onTurnOn}>
+        {t(COPY.turnOn)}
+      </button>
+    </>
+  );
+}
 
 export function OnPanel(props: {
   state: SyncState;

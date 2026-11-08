@@ -1,9 +1,10 @@
 // Small building blocks shared by the Sync card steps: a labelled field, the strength hint and the step buttons.
-import type { InputHTMLAttributes, ReactNode } from 'react';
+import { useEffect, useState, type InputHTMLAttributes, type ReactNode } from 'react';
 import type { Bi } from '../../i18n';
 import { useI18n } from '../../i18n/LanguageProvider';
 import { field, primary, secondary } from '../lock/lockUi';
 import { MIN_PASSPHRASE_LENGTH } from './syncAccount';
+import type { SyncState } from './syncEngine';
 import { COPY, passphraseStrength, STRENGTH } from './syncCopy';
 
 export const intro = 'text-sm leading-7 text-muted';
@@ -80,4 +81,19 @@ export function CardStatus({ live, notice }: { live: string | null; notice: stri
       {notice && <p>{notice}</p>}
     </div>
   );
+}
+
+/**
+ * A confirmation that lasts only until the live state changes after it was shown, so it can never hide what sync is
+ * doing now. It is stamped with the state of its first render, so a state change batched into that same render (the
+ * engine publishing just before the request resolved) does not wipe it.
+ */
+export function useNotice(state: SyncState): [string | null, (text: string | null) => void] {
+  const [notice, setNotice] = useState<{ text: string; seen?: SyncState } | null>(null);
+  useEffect(() => {
+    if (notice && !notice.seen) setNotice({ text: notice.text, seen: state });
+    else if (notice?.seen && notice.seen !== state) setNotice(null);
+  }, [notice, state]);
+  const shown = notice && (!notice.seen || notice.seen === state) ? notice.text : null;
+  return [shown, (text) => setNotice(text === null ? null : { text })];
 }

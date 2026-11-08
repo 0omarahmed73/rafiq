@@ -35,7 +35,9 @@ export function ResetConfirmStep(props: {
           />
         </>
       ) : (
-        <p className="text-sm leading-7 font-semibold">{t(COPY.resetCount, { count: props.recordCount })}</p>
+        <p className="text-sm leading-7 font-semibold">
+          {props.recordCount === 1 ? t(COPY.resetCountOne) : t(COPY.resetCount, { count: props.recordCount })}
+        </p>
       )}
       <button
         type="button"

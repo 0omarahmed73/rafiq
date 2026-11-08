@@ -18,6 +18,11 @@ export interface SyncKey {
   salt: string;
   /** PBKDF2 iterations used to derive `key`. */
   iter: number;
+  /**
+   * The account the key belongs to. Missing on keys cached before it was recorded: the engine binds such a key to
+   * the session of its first run.
+   */
+  userId?: string;
 }
 
 export interface SyncMeta {
@@ -108,7 +113,8 @@ function isSyncKey(value: unknown): value is SyncKey {
     typeof v.salt === 'string' &&
     v.salt.length > 0 &&
     Number.isInteger(v.iter) &&
-    (v.iter as number) > 0
+    (v.iter as number) > 0 &&
+    (v.userId === undefined || (typeof v.userId === 'string' && v.userId.length > 0))
   );
 }
 
@@ -126,7 +132,9 @@ export function loadSyncKey(): Promise<SyncKey | null> {
  */
 export function saveSyncKey(k: SyncKey): Promise<void> {
   return run('readwrite', DEFAULT_TIMEOUT_MS, (store) => {
-    store.put({ key: k.key, salt: k.salt, iter: k.iter }, KEY);
+    const stored: SyncKey = { key: k.key, salt: k.salt, iter: k.iter };
+    if (k.userId) stored.userId = k.userId;
+    store.put(stored, KEY);
     return () => undefined;
   });
 }

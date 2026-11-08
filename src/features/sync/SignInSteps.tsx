@@ -10,6 +10,8 @@ const CODE_RESEND_DELAY_SECONDS = 60;
 export function EmailStep(props: {
   email: string;
   onEmail: (value: string) => void;
+  /** Signing in again: the account is fixed, only its code is asked for. */
+  readOnly?: boolean;
   busy: boolean;
   onSubmit: () => void;
   onCancel: () => void;
@@ -27,6 +29,7 @@ export function EmailStep(props: {
         type="email"
         autoComplete="email"
         required
+        readOnly={props.readOnly}
         value={props.email}
         onValue={props.onEmail}
       />
@@ -79,12 +82,7 @@ export function CodeStep(props: {
   );
 }
 
-export function VaultUnknownStep(props: {
-  busy: boolean;
-  onRetry: () => void;
-  onCancel: () => void;
-  onTurnOff: () => void;
-}) {
+export function VaultUnknownStep(props: { busy: boolean; onRetry: () => void; onCancel: () => void }) {
   const { t } = useI18n();
   return (
     <>
@@ -93,7 +91,6 @@ export function VaultUnknownStep(props: {
         {t(COPY.checkAgain)}
       </button>
       <CancelButton busy={props.busy} onCancel={props.onCancel} />
-      <CancelButton busy={props.busy} onCancel={props.onTurnOff} text={COPY.turnOff} />
     </>
   );
 }

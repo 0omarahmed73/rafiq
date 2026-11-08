@@ -143,12 +143,12 @@ export function createSyncAccount(deps: {
     createVault: (passphrase) =>
       guarded(async () => {
         requireLongEnough(passphrase);
-        await requireSession();
+        const session = await requireSession();
         // A copy already exists: this passphrase would never open it, so unlock or reset instead.
         if (await server.getVault()) throw new SyncAccountError('vaultExists');
         const salt = newSalt();
         const key = await deriveVaultKey(passphrase, salt, iter);
-        await saveSyncKey({ key, salt, iter });
+        await saveSyncKey({ key, salt, iter, userId: session.userId });
         await finish();
       }),
 
@@ -170,6 +170,7 @@ export function createSyncAccount(deps: {
           key,
           salt: envelope.kdf.salt,
           iter: envelope.kdf.iter,
+          userId: session.userId,
         });
         await finish();
         return true;
@@ -186,7 +187,7 @@ export function createSyncAccount(deps: {
         const envelope = await encryptEnvelope(key, salt, session.userId, toPlaintext(data), iter);
         const { version } = await server.replaceVault(envelope);
         // Only now that the server holds the new copy does this device switch to the new key.
-        await saveSyncKey({ key, salt, iter });
+        await saveSyncKey({ key, salt, iter, userId: session.userId });
         await saveSyncMeta({ version, lastSyncedAt: new Date().toISOString() });
         await finish();
       }),
