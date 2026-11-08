@@ -58,4 +58,16 @@ describe('withChangeSignal', () => {
     await expect(repo.saveSettings()).rejects.toBe(failure);
     expect(onChange).not.toHaveBeenCalled();
   });
+
+  it('does not reject a write that succeeded when the listener throws', async () => {
+    const raw = createMemoryRepo();
+    const onChange = vi.fn(() => {
+      throw new Error('listener failed');
+    });
+    const result = { id: 'settings', theme: 'system' } as const;
+    vi.spyOn(raw, 'saveSettings').mockResolvedValue(result as never);
+
+    await expect(withChangeSignal(raw, onChange).saveSettings(result)).resolves.toBe(result);
+    expect(onChange).toHaveBeenCalledTimes(1);
+  });
 });

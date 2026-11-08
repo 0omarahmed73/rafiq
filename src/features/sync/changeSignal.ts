@@ -59,7 +59,11 @@ export function withChangeSignal(repo: Repo, onChange: () => void): Repo {
 
       return (...args: unknown[]) =>
         Promise.resolve(method.apply(target, args)).then((result: unknown) => {
-          onChange();
+          try {
+            onChange();
+          } catch {
+            // A failing listener must not reject a write that already succeeded.
+          }
           return result;
         });
     },

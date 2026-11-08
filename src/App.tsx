@@ -36,7 +36,7 @@ export function App({
         {sync ? (
           <SyncProvider engine={sync.engine} account={sync.account}>
             <SyncSettingsRefresh />
-            <AppContent router={router} persistent={persistent} syncEnabled />
+            <AppContent router={router} persistent={persistent} />
           </SyncProvider>
         ) : (
           <AppContent router={router} persistent={persistent} />
@@ -46,21 +46,13 @@ export function App({
   );
 }
 
-function AppContent({
-  router,
-  persistent,
-  syncEnabled = false,
-}: {
-  router: AppRouter;
-  persistent: boolean;
-  syncEnabled?: boolean;
-}) {
+function AppContent({ router, persistent }: { router: AppRouter; persistent: boolean }) {
   return (
     <LockProvider screen={LockScreen}>
       <div className="mx-auto max-w-xl px-4 pt-4 empty:hidden">
         <StorageBanner persistent={persistent} />
       </div>
-      <LocalizedRouter router={router} syncEnabled={syncEnabled} />
+      <LocalizedRouter router={router} />
     </LockProvider>
   );
 }
@@ -87,7 +79,11 @@ function SyncSettingsRefresh() {
   return null;
 }
 
-function LocalizedRouter({ router, syncEnabled }: { router: AppRouter; syncEnabled: boolean }) {
+function LocalizedRouter({ router }: { router: AppRouter }) {
   const { lang } = useLanguage();
-  return syncEnabled ? <RouterProvider router={router} /> : <RouterProvider key={lang} router={router} />;
+  // A real language change (including one merged from another device) remounts every screen: many pages call the
+  // plain t() without subscribing, so they would otherwise stay in the old language. The key is the language string,
+  // so merges that change only theme, accent or other settings do not remount. Cost: if a remote language change
+  // arrives while someone is typing, that screen remounts and the unsaved typed text is lost.
+  return <RouterProvider key={lang} router={router} />;
 }

@@ -25,6 +25,7 @@ export function SyncProvider({
 
   useEffect(() => {
     const unsubscribe = engine.subscribe(setState);
+    setState(engine.getState());
     engine.start();
     const removeForegroundListener = onForegroundChange((active) => {
       if (active) engine.requestSync('foreground');

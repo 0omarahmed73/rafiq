@@ -43,6 +43,23 @@ describe('SyncProvider', () => {
     expect(engine.start).toHaveBeenCalledTimes(1);
   });
 
+  it('reflects a state change that happened between the first render and the effect', () => {
+    const { engine, account } = setup();
+    let current: SyncState = { status: 'idle', email: 'person@example.com' };
+    engine.getState.mockImplementation(() => current);
+    engine.subscribe.mockImplementation(() => {
+      current = { status: 'syncing', email: 'person@example.com' };
+      return vi.fn();
+    });
+    render(
+      <SyncProvider engine={engine} account={account}>
+        <Probe />
+      </SyncProvider>,
+    );
+
+    expect(screen.getByTestId('sync-state')).toHaveTextContent('true:syncing');
+  });
+
   it('requests sync when the app becomes active and when the browser comes online', () => {
     const { engine, account } = setup();
     render(
