@@ -17,7 +17,14 @@ import {
 import { hashSecret, normalizeRecoveryCode } from './pin';
 import { verifyBiometric } from '../../platform/biometric';
 import { IDBFactory } from 'fake-indexeddb';
-import { createSessionStorage, loadSyncKey, loadSyncMeta, saveSyncKey, saveSyncMeta } from '../sync/syncKeyStore';
+import {
+  clearSyncIdentity,
+  createSessionStorage,
+  loadSyncKey,
+  loadSyncMeta,
+  saveSyncKey,
+  saveSyncMeta,
+} from '../sync/syncKeyStore';
 import { createFakeSyncServer } from '../sync/syncServer.fake';
 import { createSyncEngine } from '../sync/syncEngine';
 
@@ -44,6 +51,12 @@ vi.mock('./lockDb', async (importOriginal) => {
     writeLockDb: vi.fn(real.writeLockDb),
     clearLockDb: vi.fn(real.clearLockDb),
   };
+});
+
+// The real sync key store, wrapped so an erase test can make clearing the sync identity hang.
+vi.mock('../sync/syncKeyStore', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../sync/syncKeyStore')>();
+  return { ...real, clearSyncIdentity: vi.fn(real.clearSyncIdentity) };
 });
 
 /** The record in the lock database, read straight from IndexedDB. */
@@ -144,6 +157,7 @@ afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
   for (const fn of [readLockDb, writeLockDb, clearLockDb]) vi.mocked(fn).mockRestore();
+  vi.mocked(clearSyncIdentity).mockRestore();
 });
 
 describe('LockProvider', () => {
@@ -702,7 +716,9 @@ describe('LockProvider', () => {
       await storeRecord();
       await withReload(async (reload) => {
         renderLock();
-        vi.mocked(writeLockDb).mockClear().mockImplementation(() => new Promise(() => {}));
+        vi.mocked(writeLockDb)
+          .mockClear()
+          .mockImplementation(() => new Promise(() => {}));
         act(() => {
           void api.verifyPin('0000');
         });
@@ -713,6 +729,59 @@ describe('LockProvider', () => {
         expect(localStorage.getItem(LOCK_STORAGE_KEY)).toBeNull();
         expect(readLock()).toBeNull();
         expect(await readLockDb()).toEqual({ initialized: true, record: undefined });
+        expect(reload).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    /**
+     * Starts the erase and runs the fake clock in small steps, giving IndexedDB (real macrotasks) a turn after each,
+     * until the app reloads or 8 s of fake time have passed: long enough for every capped wait, no more.
+     */
+    async function eraseWithFakeClock(reload: ReturnType<typeof vi.fn>) {
+      // The shared set-up fakes only Date and intervals; installing again needs the real timers back first.
+      const now = Date.now();
+      vi.useRealTimers();
+      vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval', 'setTimeout', 'clearTimeout'], now });
+      act(() => {
+        void api.eraseEverything();
+      });
+      for (let step = 0; step < 80 && reload.mock.calls.length === 0; step++) {
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(100);
+          await new Promise((resolve) => setImmediate(resolve));
+        });
+      }
+    }
+
+    it('reloads even when clearing the sync identity never finishes', async () => {
+      await storeRecord();
+      vi.mocked(clearSyncIdentity).mockImplementation(() => new Promise(() => {}));
+      const repo = createMemoryRepo();
+      const erase = vi.spyOn(repo, 'eraseAll');
+      await withReload(async (reload) => {
+        renderLock(repo);
+        await eraseWithFakeClock(reload);
+        expect(erase).toHaveBeenCalledTimes(1);
+        expect(vi.mocked(clearSyncIdentity)).toHaveBeenCalledTimes(1);
+        expect(readLock()).toBeNull();
+        expect(reload).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    it('erases and reloads even when stopping the sync run in flight never finishes', async () => {
+      await storeRecord();
+      const repo = createMemoryRepo();
+      const engine = createSyncEngine({ repo, server: createFakeSyncServer() });
+      const stop = vi.spyOn(engine, 'stop');
+      vi.spyOn(engine, 'whenIdle').mockReturnValue(new Promise(() => {}));
+      const erase = vi.spyOn(repo, 'eraseAll');
+      await withReload(async (reload) => {
+        renderLock(repo);
+        await eraseWithFakeClock(reload);
+        expect(stop).toHaveBeenCalledTimes(1);
+        expect(erase).toHaveBeenCalledTimes(1);
+        expect(stop.mock.invocationCallOrder[0]).toBeLessThan(erase.mock.invocationCallOrder[0]);
+        expect(readLock()).toBeNull();
         expect(reload).toHaveBeenCalledTimes(1);
       });
     });
@@ -869,7 +938,7 @@ describe('LockProvider', () => {
     expect(await stored()).toMatchObject({ pin: other.pin, failures: 0 });
   });
 
-  it('adopts another tab\'s record before a settings change', async () => {
+  it("adopts another tab's record before a settings change", async () => {
     const mine = await storeRecord();
     renderLock();
     await call(() => api.unlock('1357'));

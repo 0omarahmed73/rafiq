@@ -2,92 +2,24 @@ import { IDBFactory } from 'fake-indexeddb';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createMemoryRepo } from '../../db/memoryRepo';
-import { RepoProvider } from '../../db/RepoContext';
-import { LanguageProvider } from '../../i18n/LanguageProvider';
-import { createFakeSyncServer, FAKE_CODE } from './syncServer.fake';
-import { createSyncAccount, type SyncAccount, type VaultStatus } from './syncAccount';
+import { FAKE_CODE } from './syncServer.fake';
+import { SyncAccountError, type VaultStatus } from './syncAccount';
 import { SyncSettings } from './SyncSettings';
-import { SyncProvider } from './SyncProvider';
-import { createSyncEngine, type SyncEngine, type SyncState } from './syncEngine';
+import type { SyncState } from './syncEngine';
 import { clearSyncIdentity } from './syncKeyStore';
+import {
+  cardStatus,
+  EMAIL,
+  enterCode,
+  fakeAccount,
+  makeEngine,
+  PASS,
+  realSetup,
+  renderWithSync,
+  withVault,
+} from './syncSettings.testUtils';
 
-function makeEngine(initial: SyncState = { status: 'off' }) {
-  const listeners = new Set<(state: SyncState) => void>();
-  let state = initial;
-  const engine = {
-    getState: () => state,
-    subscribe: (fn: (next: SyncState) => void) => {
-      listeners.add(fn);
-      return () => {
-        listeners.delete(fn);
-      };
-    },
-    start: vi.fn(),
-    stop: vi.fn(),
-    requestSync: vi.fn(),
-    syncNow: vi.fn(async () => undefined),
-    whenIdle: vi.fn(async () => undefined),
-    refresh: vi.fn(async () => undefined),
-  } satisfies SyncEngine;
-  return {
-    engine,
-    publish(next: SyncState) {
-      state = next;
-      for (const listener of listeners) listener(next);
-    },
-  };
-}
-
-function fakeAccount(): SyncAccount {
-  return {
-    requestCode: vi.fn(async () => undefined),
-    verifyCode: vi.fn(async (): Promise<{ email: string; vault: VaultStatus }> => ({ email: 'person@example.com', vault: 'none' })),
-    vaultStatus: vi.fn(async (): Promise<VaultStatus> => 'none'),
-    createVault: vi.fn(async () => undefined),
-    unlockVault: vi.fn(async () => true),
-    resetVault: vi.fn(async () => undefined),
-    localRecordCount: vi.fn(async () => 1),
-    signOut: vi.fn(async () => undefined),
-  };
-}
-
-function renderWithSync({
-  lang = 'en',
-  state = { status: 'off' } as SyncState,
-  account = fakeAccount(),
-  engine = makeEngine(state).engine,
-}: {
-  lang?: 'ar' | 'en';
-  state?: SyncState;
-  account?: ReturnType<typeof fakeAccount>;
-  engine?: SyncEngine;
-} = {}) {
-  const repo = createMemoryRepo();
-  const view = render(
-    <RepoProvider repo={repo}>
-      <LanguageProvider initial={lang}>
-        <SyncProvider engine={engine} account={account}>
-          <SyncSettings />
-        </SyncProvider>
-      </LanguageProvider>
-    </RepoProvider>,
-  );
-  return { ...view, repo, account, engine };
-}
-
-const EMAIL = 'person@example.com';
-const PASS = 'long enough passphrase';
-
-async function enterCode(user: ReturnType<typeof userEvent.setup>, email = EMAIL) {
-  await user.click(screen.getByRole('button', { name: 'Turn on sync' }));
-  await user.type(screen.getByLabelText('Email address'), email);
-  await user.click(screen.getByRole('button', { name: 'Send a code' }));
-  await user.type(screen.getByLabelText('Email code'), FAKE_CODE);
-  await user.click(screen.getByRole('button', { name: 'Verify code' }));
-}
-
-describe('SyncSettings', () => {
+describe('SyncSettings: turning sync on', () => {
   beforeEach(() => {
     globalThis.indexedDB = new IDBFactory();
   });
@@ -104,28 +36,45 @@ describe('SyncSettings', () => {
 
   it('shows the honest note in both languages while sync is off', () => {
     const view = renderWithSync();
-    expect(screen.getByText('My data is encrypted on this phone before it leaves it. If I forget the passphrase, I can reset the cloud copy from a device that still has my data.')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'My data is encrypted on this phone before it leaves it. ' +
+          'If I forget the passphrase, I can reset the cloud copy from a device that still has my data.',
+      ),
+    ).toBeInTheDocument();
     view.unmount();
     renderWithSync({ lang: 'ar' });
-    expect(screen.getByText('بياناتي تُشفَّر على هذا الهاتف قبل أن تغادره. إذا نسيت عبارة المرور أستطيع إعادة ضبط النسخة السحابية من جهاز ما زال يحتوي بياناتي.')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'بياناتي تُشفَّر على هذا الهاتف قبل أن تغادره. ' +
+          'إذا نسيت عبارة المرور أستطيع إعادة ضبط النسخة السحابية من جهاز ما زال يحتوي بياناتي.',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('runs the sign-in and create steps in Arabic', async () => {
+    const user = userEvent.setup();
+    renderWithSync({ lang: 'ar' });
+    expect(screen.getByRole('heading', { name: 'المزامنة' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'تفعيل المزامنة' }));
+    await user.type(screen.getByLabelText('البريد الإلكتروني'), EMAIL);
+    await user.click(screen.getByRole('button', { name: 'إرسال رمز' }));
+    expect(cardStatus()).toHaveTextContent('أرسلتُ رمزًا إلى بريدي الإلكتروني.');
+    expect(screen.getByText('أدخل الرمز الذي وصل إلى بريدي الإلكتروني.')).toBeInTheDocument();
+    await user.type(screen.getByLabelText('رمز البريد الإلكتروني'), FAKE_CODE);
+    await user.click(screen.getByRole('button', { name: 'التحقق من الرمز' }));
+    expect(await screen.findByLabelText('عبارة المرور')).toBeInTheDocument();
+    expect(screen.getByText(/أنشئ عبارة مرور من ١٠ أحرف على الأقل/)).toBeInTheDocument();
+    await user.type(screen.getByLabelText('عبارة المرور'), 'قصير');
+    expect(screen.getByText('قصيرة: أحتاج إلى ١٠ أحرف على الأقل.')).toBeInTheDocument();
+    expect(screen.getByLabelText('أكرر عبارة المرور')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'إنشاء النسخة المشفّرة' })).toBeInTheDocument();
   });
 
   it('signs in with an email code and creates a passphrase-protected vault', async () => {
     const user = userEvent.setup();
-    const server = createFakeSyncServer();
-    const repo = createMemoryRepo();
-    const engine = createSyncEngine({ repo, server });
-    vi.spyOn(engine, 'start').mockImplementation(() => {});
-    const account = createSyncAccount({ server, engine, repo, iterations: 1000 });
-    render(
-      <RepoProvider repo={repo}>
-        <LanguageProvider initial="en">
-          <SyncProvider engine={engine} account={account}>
-            <SyncSettings />
-          </SyncProvider>
-        </LanguageProvider>
-      </RepoProvider>,
-    );
+    const setup = realSetup();
+    renderWithSync(setup);
 
     await enterCode(user);
     await user.type(screen.getByLabelText('Passphrase'), 'short');
@@ -143,25 +92,60 @@ describe('SyncSettings', () => {
     await user.clear(screen.getByLabelText('Repeat passphrase'));
     await user.type(screen.getByLabelText('Repeat passphrase'), PASS);
     await user.click(screen.getByRole('button', { name: 'Create encrypted copy' }));
-    expect(await screen.findByText('person@example.com')).toBeInTheDocument();
-    expect(screen.getByRole('status')).toHaveTextContent('I created an encrypted copy');
-    expect(server.vault()).not.toBeNull();
+    expect(await screen.findByText(EMAIL)).toBeInTheDocument();
+    expect(cardStatus()).toHaveTextContent('I created an encrypted copy');
+    expect(setup.server.vault()).not.toBeNull();
+    expect(screen.queryByLabelText('Passphrase')).not.toBeInTheDocument();
+  });
+
+  it('gives a live text strength hint while I choose a passphrase', async () => {
+    const user = userEvent.setup();
+    renderWithSync();
+    await enterCode(user);
+    const field = await screen.findByLabelText('Passphrase');
+    await user.type(field, 'short');
+    expect(screen.getByText('Too short: I need at least 10 characters.')).toHaveAttribute('role', 'status');
+    await user.clear(field);
+    await user.type(field, 'abcdefghijkl');
+    expect(screen.getByText(/^Acceptable\./)).toHaveAttribute('role', 'status');
+    await user.clear(field);
+    await user.type(field, 'correct horse 42');
+    expect(screen.getByText('Strong.')).toHaveAttribute('role', 'status');
+  });
+
+  it('keeps me on the code step after a wrong code', async () => {
+    const user = userEvent.setup();
+    renderWithSync(realSetup());
+    await enterCode(user, EMAIL, '000000');
+    expect(await screen.findByRole('alert')).toHaveTextContent('That code is not right or has expired.');
+    expect(screen.getByLabelText('Email code')).toHaveValue('');
     expect(screen.queryByLabelText('Passphrase')).not.toBeInTheDocument();
   });
 
   it('keeps an accepted account on a failed vault lookup and retries without another code', async () => {
     const user = userEvent.setup();
-    const verifyCode = vi.fn(async () => ({ email: EMAIL, vault: 'unknown' as VaultStatus }));
-    const vaultStatus = vi.fn(async (): Promise<VaultStatus> => 'none');
-    const account = { ...fakeAccount(), verifyCode, vaultStatus };
+    const account = fakeAccount();
+    account.verifyCode.mockResolvedValue({ email: EMAIL, vault: 'unknown' });
     renderWithSync({ account });
 
     await enterCode(user);
     expect(screen.getByText('I signed in, but could not check the cloud copy.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Turn off sync on this device' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Check again' }));
     expect(await screen.findByLabelText('Passphrase')).toBeInTheDocument();
     expect(account.verifyCode).toHaveBeenCalledTimes(1);
     expect(account.vaultStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it('signs out when I cancel the failed vault lookup', async () => {
+    const user = userEvent.setup();
+    const account = fakeAccount();
+    account.verifyCode.mockResolvedValue({ email: EMAIL, vault: 'unknown' });
+    renderWithSync({ account });
+    await enterCode(user);
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(account.signOut).toHaveBeenCalledTimes(1);
+    expect(await screen.findByRole('button', { name: 'Turn on sync' })).toBeInTheDocument();
   });
 
   it('allows resending an email code after the cooldown', async () => {
@@ -192,24 +176,10 @@ describe('SyncSettings', () => {
 
   it('lets an existing account retry a wrong passphrase', async () => {
     const user = userEvent.setup();
-    const server = createFakeSyncServer();
-    const repo = createMemoryRepo();
-    const engine = createSyncEngine({ repo, server });
-    vi.spyOn(engine, 'start').mockImplementation(() => {});
-    const account = createSyncAccount({ server, engine, repo, iterations: 1000 });
-    await server.requestCode(EMAIL);
-    await server.verifyCode(EMAIL, FAKE_CODE);
-    await account.createVault(PASS);
-    await account.signOut();
-    render(
-      <RepoProvider repo={repo}>
-        <LanguageProvider initial="en">
-          <SyncProvider engine={engine} account={account}>
-            <SyncSettings />
-          </SyncProvider>
-        </LanguageProvider>
-      </RepoProvider>,
-    );
+    const setup = realSetup();
+    await withVault(setup);
+    await setup.account.signOut();
+    renderWithSync(setup);
 
     await enterCode(user);
     expect(await screen.findByLabelText('Passphrase')).toBeInTheDocument();
@@ -221,68 +191,92 @@ describe('SyncSettings', () => {
     expect(await screen.findByText(EMAIL)).toBeInTheDocument();
   });
 
-  it('requires typed confirmation before an empty local copy can replace the cloud vault', async () => {
+  it('routes to unlocking when a cloud copy appeared meanwhile and keeps the reason on screen', async () => {
     const user = userEvent.setup();
-    const server = createFakeSyncServer();
-    const repo = createMemoryRepo();
-    const engine = createSyncEngine({ repo, server });
-    vi.spyOn(engine, 'start').mockImplementation(() => {});
-    const account = createSyncAccount({ server, engine, repo, iterations: 1000 });
-    await server.requestCode(EMAIL);
-    await server.verifyCode(EMAIL, FAKE_CODE);
-    await account.createVault(PASS);
-    const reset = vi.spyOn(account, 'resetVault');
-    render(
-      <RepoProvider repo={repo}>
-        <LanguageProvider initial="en">
-          <SyncProvider engine={engine} account={account}>
-            <SyncSettings />
-          </SyncProvider>
-        </LanguageProvider>
-      </RepoProvider>,
+    const account = fakeAccount();
+    account.createVault.mockRejectedValue(new SyncAccountError('vaultExists'));
+    renderWithSync({ account });
+    await enterCode(user);
+    await user.type(await screen.findByLabelText('Passphrase'), PASS);
+    await user.type(screen.getByLabelText('Repeat passphrase'), PASS);
+    await user.click(screen.getByRole('button', { name: 'Create encrypted copy' }));
+    expect(await screen.findByRole('button', { name: 'Unlock copy' })).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'A cloud copy already exists. I unlock it with its passphrase.',
     );
-
-    await screen.findByText(EMAIL);
-    await user.click(screen.getByRole('button', { name: 'Reset cloud copy' }));
-    await screen.findByLabelText('Type “ERASE” to confirm');
-    const continueButton = screen.getByRole('button', { name: 'Continue and enter a new passphrase' });
-    expect(continueButton).toBeDisabled();
-    await user.type(screen.getByLabelText('Type “ERASE” to confirm'), 'ERASE');
-    await user.click(continueButton);
-    await user.type(screen.getByLabelText('New passphrase'), PASS);
-    await user.type(screen.getByLabelText('Repeat new passphrase'), PASS);
-    await user.click(screen.getByRole('button', { name: 'Replace cloud copy' }));
-
-    await waitFor(() => expect(reset).toHaveBeenCalledWith(PASS, { allowEmpty: true }));
-    await waitFor(() => expect(server.vault()?.version).toBeGreaterThan(1));
+    expect(screen.getByLabelText('Passphrase')).toHaveValue('');
   });
 
-  it('shows state-specific attention and retries without losing the account card', async () => {
+  it.each<[string, VaultStatus, string]>([
+    ['create', 'none', 'Create encrypted copy'],
+    ['unlock', 'exists', 'Unlock copy'],
+  ])('signs out when I cancel the %s step during set-up', async (_name, vault, submit) => {
     const user = userEvent.setup();
-    const { engine, publish } = makeEngine({ status: 'attention', issue: 'damaged', email: EMAIL });
     const account = fakeAccount();
-    renderWithSync({ state: { status: 'attention', issue: 'damaged', email: EMAIL }, account, engine });
-
-    expect(screen.getByRole('status')).toHaveTextContent('could not be opened or validated');
-    await user.click(screen.getByRole('button', { name: 'Try again' }));
-    expect(engine.syncNow).toHaveBeenCalledTimes(1);
-    await user.click(screen.getByRole('button', { name: 'Reset cloud copy' }));
-    expect(await screen.findByText('Records on this device: 1')).toBeInTheDocument();
+    account.verifyCode.mockResolvedValue({ email: EMAIL, vault });
+    renderWithSync({ account });
+    await enterCode(user);
+    await user.type(await screen.findByLabelText('Passphrase'), PASS);
+    expect(screen.getByRole('button', { name: submit })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
-    act(() => publish({ status: 'attention', issue: 'newerVersion', email: EMAIL }));
-    expect(screen.getByRole('status')).toHaveTextContent('newer version of the app');
+    expect(account.signOut).toHaveBeenCalledTimes(1);
+    expect(await screen.findByRole('button', { name: 'Turn on sync' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Passphrase')).not.toBeInTheDocument();
   });
 
-  it('turns sync off on this device without erasing local data', async () => {
+  it('disables Cancel while a request is in flight', async () => {
     const user = userEvent.setup();
-    const { engine } = makeEngine({ status: 'idle', email: EMAIL });
     const account = fakeAccount();
-    const { repo } = renderWithSync({ state: { status: 'idle', email: EMAIL }, account, engine });
-    await repo.saveSettings({ id: 'settings', theme: 'dark', displayName: 'keep me' });
+    let finish!: () => void;
+    account.createVault.mockReturnValue(new Promise<undefined>((resolve) => (finish = () => resolve(undefined))));
+    renderWithSync({ account });
+    await enterCode(user);
+    await user.type(await screen.findByLabelText('Passphrase'), PASS);
+    await user.type(screen.getByLabelText('Repeat passphrase'), PASS);
+    await user.click(screen.getByRole('button', { name: 'Create encrypted copy' }));
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+    await act(async () => finish());
+    expect(account.signOut).not.toHaveBeenCalled();
+  });
 
-    await user.click(screen.getByRole('button', { name: 'Turn off sync on this device' }));
-    expect(account.signOut).toHaveBeenCalledTimes(1);
-    expect(await repo.getSettings()).toMatchObject({ displayName: 'keep me' });
-    expect(screen.getByRole('status')).toHaveTextContent('local data stays here');
+  it.each<[SyncState, string]>([
+    [{ status: 'attention', issue: 'tooLarge', email: EMAIL }, 'larger than the service allows'],
+    [{ status: 'offline', email: EMAIL }, 'Offline. I will retry when I am online.'],
+    [{ status: 'attention', issue: 'keyChanged', email: EMAIL }, 'The passphrase changed on another device.'],
+  ])('shows the live state %j after unlocking, not the confirmation', async (final, text) => {
+    const user = userEvent.setup();
+    const { engine, publish } = makeEngine();
+    const account = fakeAccount();
+    account.verifyCode.mockResolvedValue({ email: EMAIL, vault: 'exists' });
+    account.unlockVault.mockImplementation(async () => {
+      act(() => publish(final));
+      return true;
+    });
+    renderWithSync({ account, engine });
+    await enterCode(user);
+    await user.type(await screen.findByLabelText('Passphrase'), PASS);
+    await user.click(screen.getByRole('button', { name: 'Unlock copy' }));
+    await waitFor(() => expect(cardStatus()).toHaveTextContent(text));
+    expect(screen.queryByText(/I unlocked the copy/)).not.toBeInTheDocument();
+  });
+
+  it('shows the confirmation only until the state changes', async () => {
+    const user = userEvent.setup();
+    const { engine, publish } = makeEngine();
+    const account = fakeAccount();
+    account.verifyCode.mockResolvedValue({ email: EMAIL, vault: 'exists' });
+    account.unlockVault.mockImplementation(async () => {
+      act(() => publish({ status: 'idle', email: EMAIL }));
+      return true;
+    });
+    renderWithSync({ account, engine });
+    await enterCode(user);
+    await user.type(await screen.findByLabelText('Passphrase'), PASS);
+    await user.click(screen.getByRole('button', { name: 'Unlock copy' }));
+    expect(await screen.findByText('I unlocked the copy and started syncing.')).toBeInTheDocument();
+    expect(cardStatus()).toHaveTextContent('Sync is on.');
+    act(() => publish({ status: 'offline', email: EMAIL }));
+    expect(cardStatus()).toHaveTextContent('Offline.');
+    expect(screen.queryByText('I unlocked the copy and started syncing.')).not.toBeInTheDocument();
   });
 });

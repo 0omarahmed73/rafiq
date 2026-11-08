@@ -489,7 +489,11 @@ export function LockProvider({
   }, [enqueue, syncFromStorage, setRecord, setLockedBoth, setRecoveredBoth]);
 
   const eraseEverything = useCallback(async () => {
-    // Stop sync before erasing data so a run cannot merge or push an empty snapshot after the reset.
+    // Sync stops first (its own wait is capped), so a run cannot merge into or push an empty snapshot after the
+    // reset. Then the data goes, before the lock, so a crash in between never leaves data without its lock. eraseLock
+    // removes the mirror at once, stops queued writes from bringing the record back and clears IndexedDB without
+    // waiting behind them; clearSyncIdentity removes the sync key, meta and session. Their wait is capped above
+    // lockDb's own timeout, so the app always reloads even if IndexedDB hangs.
     await stopActiveSync();
     await repo.eraseAll();
     await Promise.race([
