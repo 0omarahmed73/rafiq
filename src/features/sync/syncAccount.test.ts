@@ -113,6 +113,40 @@ describe('sign-in', () => {
     });
   });
 
+  it('set-up forgets a leftover key before the new session exists; sign in again keeps it', async () => {
+    const a = await signedIn();
+    await a.account.createVault(PASS);
+    const keyA = (await loadSyncKey())!;
+    await a.server.signOut();
+    let keyAtSignIn: unknown = 'unread';
+    const verify = a.server.verifyCode.bind(a.server);
+    a.server.verifyCode = async (email, code) => {
+      keyAtSignIn = await loadSyncKey();
+      return verify(email, code);
+    };
+    expect(await a.account.verifyCode(EMAIL, FAKE_CODE, { reauth: true })).toEqual({
+      email: EMAIL,
+      vault: 'exists',
+      otherAccount: false,
+    });
+    expect((await loadSyncKey())!.salt).toBe(keyA.salt);
+
+    await a.server.signOut();
+    await a.account.verifyCode('other@example.com', FAKE_CODE);
+    expect(keyAtSignIn).toBeNull();
+    expect(await loadSyncKey()).toBeNull();
+    expect(await loadSyncMeta()).toEqual({ version: 0 });
+    expect(await a.server.session()).toMatchObject({ email: 'other@example.com' });
+  });
+
+  it('sign in again reports another account than the one the key belongs to', async () => {
+    const a = await signedIn();
+    await a.account.createVault(PASS);
+    await a.server.signOut();
+    const result = await a.account.verifyCode('other@example.com', FAKE_CODE, { reauth: true });
+    expect(result).toMatchObject({ email: 'other@example.com', otherAccount: true });
+  });
+
   it('keeps the session and reports vault unknown when the vault lookup fails, then vaultStatus retries', async () => {
     const d = device();
     d.server.failNext('network');
@@ -177,10 +211,10 @@ describe('createVault', () => {
   it('refuses to start a second vault when a cloud copy exists', async () => {
     const a = await signedIn();
     await a.account.createVault(PASS);
-    const keyA = (await loadSyncKey())!;
     const b = await signedIn(a.server.shared);
+    // The tests share one key store: b's set-up sign-in forgot a's key, and the refused create saves none.
     await expectKind(b.account.createVault('another passphrase'), 'vaultExists');
-    expect((await loadSyncKey())!.salt).toBe(keyA.salt);
+    expect(await loadSyncKey()).toBeNull();
     expect(a.server.vault()!.version).toBe(1);
   });
 });

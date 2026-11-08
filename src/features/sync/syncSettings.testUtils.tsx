@@ -45,10 +45,13 @@ export function makeEngine(initial: SyncState = { status: 'off' }) {
 export function fakeAccount() {
   return {
     requestCode: vi.fn(async (_email: string) => undefined),
-    verifyCode: vi.fn(async (_email: string, _code: string): Promise<{ email: string; vault: VaultStatus }> => ({
-      email: EMAIL,
-      vault: 'none',
-    })),
+    verifyCode: vi.fn(
+      async (
+        _email: string,
+        _code: string,
+        _opts?: { reauth?: boolean },
+      ): Promise<{ email: string; vault: VaultStatus; otherAccount?: boolean }> => ({ email: EMAIL, vault: 'none' }),
+    ),
     vaultStatus: vi.fn(async (): Promise<VaultStatus> => 'none'),
     createVault: vi.fn(async (_passphrase: string) => undefined),
     unlockVault: vi.fn(async (_passphrase: string) => true),

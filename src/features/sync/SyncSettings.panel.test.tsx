@@ -144,7 +144,33 @@ describe('SyncSettings: the on panel', () => {
     expect(account.signOut).toHaveBeenCalledTimes(1);
     expect(engine.syncNow).not.toHaveBeenCalled();
     expect(account.createVault).not.toHaveBeenCalled();
-    expect(screen.getByRole('alert')).toHaveTextContent('That was a different account');
+    expect(cardStatus()).toHaveTextContent('That was a different account');
+    expect(account.verifyCode).toHaveBeenCalledWith(EMAIL, FAKE_CODE, { reauth: true });
+  });
+
+  it('also signs out when the account reports another account behind the same email', async () => {
+    const user = userEvent.setup();
+    const { account, engine } = onCard({ status: 'attention', issue: 'auth', email: EMAIL });
+    account.verifyCode.mockResolvedValue({ email: EMAIL, vault: 'exists', otherAccount: true });
+    await user.click(screen.getByRole('button', { name: 'Sign in again' }));
+    await user.click(screen.getByRole('button', { name: 'Send a code' }));
+    await user.type(screen.getByLabelText('Email code'), FAKE_CODE);
+    await user.click(screen.getByRole('button', { name: 'Verify code' }));
+    expect(await screen.findByRole('button', { name: 'Turn on sync' })).toBeInTheDocument();
+    expect(account.signOut).toHaveBeenCalledTimes(1);
+    expect(engine.syncNow).not.toHaveBeenCalled();
+    expect(cardStatus()).toHaveTextContent('That was a different account');
+  });
+
+  it('clears an error when sync goes off elsewhere', async () => {
+    const user = userEvent.setup();
+    const account = fakeAccount();
+    account.localRecordCount.mockRejectedValueOnce(new Error('boom'));
+    const { publish } = onCard({ status: 'idle', email: EMAIL }, account);
+    await user.click(screen.getByRole('button', { name: 'Reset cloud copy' }));
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    act(() => publish({ status: 'off' }));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('Cancel on the sign-in-again step returns to the on panel', async () => {

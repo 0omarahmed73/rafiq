@@ -140,6 +140,32 @@ export function saveSyncKey(k: SyncKey): Promise<void> {
 }
 
 /**
+ * Binds a key cached without an account to `userId`, in one transaction and only while the stored key is still
+ * unbound with this salt and iteration count (a key saved meanwhile is left alone). Rejects like `saveSyncKey`.
+ */
+export function bindSyncKey(userId: string, salt: string, iter: number): Promise<void> {
+  return run('readwrite', DEFAULT_TIMEOUT_MS, (store) => {
+    const request = store.get(KEY);
+    request.onsuccess = () => {
+      const v: unknown = request.result;
+      if (isSyncKey(v) && v.userId === undefined && v.salt === salt && v.iter === iter) {
+        store.put({ key: v.key, salt: v.salt, iter: v.iter, userId }, KEY);
+      }
+    };
+    return () => undefined;
+  });
+}
+
+/** Removes the key and the meta (not the session) in one durable transaction; rejects when that fails. */
+export function clearSyncKeyAndMeta(): Promise<void> {
+  return run('readwrite', DEFAULT_TIMEOUT_MS, (store) => {
+    store.delete(KEY);
+    store.delete(META);
+    return () => undefined;
+  });
+}
+
+/**
  * Removes the key durably. A rejection (especially a timeout) means the outcome is UNKNOWN:
  * the write may still have committed.
  */

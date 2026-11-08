@@ -4,6 +4,7 @@ import { createMemoryRepo } from '../../db/memoryRepo';
 import type { Repo } from '../../db/repo';
 import { decryptEnvelope, deriveVaultKey, encryptEnvelope, newSalt } from './envelope';
 import { parseRemote, sameSyncData, toPlaintext, toSyncData, type SyncData } from './syncData';
+import { SIGN_OUT_TIMEOUT_MS } from './syncAccount';
 import { createSyncEngine, stopActiveSync, type SyncEngine, type SyncState } from './syncEngine';
 import { clearSyncIdentity, loadSyncKey, loadSyncMeta, saveSyncKey, saveSyncMeta, type SyncKey } from './syncKeyStore';
 import { createFakeSyncServer, FAKE_CODE, type FakeBackingStore, type FakeSyncServer } from './syncServer.fake';
@@ -966,6 +967,24 @@ describe('sync engine: the account the key belongs to', () => {
     expect(d.server.vault()).toBeNull();
     expect(d.server.pushCount()).toBe(0);
     expect(d.engine.getState()).toEqual({ status: 'off' });
+  });
+
+  it('forgets the foreign identity first and finishes even when the server sign-out never answers', async () => {
+    const d = await device();
+    await saveSyncKey({ ...(await makeKey()), userId: 'user-other' });
+    const signOut = vi.fn(() => new Promise<void>(() => {}));
+    d.server.signOut = signOut;
+    let done = false;
+    void d.engine.syncNow().then(() => {
+      done = true;
+    });
+    await until(() => signOut.mock.calls.length === 1);
+    expect(await loadSyncKey()).toBeNull();
+    expect(done).toBe(false);
+    await vi.advanceTimersByTimeAsync(SIGN_OUT_TIMEOUT_MS);
+    await until(() => done);
+    expect(d.engine.getState()).toEqual({ status: 'off' });
+    expect(d.server.pushCount()).toBe(0);
   });
 
   it('reports off on refresh while another account is signed in on top of the key', async () => {

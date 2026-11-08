@@ -6,7 +6,7 @@ import { FAKE_CODE } from './syncServer.fake';
 import { SyncAccountError, type VaultStatus } from './syncAccount';
 import { SyncSettings } from './SyncSettings';
 import type { SyncState } from './syncEngine';
-import { clearSyncIdentity } from './syncKeyStore';
+import { clearSyncIdentity, loadSyncKey } from './syncKeyStore';
 import {
   cardStatus,
   EMAIL,
@@ -77,7 +77,7 @@ describe('SyncSettings: turning sync on', () => {
     renderWithSync(setup);
 
     await enterCode(user);
-    await user.type(screen.getByLabelText('Passphrase'), 'short');
+    await user.type(await screen.findByLabelText('Passphrase'), 'short');
     await user.type(screen.getByLabelText('Repeat passphrase'), 'short');
     await user.click(screen.getByRole('button', { name: 'Create encrypted copy' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('at least 10 characters');
@@ -188,6 +188,34 @@ describe('SyncSettings: turning sync on', () => {
     });
     expect(account.requestCode).toHaveBeenCalledTimes(2);
     expect(screen.getByRole('button', { name: 'Resend in 60 seconds' })).toBeDisabled();
+  });
+
+  it('sets up another account over a leftover key even when a sync runs right after the sign-in', async () => {
+    const user = userEvent.setup();
+    const setup = realSetup();
+    await withVault(setup);
+    // The session of account A ended; its key stayed on the device, so the card is off.
+    await setup.server.signOut();
+    await setup.engine.refresh();
+    const verify = setup.server.verifyCode.bind(setup.server);
+    setup.server.verifyCode = async (email, code) => {
+      const session = await verify(email, code);
+      // A foreground or online trigger lands between the sign-in and the next step.
+      await setup.engine.syncNow();
+      return session;
+    };
+    renderWithSync(setup);
+
+    await enterCode(user, 'other@example.com');
+    await user.type(await screen.findByLabelText('Passphrase'), PASS);
+    await user.type(screen.getByLabelText('Repeat passphrase'), PASS);
+    await user.click(screen.getByRole('button', { name: 'Create encrypted copy' }));
+    expect(await screen.findByText('other@example.com')).toBeInTheDocument();
+    const session = await setup.server.session();
+    expect(session).toMatchObject({ email: 'other@example.com' });
+    expect((await loadSyncKey())!.userId).toBe(session!.userId);
+    expect(setup.engine.getState()).toMatchObject({ status: 'idle', email: 'other@example.com' });
+    expect(setup.server.vault()).not.toBeNull();
   });
 
   it('lets an existing account retry a wrong passphrase', async () => {

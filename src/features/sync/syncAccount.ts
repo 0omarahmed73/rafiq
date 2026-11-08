@@ -12,7 +12,7 @@ import {
 } from './envelope';
 import type { SyncEngine } from './syncEngine';
 import { toPlaintext, toSyncData, type SyncData } from './syncData';
-import { clearSyncIdentity, saveSyncKey, saveSyncMeta } from './syncKeyStore';
+import { clearSyncIdentity, clearSyncKeyAndMeta, loadSyncKey, saveSyncKey, saveSyncMeta } from './syncKeyStore';
 import { SyncServerError, type SyncServer } from './syncServer';
 
 export const MIN_PASSPHRASE_LENGTH = 10;
@@ -51,8 +51,16 @@ export function checkPassphrase(passphrase: string): PassphraseCheck {
 
 export interface SyncAccount {
   requestCode(email: string): Promise<void>;
-  /** Keeps the session even when the vault lookup fails afterwards (then `vault` is 'unknown'). */
-  verifyCode(email: string, code: string): Promise<{ email: string; vault: VaultStatus }>;
+  /**
+   * Keeps the session even when the vault lookup fails afterwards (then `vault` is 'unknown'). Set-up (the default)
+   * first forgets any cached key and meta, since it creates or unlocks its own key; `reauth` keeps the key and
+   * reports `otherAccount` when the code signed in an account other than the one the key belongs to.
+   */
+  verifyCode(
+    email: string,
+    code: string,
+    opts?: { reauth?: boolean },
+  ): Promise<{ email: string; vault: VaultStatus; otherAccount?: boolean }>;
   /** Whether the signed-in account has a cloud copy; for retrying after `vault: 'unknown'`. */
   vaultStatus(): Promise<VaultStatus>;
   /** No cloud copy yet: new salt, key cached, first sync. */
@@ -128,12 +136,19 @@ export function createSyncAccount(deps: {
   return {
     requestCode: (email) => guarded(() => server.requestCode(email)),
 
-    verifyCode: (email, code) =>
+    verifyCode: (email, code, opts) =>
       guarded(async () => {
+        const reauth = opts?.reauth === true;
+        // Read or cleared BEFORE the new session exists, so the engine never sees a leftover key next to another
+        // account's session (it would sign that account out and drop the key set-up is about to save).
+        const before = reauth ? await loadSyncKey() : null;
+        if (!reauth) await clearSyncKeyAndMeta();
         const session = await server.verifyCode(email, code);
         // The single-use code is spent: a failed lookup must not undo the sign-in.
         const vault = await vaultStatus().catch((): VaultStatus => 'unknown');
-        return { email: session.email, vault };
+        if (!reauth) return { email: session.email, vault };
+        const otherAccount = before?.userId !== undefined && before.userId !== session.userId;
+        return { email: session.email, vault, otherAccount };
       }),
 
     vaultStatus: () => guarded(vaultStatus),

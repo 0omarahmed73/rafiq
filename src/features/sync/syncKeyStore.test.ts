@@ -1,8 +1,10 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  bindSyncKey,
   clearSyncIdentity,
   clearSyncKey,
+  clearSyncKeyAndMeta,
   createSessionStorage,
   loadSyncKey,
   loadSyncMeta,
@@ -198,6 +200,29 @@ describe('syncKeyStore', () => {
     const legacy = await loadSyncKey();
     expect(legacy).toMatchObject({ salt: 's', iter: 1 });
     expect(legacy!.userId).toBeUndefined();
+  });
+
+  it('binds only the same unbound key, never a key saved meanwhile or one already bound', async () => {
+    const key = await makeKey();
+    await saveSyncKey({ key, salt: 'old', iter: 1 });
+    await saveSyncKey({ key, salt: 'new', iter: 1 });
+    await bindSyncKey('user-1', 'old', 1);
+    expect((await loadSyncKey())!.userId).toBeUndefined();
+    await bindSyncKey('user-1', 'new', 1);
+    expect(await loadSyncKey()).toMatchObject({ salt: 'new', userId: 'user-1' });
+    await bindSyncKey('user-2', 'new', 1);
+    expect((await loadSyncKey())!.userId).toBe('user-1');
+  });
+
+  it('clearSyncKeyAndMeta removes the key and the meta but keeps the session', async () => {
+    const storage = createSessionStorage();
+    await saveSyncKey({ key: await makeKey(), salt: 's', iter: 1, userId: 'user-1' });
+    await saveSyncMeta({ version: 2 });
+    await storage.setItem('auth', 'session');
+    await clearSyncKeyAndMeta();
+    await expect(loadSyncKey()).resolves.toBeNull();
+    await expect(loadSyncMeta()).resolves.toEqual({ version: 0 });
+    await expect(storage.getItem('auth')).resolves.toBe('session');
   });
 
   it('loadSyncMeta falls back to the default for a malformed record', async () => {

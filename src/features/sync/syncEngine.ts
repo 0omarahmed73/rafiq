@@ -14,7 +14,8 @@ import {
   toSyncData,
   type SyncData,
 } from './syncData';
-import { clearSyncIdentity, loadSyncKey, loadSyncMeta, saveSyncKey, saveSyncMeta, type SyncKey } from './syncKeyStore';
+import { SIGN_OUT_TIMEOUT_MS } from './syncAccount';
+import { bindSyncKey, clearSyncIdentity, loadSyncKey, loadSyncMeta, saveSyncMeta, type SyncKey } from './syncKeyStore';
 import { SyncServerError, type SyncServer, type SyncSession, type VaultRow } from './syncServer';
 
 export type SyncStatus = 'off' | 'idle' | 'syncing' | 'offline' | 'attention';
@@ -172,8 +173,16 @@ export function createSyncEngine(deps: SyncEngineDeps): SyncEngine {
    * pushed there under this key. Sign out and forget the key, the meta and the session; local data stays.
    */
   async function dropForeign(): Promise<void> {
-    await server.signOut().catch(() => undefined);
+    // This device forgets first; the server sign-out is best effort and bounded, so a stalled call cannot hang the run.
     await clearSyncIdentity();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([
+      server.signOut().catch(() => undefined),
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, SIGN_OUT_TIMEOUT_MS);
+      }),
+    ]);
+    clearTimeout(timer);
     if (!stopped) goOff();
   }
 
@@ -283,7 +292,8 @@ export function createSyncEngine(deps: SyncEngineDeps): SyncEngine {
     const { session } = who;
     // A key cached before keys recorded their account is bound to the account of its first run.
     const key: SyncKey = who.key.userId ? who.key : { ...who.key, userId: session.userId };
-    if (!who.key.userId) await saveSyncKey(key).catch(() => undefined);
+    // Only that same unbound key is bound: never a key saved meanwhile by a create, unlock or reset.
+    if (!who.key.userId) await bindSyncKey(session.userId, key.salt, key.iter).catch(() => undefined);
     if (stopped) return;
     const meta = await loadSyncMeta();
     if (stopped) return;

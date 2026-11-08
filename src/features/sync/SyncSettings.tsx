@@ -49,6 +49,7 @@ function ConfiguredSyncSettings({ sync }: { sync: SyncApi }) {
     else if (state.status === 'off' && was !== 'off') {
       // Sync went off (here or elsewhere): no signed-in step can continue, and no typed secret stays in memory.
       setStep('off');
+      setError(null);
       setCode('');
       setPassphrase('');
       setAgain('');
@@ -110,15 +111,18 @@ function ConfiguredSyncSettings({ sync }: { sync: SyncApi }) {
   const verifyCode = () =>
     run(
       async () => {
-        const result = await account.verifyCode(email, code.trim());
+        const reauth = flow === 'reauth';
+        const result = await account.verifyCode(email, code.trim(), reauth ? { reauth } : undefined);
         setEmail(result.email || email);
-        if (flow !== 'reauth') return chooseVault(result.vault);
-        if (reauthEmail && result.email.toLowerCase() !== reauthEmail.toLowerCase()) {
+        if (!reauth) return chooseVault(result.vault);
+        const otherEmail = !!reauthEmail && result.email.toLowerCase() !== reauthEmail.toLowerCase();
+        if (result.otherAccount || otherEmail) {
           // The key belongs to the other account: forget it here (local data stays) rather than sync across accounts.
+          // A notice, not an error: the off state that sign-out publishes clears errors but keeps this.
           await account.signOut();
           setEmail('');
           go('off');
-          setError(t(COPY.otherAccount));
+          setNotice(t(COPY.otherAccount));
           return;
         }
         // The key is still on this device: the new session is all sync needed.
