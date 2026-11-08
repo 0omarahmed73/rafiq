@@ -1,20 +1,60 @@
-import { act, render, screen, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryRouter } from 'react-router-dom';
-import { App } from './App';
+import { useState } from 'react';
+import { App, SYNC_MERGED_EVENT } from './App';
 import { createMemoryRepo } from './db/memoryRepo';
 import { IDBFactory } from 'fake-indexeddb';
 import { writeLockDb } from './features/lock/lockDb';
 import { loadLock, resetLockStoreForTests } from './features/lock/lockStore';
 import { hashSecret } from './features/lock/pin';
+import type { SyncAccount } from './features/sync/syncAccount';
+import type { SyncEngine } from './features/sync/syncEngine';
 import type { Lang } from './i18n';
+import { useI18n } from './i18n/LanguageProvider';
 import { routes } from './routes';
 
 /** Arabic by default, so the Arabic copy checks below run as they always did. */
 /** `null` means no language has been chosen yet. */
-function renderApp(path: string, persistent = true, language: Lang | null = 'ar', repo = createMemoryRepo()) {
+type SyncProps = { engine: SyncEngine; account: SyncAccount };
+
+function createSyncProps(): SyncProps {
+  const engine = {
+    getState: vi.fn(() => ({ status: 'off' as const })),
+    subscribe: vi.fn(() => () => {}),
+    start: vi.fn(),
+    stop: vi.fn(),
+    requestSync: vi.fn(),
+    syncNow: vi.fn().mockResolvedValue(undefined),
+    whenIdle: vi.fn().mockResolvedValue(undefined),
+    refresh: vi.fn().mockResolvedValue(undefined),
+  };
+  return { engine: engine as unknown as SyncEngine, account: {} as SyncAccount };
+}
+
+function DraftRoute() {
+  const { t } = useI18n();
+  const [draft, setDraft] = useState('');
+  return (
+    <main>
+      <p>{t({ ar: 'النص العربي', en: 'English text' })}</p>
+      <label>
+        Draft
+        <input value={draft} onChange={(event) => setDraft(event.target.value)} />
+      </label>
+    </main>
+  );
+}
+
+function renderApp(
+  path: string,
+  persistent = true,
+  language: Lang | null = 'ar',
+  repo = createMemoryRepo(),
+  sync?: SyncProps,
+) {
   const router = createMemoryRouter(routes, { initialEntries: [path] });
-  render(<App router={router} repo={repo} persistent={persistent} language={language ?? undefined} />);
+  render(<App router={router} repo={repo} persistent={persistent} language={language ?? undefined} sync={sync} />);
   return { router, repo };
 }
 
@@ -38,6 +78,28 @@ describe('App', () => {
   it('shows no storage warning when storage is persistent', () => {
     renderApp('/', true);
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('updates merged settings without remounting an open form when sync is configured', async () => {
+    const user = userEvent.setup();
+    const repo = createMemoryRepo();
+    await repo.saveSettings({ id: 'settings', theme: 'light', accent: 'teal', language: 'ar' });
+    const router = createMemoryRouter([{ path: '/', element: <DraftRoute /> }]);
+    const sync = createSyncProps();
+    render(<App router={router} repo={repo} persistent language="ar" sync={sync} />);
+
+    const input = screen.getByRole('textbox', { name: 'Draft' });
+    await user.type(input, 'unsaved text');
+    await act(async () => {
+      await repo.saveSettings({ id: 'settings', theme: 'dark', accent: 'rose', language: 'en' });
+      window.dispatchEvent(new Event(SYNC_MERGED_EVENT));
+    });
+
+    await waitFor(() => expect(screen.getByText('English text')).toBeInTheDocument());
+    expect(input).toHaveValue('unsaved text');
+    expect(document.documentElement.lang).toBe('en');
+    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(document.documentElement.dataset.accent).toBe('rose');
   });
 });
 
@@ -113,6 +175,14 @@ describe('app lock', () => {
     expect(await screen.findByRole('heading', { name: 'كيف حالك اليوم؟' })).toBeInTheDocument();
     expect(screen.getByRole('navigation')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'فتح' })).not.toBeInTheDocument();
+  });
+
+  it('keeps sync mounted while the lock screen is shown', async () => {
+    const sync = createSyncProps();
+    renderApp('/', true, 'ar', await acceptedRepo(), sync);
+    await waitFor(() => expect(sync.engine.start).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole('heading', { level: 1, name: 'رفيق' })).toBeInTheDocument();
+    expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
   });
 
   it('applies a navigation requested while locked (a notification tap) only once unlocked', async () => {
